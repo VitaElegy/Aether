@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde::de::DeserializeOwned;
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
@@ -56,6 +55,7 @@ pub struct User {
 }
 
 impl User {
+    #[allow(dead_code)]
     pub fn has_permission(&self, required_perm: u64) -> bool {
         (self.permissions & required_perm) == required_perm
     }

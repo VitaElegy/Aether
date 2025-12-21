@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use jsonwebtoken::{encode, decode, Header, Validation, EncodingKey, DecodingKey, Algorithm};
+use jsonwebtoken::{decode, Validation, DecodingKey, Algorithm};
 use argon2::{
     password_hash::{
         rand_core::OsRng,
@@ -10,7 +10,7 @@ use argon2::{
 use std::sync::Arc;
 use crate::domain::{
     ports::{AuthService, AuthError, UserRepository},
-    models::{AuthClaims, User},
+    models::AuthClaims,
 };
 use chrono::{Utc, Duration};
 

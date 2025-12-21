@@ -26,6 +26,7 @@ pub enum AuthError {
 
 /// The Input Port: Defines what the application CORE expects from the storage layer.
 #[async_trait]
+#[allow(dead_code)]
 pub trait ContentRepository: Send + Sync {
     async fn save(&self, content: ContentAggregate) -> Result<ContentId, RepositoryError>;
     async fn find_by_id(&self, id: &ContentId) -> Result<Option<ContentAggregate>, RepositoryError>;
@@ -50,17 +51,7 @@ pub trait AuthService: Send + Sync {
 
 /// Service Port: Defines complex domain logic that doesn't fit in the entity.
 #[async_trait]
-pub trait ContentService: Send + Sync {
-
-    async fn save(&self, content: ContentAggregate) -> Result<ContentId, RepositoryError>;
-    async fn find_by_id(&self, id: &ContentId) -> Result<Option<ContentAggregate>, RepositoryError>;
-    async fn find_by_slug(&self, slug: &str) -> Result<Option<ContentAggregate>, RepositoryError>;
-    async fn list(&self, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError>;
-    async fn delete(&self, id: &ContentId) -> Result<(), RepositoryError>;
-}
-
-/// Service Port: Defines complex domain logic that doesn't fit in the entity.
-#[async_trait]
+#[allow(dead_code)]
 pub trait ContentService: Send + Sync {
     async fn publish(&self, id: ContentId) -> Result<(), RepositoryError>;
     // Example of extension: specific rendering logic could be injected here
