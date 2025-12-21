@@ -25,6 +25,7 @@ pub struct ContentId(pub Uuid);
 pub struct ContentAggregate {
     pub id: ContentId,
     pub author_id: Uuid,
+    pub author_name: Option<String>, // Added for UI convenience
     pub title: String,
     pub slug: String,
     pub status: ContentStatus,
@@ -57,6 +58,9 @@ pub struct User {
     pub id: UserId,
     pub username: String,
     pub email: String,
+    pub display_name: Option<String>,
+    pub bio: Option<String>,
+    pub avatar_url: Option<String>,
     // We never return the password hash to the frontend, forcing manual field exclusion
     #[serde(skip_serializing)]
     pub password_hash: String,

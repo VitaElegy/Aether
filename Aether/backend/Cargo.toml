@@ -6,7 +6,7 @@ authors = ["The Geek Master <master@aether.io>"]
 
 [dependencies]
 # Web Framework
-axum = { version = "0.7", features = ["macros"] }
+axum = { version = "0.7", features = ["macros", "multipart"] }
 tower = { version = "0.4", features = ["util", "timeout"] }
 tower-http = { version = "0.5", features = ["cors", "trace", "fs"] }
 
@@ -44,6 +44,7 @@ ring = "0.17"
 async-trait = "0.1"
 tracing-appender = "0.2.4"
 similar = "2.7.0"
+axum-extra = { version = "0.12.3", features = ["multipart"] }
 
 [workspace]
 members = ["."]

@@ -43,6 +43,7 @@ pub async fn create_content_handler(
     let content = ContentAggregate {
         id: ContentId(Uuid::new_v4()),
         author_id: user.id,
+        author_name: None, // Filled by Repo on read, not needed on write
         title: payload.title.clone(),
         slug: payload.title.to_lowercase().replace(" ", "-") + "-" + &Uuid::new_v4().to_string()[..8],
         status,
@@ -97,6 +98,7 @@ pub async fn update_content_handler(
     let updated_content = ContentAggregate {
         id: ContentId(id),
         author_id: user.id,
+        author_name: None, // Filled by Repo on read, not needed on write
         title: payload.title,
         slug: existing.slug, // Keep slug or regenerate? Keeping for now.
         status,

@@ -102,15 +102,22 @@ where
 
 pub async fn login_handler(
     State(auth_service): State<Arc<dyn AuthService>>,
+    State(repo): State<Arc<dyn UserRepository>>,
     Json(payload): Json<LoginRequest>,
 ) -> impl IntoResponse {
     match auth_service.authenticate(&payload.username, &payload.password).await {
         Ok(claims) => {
              match auth_service.generate_token(&claims) {
-                Ok(token) => (StatusCode::OK, Json(serde_json::json!({
-                    "token": token,
-                    "user": { "id": claims.sub, "perms": claims.perms }
-                }))),
+                Ok(token) => {
+                    // Fetch full user details
+                    let user_id = crate::domain::models::UserId(Uuid::parse_str(&claims.sub).unwrap());
+                    let user = repo.find_by_id(&user_id).await.unwrap().unwrap(); // Safe unwrap after auth
+
+                    (StatusCode::OK, Json(serde_json::json!({
+                        "token": token,
+                        "user": user
+                    })))
+                },
                 Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
              }
         },
@@ -132,6 +139,9 @@ pub async fn register_handler(
         id: crate::domain::models::UserId(Uuid::new_v4()),
         username: payload.username,
         email: payload.email,
+        display_name: None,
+        bio: None,
+        avatar_url: None,
         password_hash: hash_password(&payload.password),
         permissions: 1, // Default to Read-Only or Basic User
     };
@@ -139,6 +149,55 @@ pub async fn register_handler(
     // 3. Save
     match repo.save(user).await {
         Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({ "message": "User created" }))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct UpdateUserRequest {
+    display_name: Option<String>,
+    bio: Option<String>,
+    avatar_url: Option<String>,
+    email: Option<String>,
+}
+
+pub async fn get_user_handler(
+    State(repo): State<Arc<dyn UserRepository>>,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+) -> impl IntoResponse {
+    let user_id = crate::domain::models::UserId(id);
+    match repo.find_by_id(&user_id).await {
+        Ok(Some(user)) => (StatusCode::OK, Json(serde_json::to_value(user).unwrap())),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "User not found" }))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
+    }
+}
+
+pub async fn update_user_handler(
+    State(repo): State<Arc<dyn UserRepository>>,
+    auth_user: AuthenticatedUser,
+    axum::extract::Path(id): axum::extract::Path<Uuid>,
+    Json(payload): Json<UpdateUserRequest>,
+) -> impl IntoResponse {
+    if auth_user.id != id {
+        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Cannot update other users" })));
+    }
+
+    let user_id = crate::domain::models::UserId(id);
+
+    let mut user = match repo.find_by_id(&user_id).await {
+        Ok(Some(u)) => u,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "User not found" }))),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
+    };
+
+    if let Some(name) = payload.display_name { user.display_name = Some(name); }
+    if let Some(bio) = payload.bio { user.bio = Some(bio); }
+    if let Some(avatar) = payload.avatar_url { user.avatar_url = Some(avatar); }
+    if let Some(email) = payload.email { user.email = email; }
+
+    match repo.save(user).await {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "message": "User updated" }))),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
     }
 }

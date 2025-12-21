@@ -29,6 +29,31 @@ impl UserRepository for PostgresRepository {
                 id: UserId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
                 username: m.username,
                 email: m.email,
+                display_name: m.display_name,
+                bio: m.bio,
+                avatar_url: m.avatar_url,
+                password_hash: m.password_hash,
+                permissions: m.permissions as u64,
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, RepositoryError> {
+        let model = user::Entity::find_by_id(id.0.to_string())
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        if let Some(m) = model {
+            Ok(Some(User {
+                id: UserId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                username: m.username,
+                email: m.email,
+                display_name: m.display_name,
+                bio: m.bio,
+                avatar_url: m.avatar_url,
                 password_hash: m.password_hash,
                 permissions: m.permissions as u64,
             }))
@@ -42,6 +67,9 @@ impl UserRepository for PostgresRepository {
             id: Set(u.id.0.to_string()),
             username: Set(u.username),
             email: Set(u.email),
+            display_name: Set(u.display_name),
+            bio: Set(u.bio),
+            avatar_url: Set(u.avatar_url),
             password_hash: Set(u.password_hash),
             permissions: Set(u.permissions as i64),
         };
@@ -52,6 +80,9 @@ impl UserRepository for PostgresRepository {
                     .update_columns([
                         user::Column::Username,
                         user::Column::Email,
+                        user::Column::DisplayName,
+                        user::Column::Bio,
+                        user::Column::AvatarUrl,
                         user::Column::PasswordHash,
                         user::Column::Permissions,
                     ])
@@ -86,6 +117,11 @@ impl ContentRepository for PostgresRepository {
 
         // Start Transaction
         let txn = self.db.begin().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // CHECK: Does content exist? (To decide Insert vs Update manually if needed, or trust on_conflict)
+        // SeaORM insert with on_conflict is usually an UPSERT.
+        // However, if we insert, we must ensure we don't duplicate via logic error elsewhere.
+        // The ID is Primary Key, so duplicate ID insert will trigger OnConflict Update.
 
         let model = content::ActiveModel {
             id: Set(content.id.0.to_string()),
@@ -176,15 +212,17 @@ impl ContentRepository for PostgresRepository {
     }
 
     async fn find_by_id(&self, id: &ContentId) -> Result<Option<ContentAggregate>, RepositoryError> {
-        let model = content::Entity::find_by_id(id.0.to_string())
+        let result = content::Entity::find_by_id(id.0.to_string())
+            .find_also_related(user::Entity)
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        if let Some(m) = model {
+        if let Some((m, author)) = result {
             Ok(Some(ContentAggregate {
                 id: ContentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
                 author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                author_name: author.map(|u| u.display_name.or(Some(u.username)).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
                 status: match m.status.as_str() {
@@ -214,18 +252,20 @@ impl ContentRepository for PostgresRepository {
     }
 
     async fn list(&self, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError> {
-         let models = content::Entity::find()
+         let results = content::Entity::find()
+            .find_also_related(user::Entity)
             .limit(limit)
             .offset(offset)
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        let mut results = Vec::new();
-        for m in models {
-             results.push(ContentAggregate {
+        let mut aggregates = Vec::new();
+        for (m, author) in results {
+             aggregates.push(ContentAggregate {
                 id: ContentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
                 author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                author_name: author.map(|u| u.display_name.or(Some(u.username)).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
                 status: match m.status.as_str() {
@@ -246,7 +286,7 @@ impl ContentRepository for PostgresRepository {
                 version_message: None,
             });
         }
-        Ok(results)
+        Ok(aggregates)
     }
 
     async fn delete(&self, id: &ContentId) -> Result<(), RepositoryError> {
