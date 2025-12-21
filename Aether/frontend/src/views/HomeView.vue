@@ -10,11 +10,21 @@ const authStore = useAuthStore();
 const posts = ref<any[]>([]);
 
 onMounted(async () => {
+  // Ensure we have user data for the avatar
+  if (!authStore.user || !authStore.user.username) {
+      await authStore.fetchUser();
+  }
+
   try {
     const res = await axios.get('/api/content');
-    posts.value = res.data.map((p: any) => ({
+
+    // Deduplicate posts based on ID (Temporary fix for data issues)
+    const uniqueData = Array.from(new Map(res.data.map((item: any) => [item.id, item])).values());
+
+    posts.value = uniqueData.map((p: any) => ({
       id: p.id,
       title: p.title,
+      author: p.author_name || 'Unknown',
       date: new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
       category: p.category || 'Uncategorized',
       type: p.body.type,
@@ -52,7 +62,7 @@ const goToProfile = (id: string) => router.push(`/profile/${id}`);
         </button>
 
         <div class="w-8 h-8 bg-neutral-100 rounded-full overflow-hidden cursor-pointer hover:ring-2 ring-neutral-200 transition-all" @click="goToProfile(authStore.user?.id || 'me')">
-           <img :src="`https://api.dicebear.com/9.x/notionists/svg?seed=${authStore.user?.name || 'User'}`" class="w-full h-full object-cover" />
+           <img :src="authStore.user?.avatar_url || `https://api.dicebear.com/9.x/notionists/svg?seed=${authStore.user?.username || 'User'}`" class="w-full h-full object-cover mix-blend-multiply" />
         </div>
       </div>
     </nav>
@@ -78,12 +88,13 @@ const goToProfile = (id: string) => router.push(`/profile/${id}`);
 
           <!-- Meta (Left) -->
           <div class="md:w-1/4 flex flex-col gap-2">
-            <span class="text-xs font-mono text-neutral-400 uppercase tracking-widest">{{ post.date }}</span>
+            <span class="text-xs font-mono text-neutral-400 uppercase tracking-widest">{{ post.author }}</span>
+            <span class="text-[10px] font-mono text-neutral-300 uppercase tracking-widest">{{ post.date }}</span>
             <div class="flex flex-wrap gap-2">
               <span class="text-[10px] font-bold uppercase tracking-widest bg-neutral-100 px-2 py-1">{{ post.category }}</span>
             </div>
             <div class="mt-auto hidden md:block">
-               <button class="text-xs font-bold uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity -ml-4 group-hover:ml-0 duration-300">
+               <button @click="router.push(`/article/${post.id}`)" class="text-xs font-bold uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity -ml-4 group-hover:ml-0 duration-300">
                  Read Entry <i class="ri-arrow-right-line"></i>
                </button>
             </div>
@@ -91,7 +102,7 @@ const goToProfile = (id: string) => router.push(`/profile/${id}`);
 
           <!-- Content (Right) -->
           <div class="md:w-3/4">
-             <h2 class="text-3xl font-bold tracking-tight mb-4 group-hover:text-neutral-600 transition-colors cursor-pointer">{{ post.title }}</h2>
+             <h2 @click="router.push(`/article/${post.id}`)" class="text-3xl font-bold tracking-tight mb-4 group-hover:text-neutral-600 transition-colors cursor-pointer">{{ post.title }}</h2>
 
              <!-- Preview Content (Truncated) -->
              <div class="prose prose-neutral prose-lg max-w-none text-neutral-600 line-clamp-3 mb-6">

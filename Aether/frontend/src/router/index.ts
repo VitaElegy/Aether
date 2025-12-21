@@ -16,15 +16,27 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
-      path: '/editor',
+      path: '/editor/:id?',
       name: 'editor',
       component: () => import('../views/EditorView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/article/:id',
+      name: 'article',
+      component: () => import('../views/ReadView.vue'),
       meta: { requiresAuth: true }
     },
     {
       path: '/profile/:id',
       name: 'profile',
       component: () => import('../views/UserProfileView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('../views/SettingsView.vue'),
       meta: { requiresAuth: true }
     },
     // Wildcard redirect for safety

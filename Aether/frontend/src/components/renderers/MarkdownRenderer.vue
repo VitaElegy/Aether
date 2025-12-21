@@ -10,7 +10,14 @@ const props = defineProps<Props>();
 
 const renderedHtml = computed(() => {
   if (!props.content) return '';
-  return marked(props.content);
+
+  const renderer = new marked.Renderer();
+  renderer.heading = function({ text, depth }: { text: string; depth: number }) {
+    const id = text.toLowerCase().replace(/[^\w]+/g, '-');
+    return `<h${depth} id="${id}">${text}</h${depth}>`;
+  };
+
+  return marked(props.content, { renderer });
 });
 </script>
 
