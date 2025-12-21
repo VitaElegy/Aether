@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use sea_orm::*;
-use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, User, UserId};
+use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId};
 use crate::domain::ports::{ContentRepository, UserRepository, RepositoryError};
 use super::entities::{content, user};
 use chrono::Utc;
@@ -74,6 +74,8 @@ impl ContentRepository for PostgresRepository {
             title: Set(content.title),
             slug: Set(content.slug),
             status: Set(format!("{:?}", content.status)),
+            visibility: Set(format!("{:?}", content.visibility)),
+            category: Set(content.category),
             created_at: Set(content.created_at.to_string()),
             updated_at: Set(Utc::now().to_string()),
             body: Set(serde_json::to_value(content.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?.to_string()),
@@ -86,6 +88,8 @@ impl ContentRepository for PostgresRepository {
                     .update_columns([
                         content::Column::Title,
                         content::Column::Status,
+                        content::Column::Visibility,
+                        content::Column::Category,
                         content::Column::Body,
                         content::Column::UpdatedAt,
                         content::Column::Tags,
@@ -100,7 +104,7 @@ impl ContentRepository for PostgresRepository {
     }
 
     async fn find_by_id(&self, id: &ContentId) -> Result<Option<ContentAggregate>, RepositoryError> {
-        let model = content::Entity::find_by_id(id.0)
+        let model = content::Entity::find_by_id(id.0.to_string())
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
@@ -116,6 +120,12 @@ impl ContentRepository for PostgresRepository {
                     "Archived" => ContentStatus::Archived,
                     _ => ContentStatus::Draft,
                 },
+                visibility: match m.visibility.as_str() {
+                    "Private" => Visibility::Private,
+                    "Internal" => Visibility::Internal,
+                    _ => Visibility::Public,
+                },
+                category: m.category,
                 created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
                 updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
                 body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
@@ -131,16 +141,39 @@ impl ContentRepository for PostgresRepository {
     }
 
     async fn list(&self, _limit: u64, _offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError> {
-        // Simple list implementation
-         let _models = content::Entity::find()
+        // Simple list implementation - In reality this should accept filters
+         let models = content::Entity::find()
             .limit(_limit)
             .offset(_offset)
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        // Map logic (omitted for brevity, assume similar to find_by_id)
-        Ok(vec![])
+        let mut results = Vec::new();
+        for m in models {
+             results.push(ContentAggregate {
+                id: ContentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                title: m.title,
+                slug: m.slug,
+                status: match m.status.as_str() {
+                    "Published" => ContentStatus::Published,
+                    "Archived" => ContentStatus::Archived,
+                    _ => ContentStatus::Draft,
+                },
+                visibility: match m.visibility.as_str() {
+                    "Private" => Visibility::Private,
+                    "Internal" => Visibility::Internal,
+                    _ => Visibility::Public,
+                },
+                category: m.category,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+            });
+        }
+        Ok(results)
     }
 
     async fn delete(&self, _id: &ContentId) -> Result<(), RepositoryError> {

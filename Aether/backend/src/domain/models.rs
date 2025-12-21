@@ -11,6 +11,13 @@ pub enum ContentStatus {
     Archived,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Visibility {
+    Public,
+    Private,
+    Internal, // Visible to any logged-in user
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentId(pub Uuid);
 
@@ -21,6 +28,8 @@ pub struct ContentAggregate {
     pub title: String,
     pub slug: String,
     pub status: ContentStatus,
+    pub visibility: Visibility, // Added
+    pub category: Option<String>, // Added: "Parent/Child" format
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub body: ContentBody,

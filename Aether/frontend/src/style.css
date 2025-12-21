@@ -1,0 +1,19 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-paper text-ink font-sans antialiased selection:bg-ink selection:text-paper;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-bold tracking-tight;
+  }
+}
+
+/* 隐藏滚动条但保留功能 (Windows) */
+::-webkit-scrollbar {
+  width: 0px;
+  background: transparent;
+}

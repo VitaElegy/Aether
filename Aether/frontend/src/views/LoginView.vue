@@ -1,178 +1,115 @@
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue';
+import { ref, reactive } from 'vue';
 import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import { MessagePlugin } from 'tdesign-vue-next';
+import axios from 'axios';
 
 const router = useRouter();
 const authStore = useAuthStore();
 
-const terminalLines = ref<string[]>([]);
+const isLogin = ref(true);
+const loading = ref(false);
+
 const form = reactive({
   username: '',
   password: '',
+  email: ''
 });
-const step = ref<'init' | 'user' | 'pass' | 'processing'>('init');
-const cursorVisible = ref(true);
 
-// Typewriter effect helper
-const typeLine = async (text: string, delay = 30) => {
-  let current = '';
-  terminalLines.value.push('');
-  const index = terminalLines.value.length - 1;
+const toggleMode = () => {
+  isLogin.value = !isLogin.value;
+  form.username = '';
+  form.password = '';
+  form.email = '';
+};
 
-  for (const char of text) {
-    current += char;
-    terminalLines.value[index] = current;
-    await new Promise(r => setTimeout(r, delay));
+const handleSubmit = async () => {
+  loading.value = true;
+  try {
+    if (isLogin.value) {
+      await axios.post('/api/auth/login', { username: form.username, password: form.password });
+      authStore.login('mock-token', { name: form.username });
+      router.push('/');
+    } else {
+      await axios.post('/api/auth/register', { username: form.username, email: form.email, password: form.password });
+      MessagePlugin.success('Account created.');
+      isLogin.value = true;
+    }
+  } catch (err: any) {
+    MessagePlugin.error(err.response?.data?.error || 'Authentication failed');
+  } finally {
+    loading.value = false;
   }
 };
-
-onMounted(async () => {
-  // Blinking cursor effect
-  setInterval(() => {
-    cursorVisible.value = !cursorVisible.value;
-  }, 500);
-
-  // Boot sequence
-  await typeLine('AETHER KERNEL v0.1.0-alpha loaded.');
-  await typeLine('Initializing secure handshake protocol...');
-  await new Promise(r => setTimeout(r, 400));
-  await typeLine('[OK] Connection established.');
-  await typeLine('[OK] Encryption: Ed25519 verified.');
-
-  step.value = 'user';
-});
-
-const handleUserEnter = async () => {
-  if (!form.username) return;
-  terminalLines.value.push(`user: ${form.username}`);
-  step.value = 'pass';
-};
-
-const handlePassEnter = async () => {
-  if (!form.password) return;
-  step.value = 'processing';
-  await typeLine('Authenticating...');
-
-  // Mock login for demo (Replace with actual API call)
-  setTimeout(async () => {
-    if (form.username === 'admin' && form.password === 'secret') {
-        await typeLine('[SUCCESS] Access Granted.');
-        await typeLine('Redirecting to mainframe...');
-        authStore.login('mock-jwt-token', { name: form.username });
-        setTimeout(() => router.push('/'), 1000);
-    } else {
-        await typeLine('[ERROR] Access Denied: Invalid credentials.');
-        await typeLine('Resetting connection...');
-        form.username = '';
-        form.password = '';
-        step.value = 'user';
-    }
-  }, 1500);
-};
-
 </script>
 
 <template>
-  <div class="terminal-container">
-    <div class="crt-overlay"></div>
-    <div class="terminal-content">
-      <div v-for="(line, idx) in terminalLines" :key="idx" class="line">
-        <span class="prefix" v-if="line.startsWith('[')">&gt; </span>
-        {{ line }}
+  <div class="h-screen w-full flex items-center justify-center p-6 bg-ash">
+    <div class="w-full max-w-sm bg-paper p-12 border border-neutral-200 shadow-sm relative overflow-hidden group">
+      <!-- Top Accent -->
+      <div class="absolute top-0 left-0 w-full h-1 bg-ink scale-x-0 group-hover:scale-x-100 transition-transform duration-500 origin-left"></div>
+
+      <div class="mb-12">
+        <h1 class="text-4xl font-bold tracking-tighter mb-2">Aether.</h1>
+        <p class="text-neutral-500 font-mono text-xs uppercase tracking-widest">
+          {{ isLogin ? 'Access Terminal' : 'New Identification' }}
+        </p>
       </div>
 
-      <!-- Interactive Inputs -->
-      <div v-if="step === 'user'" class="input-line">
-        <span class="prompt">login:</span>
-        <input
-          v-model="form.username"
-          @keyup.enter="handleUserEnter"
-          type="text"
-          autofocus
-          class="ghost-input"
-        />
-        <span class="mirror">{{ form.username }}</span>
-        <span class="cursor" v-if="cursorVisible">█</span>
-      </div>
+      <form @submit.prevent="handleSubmit" class="space-y-8">
+        <div class="space-y-6">
+          <div class="relative">
+            <input
+              v-model="form.username"
+              type="text"
+              placeholder="Username"
+              class="w-full border-b border-neutral-200 py-2 text-lg font-medium focus:outline-none focus:border-ink transition-colors placeholder:text-neutral-300 bg-transparent"
+              required
+            />
+          </div>
 
-      <div v-if="step === 'pass'" class="input-line">
-        <span class="prompt">password:</span>
-        <input
-          v-model="form.password"
-          @keyup.enter="handlePassEnter"
-          type="password"
-          class="ghost-input"
-          ref="passInput"
-          :autofocus="true"
-        />
-        <span class="mirror">{{ '*'.repeat(form.password.length) }}</span>
-        <span class="cursor" v-if="cursorVisible">█</span>
+          <div v-if="!isLogin" class="relative">
+            <input
+              v-model="form.email"
+              type="email"
+              placeholder="Email"
+              class="w-full border-b border-neutral-200 py-2 text-lg font-medium focus:outline-none focus:border-ink transition-colors placeholder:text-neutral-300 bg-transparent"
+              required
+            />
+          </div>
+
+          <div class="relative">
+             <input
+              v-model="form.password"
+              type="password"
+              placeholder="Password"
+              class="w-full border-b border-neutral-200 py-2 text-lg font-medium focus:outline-none focus:border-ink transition-colors placeholder:text-neutral-300 bg-transparent"
+              required
+            />
+          </div>
+        </div>
+
+        <div class="pt-4">
+          <button
+            type="submit"
+            :disabled="loading"
+            class="w-full bg-ink text-paper py-4 text-sm font-bold uppercase tracking-widest hover:bg-neutral-800 disabled:opacity-50 transition-colors flex justify-between px-6 items-center group/btn"
+          >
+            <span>{{ isLogin ? 'Enter' : 'Create' }}</span>
+            <i class="ri-arrow-right-line group-hover/btn:translate-x-1 transition-transform"></i>
+          </button>
+        </div>
+      </form>
+
+      <div class="mt-8 text-center">
+        <button
+          @click="toggleMode"
+          class="text-xs font-mono text-neutral-400 hover:text-ink uppercase tracking-widest transition-colors"
+        >
+          {{ isLogin ? 'Need an account?' : 'Have an account?' }}
+        </button>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-@import url('https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;700&display=swap');
-
-.terminal-container {
-  background-color: #0a0a0a;
-  color: #00ff41; /* Hacker Green */
-  height: 100vh;
-  width: 100vw;
-  font-family: 'Fira Code', monospace;
-  padding: 2rem;
-  overflow: hidden;
-  position: relative;
-}
-
-/* CRT Scanline Effect */
-.crt-overlay {
-  position: absolute;
-  top: 0; left: 0; width: 100%; height: 100%;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
-  background-size: 100% 2px, 3px 100%;
-  pointer-events: none;
-  z-index: 10;
-}
-
-.line {
-  margin-bottom: 0.5rem;
-  text-shadow: 0 0 5px rgba(0, 255, 65, 0.5);
-}
-
-.prompt {
-  margin-right: 1rem;
-  color: #fff;
-}
-
-.input-line {
-  display: flex;
-  align-items: center;
-}
-
-/* Ghost Input: The actual input is invisible but captures focus */
-.ghost-input {
-  position: absolute;
-  opacity: 0;
-  top: 0; left: 0;
-  height: 0; width: 0;
-}
-
-.cursor {
-  margin-left: 2px;
-  animation: blink 1s step-end infinite;
-}
-
-.prefix {
-  color: #555;
-}
-
-@keyframes blink {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0; }
-}
-</style>
-

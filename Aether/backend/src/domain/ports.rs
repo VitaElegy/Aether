@@ -22,6 +22,8 @@ pub enum AuthError {
     InvalidToken,
     #[error("Repository error: {0}")]
     RepoError(#[from] RepositoryError),
+    #[error("Token generation failed: {0}")]
+    TokenGenerationError(String),
 }
 
 /// The Input Port: Defines what the application CORE expects from the storage layer.
@@ -47,6 +49,7 @@ pub trait UserRepository: Send + Sync {
 pub trait AuthService: Send + Sync {
     async fn authenticate(&self, username: &str, password: &str) -> Result<AuthClaims, AuthError>;
     fn verify_token(&self, token: &str) -> Result<AuthClaims, AuthError>;
+    fn generate_token(&self, claims: &AuthClaims) -> Result<String, AuthError>;
 }
 
 /// Service Port: Defines complex domain logic that doesn't fit in the entity.
@@ -57,4 +60,3 @@ pub trait ContentService: Send + Sync {
     // Example of extension: specific rendering logic could be injected here
     async fn render_content(&self, id: ContentId) -> Result<String, RepositoryError>;
 }
-

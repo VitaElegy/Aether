@@ -12,7 +12,19 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: () => import('../views/HomeView.vue'), // Assuming this exists or will exist
+      component: () => import('../views/HomeView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/editor',
+      name: 'editor',
+      component: () => import('../views/EditorView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/profile/:id',
+      name: 'profile',
+      component: () => import('../views/UserProfileView.vue'),
       meta: { requiresAuth: true }
     },
     // Wildcard redirect for safety
@@ -36,4 +48,3 @@ router.beforeEach((to, from, next) => {
 });
 
 export default router;
-

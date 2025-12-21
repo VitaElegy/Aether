@@ -1,14 +1,97 @@
 use axum::{
-    Json, extract::State, response::IntoResponse, http::StatusCode,
+    Json, extract::{State, FromRequestParts}, response::IntoResponse, http::{StatusCode, request::Parts, header::AUTHORIZATION},
+    extract::FromRef,
 };
 use serde::Deserialize;
 use std::sync::Arc;
-use crate::domain::ports::AuthService;
+use crate::domain::{
+    ports::{AuthService, UserRepository},
+    models::{User, AuthClaims},
+};
+use uuid::Uuid;
+use crate::infrastructure::auth::jwt_service::hash_password;
 
 #[derive(Deserialize)]
 pub struct LoginRequest {
     username: String,
     password: String,
+}
+
+#[derive(Deserialize)]
+pub struct RegisterRequest {
+    username: String,
+    email: String,
+    password: String,
+}
+
+pub struct AuthenticatedUser {
+    pub id: Uuid,
+    pub permissions: u64,
+}
+
+#[axum::async_trait]
+impl<S> FromRequestParts<S> for AuthenticatedUser
+where
+    S: Send + Sync,
+    Arc<dyn AuthService>: FromRef<S>,
+{
+    type Rejection = (StatusCode, Json<serde_json::Value>);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth_header = parts.headers.get(AUTHORIZATION)
+            .ok_or((StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Missing bearer token" }))))?
+            .to_str()
+            .map_err(|_| (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid token header" }))))?;
+
+        if !auth_header.starts_with("Bearer ") {
+            return Err((StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid token format" }))));
+        }
+        let token = &auth_header[7..];
+
+        let auth_service: Arc<dyn AuthService> = FromRef::from_ref(state);
+
+        match auth_service.verify_token(token) {
+            Ok(claims) => Ok(AuthenticatedUser {
+                id: Uuid::parse_str(&claims.sub).map_err(|_| (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid user ID in token" }))))?,
+                permissions: claims.perms,
+            }),
+            Err(_) => Err((StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid token" })))),
+        }
+    }
+}
+
+pub struct MaybeAuthenticatedUser(pub Option<AuthenticatedUser>);
+
+#[axum::async_trait]
+impl<S> FromRequestParts<S> for MaybeAuthenticatedUser
+where
+    S: Send + Sync,
+    Arc<dyn AuthService>: FromRef<S>,
+{
+    type Rejection = (StatusCode, Json<serde_json::Value>);
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let auth_header = parts.headers.get(AUTHORIZATION);
+
+        match auth_header {
+            Some(header_value) => {
+                 let header_str = header_value.to_str().map_err(|_| (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid token header" }))))?;
+                 if !header_str.starts_with("Bearer ") {
+                     return Ok(MaybeAuthenticatedUser(None)); // Ignore bad format as 'no user' or error? Let's treat as no user for permissive endpoints
+                 }
+                 let token = &header_str[7..];
+                 let auth_service: Arc<dyn AuthService> = FromRef::from_ref(state);
+                 match auth_service.verify_token(token) {
+                    Ok(claims) => Ok(MaybeAuthenticatedUser(Some(AuthenticatedUser {
+                        id: Uuid::parse_str(&claims.sub).unwrap_or_default(), // Should handle error better
+                        permissions: claims.perms,
+                    }))),
+                    Err(_) => Ok(MaybeAuthenticatedUser(None)), // Invalid token -> Guest
+                 }
+            },
+            None => Ok(MaybeAuthenticatedUser(None)),
+        }
+    }
 }
 
 pub async fn login_handler(
@@ -17,24 +100,39 @@ pub async fn login_handler(
 ) -> impl IntoResponse {
     match auth_service.authenticate(&payload.username, &payload.password).await {
         Ok(claims) => {
-            // In a real app, you would sign the JWT here using the service
-            // For now, we assume the service returns claims, and we might need to encode them if the service didn't return a string token.
-            // Wait, my AuthService::authenticate returns AuthClaims.
-            // I should modify AuthService to return a Token String or encode it here.
-            // For simplicity, let's assume I modify the service later or do it here.
-            // Let's cheat slightly and just return a mock token for the MVP "runnable" state if encoding is complex,
-            // BUT we want elegance. So we should really encode it.
-
-            // Actually, the AuthService implementation I wrote earlier verifies tokens but authenticate returns claims.
-            // Let's assume we create a token from claims.
-
-            // Simplified response for now:
-            (StatusCode::OK, Json(serde_json::json!({
-                "token": "mock_token_for_demo_purposes",
-                "user": { "id": claims.sub, "perms": claims.perms }
-            })))
+             match auth_service.generate_token(&claims) {
+                Ok(token) => (StatusCode::OK, Json(serde_json::json!({
+                    "token": token,
+                    "user": { "id": claims.sub, "perms": claims.perms }
+                }))),
+                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() })))
+             }
         },
         Err(_) => (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid credentials" }))),
     }
 }
 
+pub async fn register_handler(
+    State(repo): State<Arc<dyn UserRepository>>,
+    Json(payload): Json<RegisterRequest>,
+) -> impl IntoResponse {
+    // 1. Check if user exists
+    if let Ok(Some(_)) = repo.find_by_username(&payload.username).await {
+         return (StatusCode::CONFLICT, Json(serde_json::json!({ "error": "Username already taken" })));
+    }
+
+    // 2. Create User
+    let user = User {
+        id: crate::domain::models::UserId(Uuid::new_v4()),
+        username: payload.username,
+        email: payload.email,
+        password_hash: hash_password(&payload.password),
+        permissions: 1, // Default to Read-Only or Basic User
+    };
+
+    // 3. Save
+    match repo.save(user).await {
+        Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({ "message": "User created" }))),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
+    }
+}

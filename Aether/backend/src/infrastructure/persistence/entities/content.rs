@@ -12,6 +12,8 @@ pub struct Model {
     #[sea_orm(unique)]
     pub slug: String,
     pub status: String,
+    pub visibility: String, // Added
+    pub category: Option<String>, // Added
     pub created_at: String,
     pub updated_at: String,
     #[sea_orm(column_type = "Text")]
@@ -23,4 +25,3 @@ pub struct Model {
 pub enum Relation {}
 
 impl ActiveModelBehavior for ActiveModel {}
-

@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use jsonwebtoken::{decode, Validation, DecodingKey, Algorithm};
+use jsonwebtoken::{decode, encode, Header, Validation, DecodingKey, EncodingKey, Algorithm};
 use argon2::{
     password_hash::{
         rand_core::OsRng,
@@ -40,7 +40,7 @@ impl AuthService for Arg2JwtAuthService {
         Argon2::default().verify_password(password.as_bytes(), &parsed_hash)
             .map_err(|_| AuthError::InvalidCredentials)?;
 
-        // 3. Generate Token
+        // 3. Generate Claims
         let expiration = Utc::now()
             .checked_add_signed(Duration::hours(24))
             .expect("valid timestamp")
@@ -64,6 +64,14 @@ impl AuthService for Arg2JwtAuthService {
 
         Ok(token_data.claims)
     }
+
+    fn generate_token(&self, claims: &AuthClaims) -> Result<String, AuthError> {
+        encode(
+            &Header::default(),
+            claims,
+            &EncodingKey::from_secret(self.jwt_secret.as_bytes())
+        ).map_err(|e| AuthError::TokenGenerationError(e.to_string()))
+    }
 }
 
 // Utility to hash passwords (useful for registration or seeding)
@@ -71,4 +79,3 @@ pub fn hash_password(password: &str) -> String {
     let salt = SaltString::generate(&mut OsRng);
     Argon2::default().hash_password(password.as_bytes(), &salt).unwrap().to_string()
 }
-

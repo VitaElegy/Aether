@@ -1,89 +1,76 @@
-# Aether Architecture Manifesto
+# Aether Architecture Manifesto (v1.0)
 
-## 1. Design Philosophy (设计哲学)
+> "Order is not achieved, it is maintained."
 
-Aether implies the medium that connects all things. This system is not a monolith; it is a kernel that orchestrates plugins.
+Aether is not just a blog engine; it is a **digital consciousness kernel**. It rejects the bloat of modern web frameworks in favor of a brutally efficient, type-safe, and artistically minimalist architecture.
 
-### 1.1 The Core Law: Interface over Implementation
-Code against `Traits`, never against `Structs`.
+## 1. Core Philosophy (核心哲学)
 
-*   **Wrong:** `fn save_post(db: &PostgresConnection, post: Post)`
-*   **Right:** `fn save_content<S: StoragePort>(storage: &S, content: impl Content)`
+### 1.1 The Esthetic of Void
+The UI/UX follows the **"Future Minimalist"** design language:
+*   **Atmosphere**: Deep cosmos backgrounds (`#050505`) with subtle atmospheric glow.
+*   **Material**: Glassmorphism with ultra-thin borders (`1px solid rgba(255,255,255,0.05)`).
+*   **Interaction**: Micro-interactions are fluid, governed by physics (VueUse Motion).
+*   **Typography**: `Space Grotesk` for headers, `Inter` for body. Precision over decoration.
 
-## 2. Backend Architecture (Rust)
+### 1.2 The Law of Separation
+The backend enforces a strict **Hexagonal Architecture (Ports & Adapters)**:
+*   **Domain (Inner Core)**: Pure Rust. No SQL, no HTTP, no JSON. Only logic and Traits.
+*   **Application (Orchestrator)**: Connects Ports to Services.
+*   **Infrastructure (Outer Shell)**: The dirty details (Postgres, Axum, Wasmtime).
 
-We utilize a Hexagonal (Ports & Adapters) Architecture.
+## 2. Technical Stack (技术栈)
+
+### Backend (The Kernel)
+*   **Language**: Rust (Edition 2021) - Memory safety without GC.
+*   **Web Framework**: Axum - Ergonomic, asynchronous, modular.
+*   **Database**: Postgres 15 + SeaORM (Async ORM).
+*   **Security**:
+    *   **Auth**: Argon2 (Hashing) + Ed25519 (Signing).
+    *   **RBAC**: Bitmask-based permission system (u64).
+*   **Observability**: `tracing` ecosystem (Structured JSON logs).
+*   **Extensibility**: Wasmtime (WASM Plugin Host) - allowing hot-swappable logic.
+
+### Frontend (The Interface)
+*   **Framework**: Vue 3 (Composition API) + TypeScript.
+*   **Build Tool**: Vite.
+*   **UI Library**: TDesign (Customized via CSS Variables) + RemixIcon.
+*   **Motion**: @vueuse/motion (Spring animations).
+*   **State**: Pinia.
+
+## 3. System Components
+
+### 3.1 Authentication Flow
+1.  **Identity**: Users are identified by `UserId` (UUID).
+2.  **Verification**: Passwords are hashed with Argon2id.
+3.  **Session**: Stateless JWT signed with `HS256` (migrating to Ed25519).
+4.  **Guard**: Frontend `Router Guard` enforces access control at the edge.
+
+### 3.2 Dynamic Content Engine
+The frontend utilizes a **Strategy Pattern** for rendering:
+*   `DynamicRenderer.vue` acts as the context.
+*   Specific renderers (`Markdown`, `CodeSnippet`, `Video`) are lazy-loaded.
+*   This allows infinite extensibility for new content types (e.g., 3D Models, Interactive Graphs).
+
+## 4. Directory Structure
 
 ```
-src/
-├── domain/           # Pure Logic. NO EXTERNAL DEPENDENCIES (No sqlx, no axum).
-│   ├── models/       # Structs representing the core data.
-│   └── ports/        # Traits defining what the system NEEDS (Repository interfaces).
-├── application/      # Orchestration.
-│   ├── use_cases/    # Application logic (e.g., "PublishPost").
-│   └── services/     # Domain services.
-├── infrastructure/   # The dirty details.
-│   ├── persistence/  # Database implementations (SeaORM, Redis).
-│   └── adapters/     # External APIs, File Systems.
-└── interface/        # Entry points.
-    ├── api/          # REST/GraphQL endpoints (Axum handlers).
-    └── cli/          # CLI commands.
+Aether/
+├── backend/                # The Rust Core
+│   ├── src/
+│   │   ├── domain/         # Pure Logic (Models, Ports)
+│   │   ├── infrastructure/ # Implementation (DB, Auth, WASM)
+│   │   ├── interface/      # API Handlers
+│   │   └── application/    # Use Cases (Planned)
+│   └── logs/               # Structured JSON logs
+├── frontend/               # The Vue Interface
+│   ├── src/
+│   │   ├── components/     # Atomic UI Elements
+│   │   ├── views/          # Page layouts (Glassmorphism)
+│   │   └── stores/         # Pinia State
+└── doc/                    # The Knowledge Base
 ```
-
-### 2.1 Key Abstractions
-
-#### `ContentProvider` Trait
-The blog is agnostic to *what* it serves. It could be a text post, a video, a code snippet, or a 3D model.
-
-```rust
-#[async_trait]
-pub trait ContentProvider: Send + Sync {
-    type Metadata: Serialize + DeserializeOwned;
-    fn render(&self) -> Result<String, RenderError>;
-    fn validate(&self) -> ValidationResult;
-}
-```
-
-#### `StoragePort` Trait
-The blog is agnostic to *where* it lives.
-
-```rust
-#[async_trait]
-pub trait StoragePort<T>: Send + Sync {
-    async fn save(&self, item: T) -> Result<Id, StorageError>;
-    async fn find_by_id(&self, id: Id) -> Result<Option<T>, StorageError>;
-    async fn query(&self, query: Query) -> Result<Vec<T>, StorageError>;
-}
-```
-
-## 3. Frontend Architecture (Vue 3 + TDesign)
-
-The frontend mirrors the backend's elegance through **Composition API**.
-
-### 3.1 The "Renderer" Pattern
-Instead of a giant `if-else` block for different post types, we use a dynamic component loader strategy.
-
-```typescript
-// dynamic-loader.ts
-const renderers = new Map<string, Component>();
-export function registerRenderer(type: string, component: Component) { ... }
-```
-
-### 3.2 State Management
-Pinia stores should be minimal. Complex logic belongs in pure TypeScript service classes or composables, decoupled from the UI framework.
-
-## 4. Tech Stack Decision Matrix
-
-| Component | Choice | Rationale |
-| :--- | :--- | :--- |
-| **Language** | Rust | Memory safety without GC. Enforces correctness at compile time. |
-| **Web Fx** | Axum | Built on Tokio/Tower. Ergonomic yet extremely powerful. |
-| **ORM** | SeaORM | Async, dynamic. Fits our generic/plugin architecture better than Diesel. |
-| **Frontend** | Vue 3 | Composition API allows logic reuse better than React Hooks (imo). |
-| **UI** | TDesign | Clean, enterprise-grade, fits the "Elegant" persona. |
-| **Build** | Vite | Webpack is for dinosaurs. |
 
 ---
 *Signed,*
 *The Architect*
-
