@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use crate::domain::{
     ports::{AuthService, UserRepository},
-    models::{User, AuthClaims},
+    models::User,
 };
 use uuid::Uuid;
 use crate::infrastructure::auth::jwt_service::hash_password;
@@ -27,6 +27,12 @@ pub struct RegisterRequest {
 pub struct AuthenticatedUser {
     pub id: Uuid,
     pub permissions: u64,
+}
+
+impl AuthenticatedUser {
+    pub fn has_permission(&self, required_perm: u64) -> bool {
+        (self.permissions & required_perm) == required_perm
+    }
 }
 
 #[axum::async_trait]

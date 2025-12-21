@@ -34,6 +34,8 @@ pub struct ContentAggregate {
     pub updated_at: DateTime<Utc>,
     pub body: ContentBody,
     pub tags: Vec<String>,
+    // Context for persistence, not part of domain state per se, but useful for transport
+    pub version_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

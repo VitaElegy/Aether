@@ -20,7 +20,7 @@ use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
 use crate::domain::models::User;
 use crate::interface::api::auth::{login_handler, register_handler};
-use crate::interface::api::content::{create_content_handler, list_content_handler, get_content_handler};
+use crate::interface::api::content::{create_content_handler, list_content_handler, get_content_handler, update_content_handler, delete_content_handler, get_content_diff_handler};
 
 // Define the Global State
 #[derive(Clone)]
@@ -103,7 +103,26 @@ async fn main() {
             body JSONB NOT NULL,
             tags TEXT[] NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS content_versions (
+            id UUID PRIMARY KEY,
+            content_id UUID NOT NULL,
+            version INT NOT NULL,
+            title TEXT NOT NULL,
+            body JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            change_reason TEXT,
+            content_hash TEXT NOT NULL,
+            editor_id UUID NOT NULL
+        );
     ").await.expect("Failed to initialize DB schema");
+
+    // Migration: Add columns if they don't exist (Quick hack for dev)
+    let _ = db.execute_unprepared("ALTER TABLE content_versions ADD COLUMN IF NOT EXISTS change_reason TEXT;").await;
+    let _ = db.execute_unprepared("ALTER TABLE content_versions ADD COLUMN IF NOT EXISTS content_hash TEXT DEFAULT '';").await;
+    // Editor ID: Add column, then backfill NULLs, then set NOT NULL to satisfy SeaORM strictness
+    let _ = db.execute_unprepared("ALTER TABLE content_versions ADD COLUMN IF NOT EXISTS editor_id UUID;").await;
+    let _ = db.execute_unprepared("UPDATE content_versions SET editor_id = '00000000-0000-0000-0000-000000000000' WHERE editor_id IS NULL;").await;
+    let _ = db.execute_unprepared("ALTER TABLE content_versions ALTER COLUMN editor_id SET NOT NULL;").await;
 
     let repo = Arc::new(PostgresRepository::new(db.clone()));
     let auth_service = Arc::new(Arg2JwtAuthService::new(
@@ -136,7 +155,8 @@ async fn main() {
         .route("/api/auth/login", post(login_handler))
         .route("/api/auth/register", post(register_handler))
         .route("/api/content", post(create_content_handler).get(list_content_handler))
-        .route("/api/content/:id", get(get_content_handler))
+        .route("/api/content/:id", get(get_content_handler).put(update_content_handler).delete(delete_content_handler))
+        .route("/api/content/:id/diff/:v1/:v2", get(get_content_diff_handler))
         .with_state(state)
         .layer(TraceLayer::new_for_http()); // Magic happens here: Automatic logging for every request
 

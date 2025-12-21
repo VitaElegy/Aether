@@ -43,6 +43,7 @@ ring = "0.17"
 # Abstraction
 async-trait = "0.1"
 tracing-appender = "0.2.4"
+similar = "2.7.0"
 
 [workspace]
 members = ["."]

@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sea_orm::*;
 use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId};
 use crate::domain::ports::{ContentRepository, UserRepository, RepositoryError};
-use super::entities::{content, user};
+use super::entities::{content, user, content_version};
 use chrono::Utc;
 
 pub struct PostgresRepository {
@@ -67,19 +67,38 @@ impl UserRepository for PostgresRepository {
 
 #[async_trait]
 impl ContentRepository for PostgresRepository {
-    async fn save(&self, content: ContentAggregate) -> Result<ContentId, RepositoryError> {
+    async fn save(&self, content: ContentAggregate, editor_id: UserId) -> Result<ContentId, RepositoryError> {
+        let serialized_body = serde_json::to_string(&content.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
+        let serialized_tags = serde_json::to_string(&content.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
+
+        // Calculate Hash (SHA256)
+        // Combine all semantic fields to detect any change
+        let hash_input = format!("{}{}{}{:?}{:?}{:?}",
+            content.title,
+            serialized_body,
+            serialized_tags,
+            content.status,
+            content.visibility,
+            content.category
+        );
+        let hash_digest = ring::digest::digest(&ring::digest::SHA256, hash_input.as_bytes());
+        let current_hash = hash_digest.as_ref().iter().map(|b| format!("{:02x}", b)).collect::<String>();
+
+        // Start Transaction
+        let txn = self.db.begin().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
         let model = content::ActiveModel {
             id: Set(content.id.0.to_string()),
             author_id: Set(content.author_id.to_string()),
-            title: Set(content.title),
+            title: Set(content.title.clone()),
             slug: Set(content.slug),
             status: Set(format!("{:?}", content.status)),
             visibility: Set(format!("{:?}", content.visibility)),
             category: Set(content.category),
-            created_at: Set(content.created_at.to_string()),
-            updated_at: Set(Utc::now().to_string()),
-            body: Set(serde_json::to_value(content.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?.to_string()),
-            tags: Set(serde_json::to_value(content.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?.to_string()),
+            created_at: Set(content.created_at.to_rfc3339()),
+            updated_at: Set(Utc::now().to_rfc3339()),
+            body: Set(serialized_body.clone()),
+            tags: Set(serialized_tags),
         };
 
         content::Entity::insert(model)
@@ -96,9 +115,62 @@ impl ContentRepository for PostgresRepository {
                     ])
                     .to_owned()
             )
-            .exec(&self.db)
+            .exec(&txn) // Use transaction
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // --- Versioning Logic ---
+
+        let last_version = content_version::Entity::find()
+            .filter(content_version::Column::ContentId.eq(content.id.0.to_string()))
+            .order_by_desc(content_version::Column::Version)
+            .one(&txn) // Use transaction
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let should_snapshot = if let Some(lv) = &last_version {
+            // 1. Explicit reason -> Force snapshot
+            if content.version_message.is_some() {
+                true
+            } else {
+                // 2. Hash Changed -> Snapshot
+                // We handle legacy records (empty hash) by assuming change if hash is empty
+                if lv.content_hash.is_empty() {
+                    true
+                } else {
+                    lv.content_hash != current_hash
+                }
+            }
+        } else {
+            true // First version
+        };
+
+        if should_snapshot {
+            // FIX: If last_version is None, we start at 1. If it exists, we increment.
+            // CAUTION: 'last_version' is Option<Model>.
+            let next_version = last_version.as_ref().map(|v| v.version + 1).unwrap_or(1);
+
+            let version_model = content_version::ActiveModel {
+                id: Set(uuid::Uuid::new_v4().to_string()),
+                content_id: Set(content.id.0.to_string()),
+                version: Set(next_version),
+                title: Set(content.title.clone()),
+                body: Set(serialized_body), // Back to String
+                change_reason: Set(content.version_message.clone()),
+                content_hash: Set(current_hash),
+                editor_id: Set(editor_id.0.to_string()), // Back to String
+                created_at: Set(Utc::now().to_rfc3339()),
+            };
+            content_version::Entity::insert(version_model)
+                .exec(&txn) // Use transaction
+                .await
+                .map_err(|e| {
+                    tracing::error!("Failed to insert content_version: {:?}", e);
+                    RepositoryError::ConnectionError(e.to_string())
+                })?;
+        }
+
+        txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         Ok(content.id)
     }
@@ -130,6 +202,7 @@ impl ContentRepository for PostgresRepository {
                 updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
                 body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                version_message: None, // Not persisted in main table
             }))
         } else {
             Ok(None)
@@ -140,11 +213,10 @@ impl ContentRepository for PostgresRepository {
         todo!("Implement slug lookup")
     }
 
-    async fn list(&self, _limit: u64, _offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError> {
-        // Simple list implementation - In reality this should accept filters
+    async fn list(&self, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError> {
          let models = content::Entity::find()
-            .limit(_limit)
-            .offset(_offset)
+            .limit(limit)
+            .offset(offset)
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
@@ -171,12 +243,42 @@ impl ContentRepository for PostgresRepository {
                 updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
                 body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                version_message: None,
             });
         }
         Ok(results)
     }
 
-    async fn delete(&self, _id: &ContentId) -> Result<(), RepositoryError> {
-        todo!("Implement delete")
+    async fn delete(&self, id: &ContentId) -> Result<(), RepositoryError> {
+        // ... existing delete implementation ...
+        let txn = self.db.begin().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // 1. Delete versions
+        content_version::Entity::delete_many()
+            .filter(content_version::Column::ContentId.eq(id.0.to_string()))
+            .exec(&txn)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // 2. Delete content
+        content::Entity::delete_by_id(id.0.to_string())
+            .exec(&txn)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(())
+    }
+
+    async fn get_version(&self, id: &ContentId, version: i32) -> Result<Option<String>, RepositoryError> {
+        let model = content_version::Entity::find()
+            .filter(content_version::Column::ContentId.eq(id.0.to_string()))
+            .filter(content_version::Column::Version.eq(version))
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(model.map(|m| m.body))
     }
 }
