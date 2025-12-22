@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use sea_orm::*;
-use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId};
-use crate::domain::ports::{ContentRepository, UserRepository, RepositoryError};
-use super::entities::{content, user, content_version};
+use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId};
+use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, RepositoryError};
+use super::entities::{content, user, content_version, comment};
 use chrono::Utc;
 
 pub struct PostgresRepository {
@@ -320,5 +320,55 @@ impl ContentRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         Ok(model.map(|m| m.body))
+    }
+}
+
+#[async_trait]
+impl CommentRepository for PostgresRepository {
+    async fn add_comment(&self, c: Comment) -> Result<CommentId, RepositoryError> {
+        let model = comment::ActiveModel {
+            id: Set(c.id.0.to_string()),
+            content_id: Set(c.content_id.0.to_string()),
+            user_id: Set(c.user_id.0.to_string()),
+            parent_id: Set(c.parent_id.map(|id| id.0.to_string())),
+            text: Set(c.text),
+            created_at: Set(c.created_at.to_rfc3339()),
+        };
+
+        comment::Entity::insert(model)
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(c.id)
+    }
+
+    async fn get_comments(&self, content_id: &ContentId) -> Result<Vec<Comment>, RepositoryError> {
+        let results = comment::Entity::find()
+            .filter(comment::Column::ContentId.eq(content_id.0.to_string()))
+            .find_also_related(user::Entity)
+            .order_by_asc(comment::Column::CreatedAt)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let mut flat_list = Vec::new();
+
+        for (m, author) in results {
+             let c = Comment {
+                id: CommentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                content_id: ContentId(uuid::Uuid::parse_str(&m.content_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                user_id: UserId(uuid::Uuid::parse_str(&m.user_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                user_name: author.as_ref().map(|u| u.display_name.clone().or(Some(u.username.clone())).unwrap_or_default()),
+                user_avatar: author.as_ref().and_then(|u| u.avatar_url.clone()),
+                parent_id: m.parent_id.map(|pid| CommentId(uuid::Uuid::parse_str(&pid).unwrap_or_default())),
+                text: m.text,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                replies: Vec::new(),
+            };
+            flat_list.push(c);
+        }
+
+        Ok(flat_list)
     }
 }

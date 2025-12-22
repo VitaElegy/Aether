@@ -82,3 +82,21 @@ pub struct AuthClaims {
     pub exp: usize,  // Expiry
     pub perms: u64,  // Permissions snapshot
 }
+
+// --- Comment Domain ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CommentId(pub Uuid);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Comment {
+    pub id: CommentId,
+    pub content_id: ContentId,
+    pub user_id: UserId,
+    pub user_name: Option<String>,
+    pub user_avatar: Option<String>,
+    pub parent_id: Option<CommentId>,
+    pub text: String,
+    pub created_at: DateTime<Utc>,
+    pub replies: Vec<Comment>, // For nested display
+}

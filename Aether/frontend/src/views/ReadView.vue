@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router';
 import axios from 'axios';
 import { useAuthStore } from '../stores/auth';
 import DynamicRenderer from '../components/DynamicRenderer.vue';
+import CommentSection from '../components/CommentSection.vue';
 import { marked } from 'marked';
 
 const route = useRoute();
@@ -148,6 +149,9 @@ const handleEdit = () => {
                 <div class="prose prose-neutral prose-lg max-w-none">
                     <DynamicRenderer :type="post.type" :data="post.data" />
                 </div>
+
+                <!-- Comments -->
+                <CommentSection v-if="post" :content-id="post.id" :author-id="post.author_id" />
             </div>
         </main>
     </div>

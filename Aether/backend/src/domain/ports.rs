@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use super::models::{ContentAggregate, ContentId, User, UserId, AuthClaims};
+use super::models::{ContentAggregate, ContentId, User, UserId, AuthClaims, Comment};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -44,6 +44,13 @@ pub trait UserRepository: Send + Sync {
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, RepositoryError>;
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, RepositoryError>;
     async fn save(&self, user: User) -> Result<UserId, RepositoryError>;
+}
+
+/// Comment Repository Port
+#[async_trait]
+pub trait CommentRepository: Send + Sync {
+    async fn add_comment(&self, comment: Comment) -> Result<super::models::CommentId, RepositoryError>;
+    async fn get_comments(&self, content_id: &ContentId) -> Result<Vec<Comment>, RepositoryError>;
 }
 
 /// Auth Service Port (for encryption/token generation logic)
