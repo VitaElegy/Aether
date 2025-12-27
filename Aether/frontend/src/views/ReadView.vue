@@ -7,6 +7,7 @@ import { usePreferencesStore } from '../stores/preferences';
 import DynamicRenderer from '../components/DynamicRenderer.vue';
 import CommentSection from '../components/CommentSection.vue';
 import { marked } from 'marked';
+import TopNavBar from '@/components/TopNavBar.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -77,35 +78,37 @@ const handleEdit = () => {
 <template>
     <div class="min-h-screen w-full bg-paper flex flex-col transition-colors duration-700">
         <!-- Header -->
-        <header
-            class="h-16 flex-shrink-0 flex items-center justify-between px-6 border-b border-ash/50 bg-paper/80 backdrop-blur-xl z-20 fixed w-full top-0">
-            <div class="flex items-center gap-4">
-                <button @click="router.push('/')" class="text-ink/60 hover:text-accent transition-colors">
+        <TopNavBar>
+            <template #left>
+                 <button @click="router.push('/')" class="text-ink/60 hover:text-accent transition-colors flex items-center gap-2" title="Return">
                     <i class="ri-arrow-left-line text-xl"></i>
+                    <span class="sr-only">Return</span>
                 </button>
-                <div class="h-4 w-px bg-ash mx-2"></div>
-                <span class="text-[10px] font-black uppercase tracking-[0.3em] text-ink/40">
-                    Transmission / Reader
-                </span>
-            </div>
-
-            <div class="flex items-center gap-4">
+            </template>
+            <template #center>
+                <div class="flex items-center gap-4">
+                     <span class="text-[10px] font-black uppercase tracking-[0.3em] text-ink/40">
+                        Transmission / Reader
+                    </span>
+                 </div>
+            </template>
+            <template #right>
                 <button v-if="isAuthor" @click="handleEdit"
                     class="text-xs font-black uppercase tracking-widest text-accent hover:brightness-125 transition-all">
                     Modify Entry
                 </button>
-            </div>
-        </header>
+            </template>
+        </TopNavBar>
 
-        <div v-if="loading" class="flex-1 flex items-center justify-center pt-16">
+        <div v-if="loading" class="flex-1 flex items-center justify-center">
             <div class="animate-pulse text-accent text-xs font-black uppercase tracking-[0.4em]">Establishing Uplink...
             </div>
         </div>
 
-        <div v-else class="flex-1 flex pt-16">
+        <div v-else class="flex-1 flex overflow-hidden">
             <!-- Sidebar (TOC) -->
             <aside v-if="!prefStore.isSidebarCollapsed"
-                class="w-80 flex-shrink-0 hidden xl:flex flex-col border-r border-ash/50 bg-paper px-10 py-16 overflow-y-auto custom-scrollbar h-[calc(100vh-64px)] sticky top-16">
+                class="w-80 flex-shrink-0 hidden xl:flex flex-col border-r border-ash/50 bg-paper px-10 py-16 overflow-y-auto custom-scrollbar">
                 <div class="text-[10px] font-black uppercase tracking-[0.3em] text-accent mb-10">Map Of Content</div>
                 <nav v-if="toc.length > 0" class="flex flex-col gap-6">
                     <a v-for="(item, idx) in toc" :key="idx" href="#"

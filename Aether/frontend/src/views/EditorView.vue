@@ -8,6 +8,7 @@ import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from 'tiptap-markdown';
 import { useDebounceFn, useStorage } from '@vueuse/core';
+import TopNavBar from '@/components/TopNavBar.vue';
 
 const router = useRouter();
 const route = useRoute();
@@ -311,45 +312,59 @@ onBeforeUnmount(() => {
 <template>
   <div class="h-screen w-full flex flex-col bg-paper overflow-hidden">
     <!-- Header -->
-    <header class="h-16 flex-shrink-0 flex items-center justify-between px-6 border-b border-neutral-100 bg-paper/95 backdrop-blur z-20">
-       <div class="flex items-center gap-4">
-          <button @click="router.back()" class="text-neutral-400 hover:text-ink transition-colors">
-            <i class="ri-arrow-left-line text-xl"></i>
-          </button>
-          <span class="text-xs font-mono uppercase tracking-widest text-neutral-400 hidden sm:block">
-            Editor / {{ draftId ? 'Editing Draft' : 'New Entry' }}
-          </span>
-          <span v-if="isSaving" class="text-[10px] text-neutral-300 animate-pulse uppercase tracking-widest">Saving...</span>
-          <span v-else-if="draftId" class="text-[10px] text-neutral-300 uppercase tracking-widest">Saved</span>
-       </div>
+    <TopNavBar>
+       <template #left>
+          <div class="flex items-center gap-6">
+             <button @click="router.back()" class="text-neutral-400 hover:text-ink transition-colors flex items-center gap-2" title="Go Back">
+                <i class="ri-arrow-left-line text-xl"></i>
+             </button>
 
-       <div class="flex items-center gap-6">
-          <button v-if="draftId" @click="router.push(`/content/${draftId}/history`)" class="flex items-center gap-2 group cursor-pointer hover:text-ink text-neutral-400 transition-colors" title="View Version History">
-             <i class="ri-history-line text-lg"></i>
-             <span class="text-[10px] uppercase tracking-widest group-hover:text-neutral-600 hidden sm:inline">History</span>
-          </button>
-         <div class="flex items-center gap-2 mr-4 group cursor-pointer" @click="autoSaveEnabled = !autoSaveEnabled">
-            <div class="w-2 h-2 rounded-full transition-colors" :class="autoSaveEnabled ? 'bg-green-500' : 'bg-neutral-300'"></div>
-            <span class="text-[10px] uppercase tracking-widest text-neutral-400 group-hover:text-neutral-600">Auto-Save</span>
-         </div>
+             <div class="h-4 w-px bg-neutral-200/50"></div>
 
-         <div class="flex items-center gap-3">
-            <span class="text-[10px] font-bold uppercase tracking-widest text-neutral-400 transition-colors" :class="{ 'text-ink': isLiveMode }">Live</span>
-            <button
-              @click="toggleMode"
-              class="w-10 h-5 rounded-full bg-ash relative transition-colors focus:outline-none"
-              :class="{ 'bg-ink': !isLiveMode }"
-            >
-               <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform duration-200 shadow-sm" :class="{ 'translate-x-5': !isLiveMode }"></div>
-            </button>
-            <span class="text-[10px] font-bold uppercase tracking-widest text-neutral-400 transition-colors" :class="{ 'text-ink': !isLiveMode }">Raw</span>
-         </div>
-         <div class="h-4 w-px bg-neutral-200"></div>
-         <button @click="handlePublish" :disabled="isPublishing" class="bg-ink text-paper px-6 py-2 text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
-           {{ isPublishing ? 'Publishing...' : 'Publish' }}
-         </button>
-       </div>
-    </header>
+             <button v-if="draftId" @click="router.push(`/content/${draftId}/history`)" class="flex items-center gap-2 group cursor-pointer hover:text-ink text-neutral-400 transition-colors" title="View Version History">
+                <i class="ri-history-line text-lg"></i>
+                <span class="text-[10px] uppercase tracking-widest group-hover:text-neutral-600 hidden sm:inline">History</span>
+             </button>
+          </div>
+       </template>
+
+       <template #center>
+          <div class="flex items-center gap-3">
+             <span class="text-xs font-mono uppercase tracking-widest text-neutral-400 block">
+               Editor / {{ draftId ? 'Editing Draft' : 'New Entry' }}
+             </span>
+             <span v-if="isSaving" class="text-[10px] text-neutral-300 animate-pulse uppercase tracking-widest">Saving...</span>
+             <span v-else-if="draftId" class="text-[10px] text-neutral-300 uppercase tracking-widest">Saved</span>
+          </div>
+       </template>
+
+       <template #right>
+          <div class="flex items-center gap-6">
+             <div class="flex items-center gap-2 mr-2 group cursor-pointer" @click="autoSaveEnabled = !autoSaveEnabled">
+                <div class="w-2 h-2 rounded-full transition-colors" :class="autoSaveEnabled ? 'bg-green-500' : 'bg-neutral-300'"></div>
+                <span class="text-[10px] uppercase tracking-widest text-neutral-400 group-hover:text-neutral-600">Auto-Save</span>
+             </div>
+
+             <div class="flex items-center gap-3">
+                <span class="text-[10px] font-bold uppercase tracking-widest text-neutral-400 transition-colors" :class="{ 'text-ink': isLiveMode }">Live</span>
+                <button
+                  @click="toggleMode"
+                  class="w-10 h-5 rounded-full bg-ash relative transition-colors focus:outline-none"
+                  :class="{ 'bg-ink': !isLiveMode }"
+                >
+                   <div class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform duration-200 shadow-sm" :class="{ 'translate-x-5': !isLiveMode }"></div>
+                </button>
+                <span class="text-[10px] font-bold uppercase tracking-widest text-neutral-400 transition-colors" :class="{ 'text-ink': !isLiveMode }">Raw</span>
+             </div>
+
+             <div class="h-4 w-px bg-neutral-200"></div>
+
+             <button @click="handlePublish" :disabled="isPublishing" class="bg-ink text-paper px-6 py-2 text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-center min-w-[100px]">
+               {{ isPublishing ? '...' : 'Publish' }}
+             </button>
+          </div>
+       </template>
+    </TopNavBar>
 
     <div class="flex-1 flex overflow-hidden">
       <!-- Left Sidebar: TOC -->

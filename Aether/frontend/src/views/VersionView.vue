@@ -1,54 +1,57 @@
 <template>
-  <div class="version-view p-6 max-w-5xl mx-auto">
-    <div class="header mb-6 flex justify-between items-center">
-      <div class="flex flex-col">
-         <h1 class="text-3xl font-serif text-gray-900 tracking-wide italic">
-            Version {{ versionId }}
-         </h1>
-         <div class="text-gray-400 text-[10px] font-mono mt-1 tracking-widest uppercase opacity-50 pl-1">
-            Ref: {{ originalId.slice(0, 8) }}
-         </div>
-      </div>
-
-      <div class="flex items-center gap-3">
-         <button
-            class="text-gray-500 hover:text-gray-800 font-serif italic text-lg transition-colors duration-200"
-            @click="router.push(`/content/${originalId}/history`)"
-         >
+  <div class="min-h-screen bg-[var(--bg-color-page)] flex flex-col">
+    <TopNavBar>
+      <template #left>
+         <TextAction size="sm" @click="router.push(`/content/${originalId}/history`)">
             ← return to history
-         </button>
+         </TextAction>
+      </template>
 
-         <div class="w-px h-4 bg-gray-200 rotate-12"></div>
+      <template #center>
+        <div class="flex flex-col leading-tight items-center">
+          <span class="font-serif font-bold text-lg text-ink">Version {{ versionId }}</span>
+          <MonoRef>Ref: {{ originalId.slice(0, 8) }}</MonoRef>
+        </div>
+      </template>
 
-         <button
-            class="font-serif italic text-lg transition-colors duration-200"
-            :class="isDiffMode ? 'text-gray-900 underline decoration-1 underline-offset-4' : 'text-gray-400 hover:text-gray-600'"
-            @click="toggleDiff"
-         >
-            {{ isDiffMode ? 'reading changes' : 'read content' }}
-         </button>
-      </div>
-    </div>
+      <template #right>
+          <TextAction
+              size="sm"
+              :active="isDiffMode"
+              @click="toggleDiff"
+          >
+              {{ isDiffMode ? 'reading changes' : 'read content' }}
+          </TextAction>
+      </template>
+    </TopNavBar>
 
-    <t-loading v-if="loading" />
-    <div v-else>
-         <!-- Diff View -->
-         <div v-if="isDiffMode">
-             <t-card title="Diff with Previous Version" class="mb-4">
-                 <!-- GitHub-style Diff Table -->
-                 <DiffViewer :changes="diffContent" :empty-message="diffEmptyMessage" />
-             </t-card>
-         </div>
+    <div class="flex-1 w-full max-w-5xl mx-auto p-6 md:p-12">
+      <t-loading v-if="loading" />
 
-         <!-- Content View -->
-         <div v-else class="content-preview">
-            <t-card :title="contentData.title || 'Untitled'" class="mb-4">
-               <div class="prose max-w-none p-4" v-html="renderMarkdown(contentData.body)"></div>
-            </t-card>
-            <div class="meta text-xs text-gray-400 mt-2">
-               Raw Data: {{ contentData }}
+      <!-- Unified Content Card -->
+      <div v-else class="relative">
+        <t-card
+          :title="cardTitle"
+          class="min-h-[60vh] transition-all duration-300 shadow-sm border-gray-100 overflow-hidden w-full bg-paper"
+          :class="{'ring-1 ring-emerald-50': isDiffMode}"
+          :bordered="false"
+        >
+          <Transition name="fade" mode="out-in">
+            <!-- View: Diff -->
+            <div v-if="isDiffMode" key="diff" class="w-full">
+              <DiffViewer :changes="diffContent" :empty-message="diffEmptyMessage" />
             </div>
-         </div>
+
+            <!-- View: Content Reader -->
+            <div v-else key="content" class="w-full">
+              <div class="prose max-w-none w-full p-8 font-serif text-gray-800 leading-relaxed" v-html="renderMarkdown(contentData.body)"></div>
+              <div class="meta border-t border-gray-50 mx-8 mt-4 pt-6 pb-4 text-[10px] font-mono text-gray-300 text-right">
+                  Snapshot ID: {{ contentData.id }}
+              </div>
+            </div>
+          </Transition>
+        </t-card>
+      </div>
     </div>
   </div>
 </template>
@@ -61,6 +64,13 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { ArrowLeftIcon, HistoryIcon, ComponentCheckboxIcon, FileIcon } from 'tdesign-icons-vue-next';
 import MarkdownIt from 'markdown-it';
 import DiffViewer from '@/components/DiffViewer.vue';
+import TopNavBar from '@/components/TopNavBar.vue';
+
+// UI Components
+import PageContainer from '@/components/ui/PageContainer.vue';
+import SerifHeading from '@/components/ui/SerifHeading.vue';
+import MonoRef from '@/components/ui/MonoRef.vue';
+import TextAction from '@/components/ui/TextAction.vue';
 
 const route = useRoute();
 const router = useRouter();
@@ -88,6 +98,11 @@ const diffEmptyMessage = computed(() => {
         return 'This is the first version, nothing to compare against.';
     }
     return 'No differences found.';
+});
+
+const cardTitle = computed(() => {
+    if (isDiffMode.value) return 'Review Changes';
+    return contentData.value.title || 'Untitled';
 });
 
 const loadData = async () => {
@@ -143,5 +158,17 @@ onMounted(loadData);
 .version-view {
     background: var(--bg-color-page);
     min-height: 100vh;
+}
+
+/* Smooth Fade/Slide Transition */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.25s ease, transform 0.25s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
 }
 </style>
