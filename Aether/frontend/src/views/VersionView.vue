@@ -53,7 +53,7 @@ const isDiffMode = ref(route.query.diff === 'true');
 
 const loading = ref(true);
 const contentData = ref<any>({});
-const diffContent = ref<any[]>([]);
+const diffContent = ref<any[] | null>(null);
 
 const md = new MarkdownIt();
 
@@ -72,12 +72,6 @@ const loadData = async () => {
 
         // Load Version Content
         const data = await contentApi.getVersion(originalId, versionId);
-        // data.body might be JSON string or object depending on backend response
-        // Backend returns JSON string: "{\"type\":\"Markdown\"...}" if we sent string.
-        // Wait, backend `get_version_handler` returns `body` string directly but with `application/json` header.
-        // So axios parses it?
-        // If it is doubly serialized, we might need to parse.
-        // Let's assume it comes as object if headers are correct.
         contentData.value = typeof data === 'string' ? JSON.parse(data) : data;
 
         // Load Diff if requested
@@ -96,7 +90,14 @@ const loadData = async () => {
 
 const toggleDiff = async () => {
     isDiffMode.value = !isDiffMode.value;
-    if (isDiffMode.value && !diffContent.value && versionId > 1) {
+
+    // If switching to diff mode and data not loaded yet
+    if (isDiffMode.value && !diffContent.value) {
+         if (versionId <= 1) {
+             MessagePlugin.warning('This is the first version, nothing to compare against.');
+             return;
+         }
+
          try {
              loading.value = true;
              const diff = await contentApi.getDiff(originalId, versionId - 1, versionId);
