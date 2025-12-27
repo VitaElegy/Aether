@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use sea_orm::*;
-use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId};
+use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot};
 use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, RepositoryError};
 use super::entities::{content, user, content_version, comment};
 use chrono::Utc;
@@ -105,13 +105,12 @@ impl ContentRepository for PostgresRepository {
 
         // Calculate Hash (SHA256)
         // Combine all semantic fields to detect any change
-        let hash_input = format!("{}{}{}{:?}{:?}{:?}",
+        // Calculate Hash (SHA256)
+        // Combine only versioned fields (Title + Body) to detect content changes.
+        // Status/Visibility/Tags are currently not versioned in 'content_versions', so changing them shouldn't trigger a snapshot.
+        let hash_input = format!("{}{}",
             content.title,
-            serialized_body,
-            serialized_tags,
-            content.status,
-            content.visibility,
-            content.category
+            serialized_body
         );
         let hash_digest = ring::digest::digest(&ring::digest::SHA256, hash_input.as_bytes());
         let current_hash = hash_digest.as_ref().iter().map(|b| format!("{:02x}", b)).collect::<String>();
@@ -252,9 +251,29 @@ impl ContentRepository for PostgresRepository {
         todo!("Implement slug lookup")
     }
 
-    async fn list(&self, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError> {
+    async fn list(&self, viewer_id: Option<UserId>, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError> {
+         let mut condition = Condition::any()
+            .add(
+                Condition::all()
+                    .add(content::Column::Visibility.eq("Public"))
+                    .add(content::Column::Status.eq("Published"))
+            );
+
+         if let Some(uid) = viewer_id {
+             // Logged in: Can see Internal Published
+             condition = condition.add(
+                Condition::all()
+                    .add(content::Column::Visibility.eq("Internal"))
+                    .add(content::Column::Status.eq("Published"))
+             );
+             // Logged in: Can see ALL my own content (Drafts, Private, etc.)
+             condition = condition.add(content::Column::AuthorId.eq(uid.0.to_string()));
+         }
+
          let results = content::Entity::find()
             .find_also_related(user::Entity)
+            .filter(condition)
+            .order_by_desc(content::Column::CreatedAt) // Fix pagination order
             .limit(limit)
             .offset(offset)
             .all(&self.db)
@@ -414,7 +433,7 @@ impl ContentRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn get_version(&self, id: &ContentId, version: i32) -> Result<Option<String>, RepositoryError> {
+    async fn get_version(&self, id: &ContentId, version: i32) -> Result<Option<(String, String)>, RepositoryError> {
         let model = content_version::Entity::find()
             .filter(content_version::Column::ContentId.eq(id.0.to_string()))
             .filter(content_version::Column::Version.eq(version))
@@ -422,7 +441,29 @@ impl ContentRepository for PostgresRepository {
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        Ok(model.map(|m| m.body))
+        Ok(model.map(|m| (m.title, m.body)))
+    }
+
+    async fn get_history(&self, id: &ContentId) -> Result<Vec<ContentVersionSnapshot>, RepositoryError> {
+        let versions = content_version::Entity::find()
+            .filter(content_version::Column::ContentId.eq(id.0.to_string()))
+            .order_by_desc(content_version::Column::Version)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let snapshots = versions.into_iter().map(|v| ContentVersionSnapshot {
+            id: v.id,
+            version: v.version,
+            title: v.title,
+            created_at: chrono::DateTime::parse_from_rfc3339(&v.created_at)
+                .unwrap_or_else(|_| Utc::now().into())
+                .with_timezone(&Utc),
+            reason: v.change_reason,
+            editor_id: uuid::Uuid::parse_str(&v.editor_id).unwrap_or_default(),
+        }).collect();
+
+        Ok(snapshots)
     }
 }
 

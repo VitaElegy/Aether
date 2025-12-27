@@ -40,6 +40,16 @@ pub struct ContentAggregate {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentVersionSnapshot {
+    pub id: String,
+    pub version: i32,
+    pub title: String,
+    pub created_at: DateTime<Utc>,
+    pub reason: Option<String>,
+    pub editor_id: Uuid,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 pub enum ContentBody {
     Markdown(String),
@@ -49,6 +59,27 @@ pub enum ContentBody {
 }
 
 // --- Authentication Domain ---
+
+#[allow(dead_code)]
+pub mod permissions {
+    pub const READ_PUBLIC: u64 = 1 << 0; // 1
+    pub const COMMENT: u64     = 1 << 1; // 2
+
+    // Content (Articles)
+    pub const CREATE_POST: u64 = 1 << 4; // 16
+    pub const EDIT_POST: u64   = 1 << 5; // 32
+    pub const DELETE_POST: u64 = 1 << 6; // 64
+
+    // Feature: Memos (Future Proofing)
+    pub const MEMO_READ: u64   = 1 << 8; // 256
+    pub const MEMO_WRITE: u64  = 1 << 9; // 512
+
+    // Feature: Todos (Future Proofing)
+    pub const TODO_READ: u64   = 1 << 12; // 4096
+    pub const TODO_WRITE: u64  = 1 << 13; // 8192
+
+    pub const ADMIN: u64       = 1 << 63;
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserId(pub Uuid);
@@ -64,8 +95,7 @@ pub struct User {
     // We never return the password hash to the frontend, forcing manual field exclusion
     #[serde(skip_serializing)]
     pub password_hash: String,
-    // Bitmask for granular permissions.
-    // 0001 = Read, 0010 = Write, 0100 = Admin, etc.
+    // Bitmask for granular permissions. See permissions module.
     pub permissions: u64,
 }
 

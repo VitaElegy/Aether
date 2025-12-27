@@ -13,13 +13,11 @@ const router = createRouter({
       path: '/',
       name: 'home',
       component: () => import('../views/HomeView.vue'),
-      meta: { requiresAuth: true }
     },
     {
       path: '/search',
       name: 'search',
       component: () => import('../views/SearchView.vue'),
-      meta: { requiresAuth: true }
     },
     {
       path: '/editor/:id?',
@@ -31,18 +29,28 @@ const router = createRouter({
       path: '/article/:id',
       name: 'article',
       component: () => import('../views/ReadView.vue'),
-      meta: { requiresAuth: true }
     },
     {
       path: '/profile/:id',
       name: 'profile',
       component: () => import('../views/UserProfileView.vue'),
-      meta: { requiresAuth: true }
     },
     {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/content/:id/history',
+      name: 'history',
+      component: () => import('../views/HistoryView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
+      path: '/content/:id/version/:version',
+      name: 'version',
+      component: () => import('../views/VersionView.vue'),
       meta: { requiresAuth: true }
     },
     // Wildcard redirect for safety

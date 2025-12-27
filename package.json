@@ -1,11 +1,14 @@
 {
-  "dependencies": {
-    "jwt-decode": "^4.0.0",
-    "pinia": "^3.0.4"
-  },
-  "devDependencies": {
-    "autoprefixer": "^10.4.23",
-    "postcss": "^8.5.6",
-    "tailwindcss": "^4.1.18"
-  }
+    "dependencies": {
+        "jwt-decode": "^4.0.0",
+        "pinia": "^3.0.4"
+    },
+    "scripts": {
+        "dev": "npm run dev --prefix Aether/frontend"
+    },
+    "devDependencies": {
+        "autoprefixer": "^10.4.23",
+        "postcss": "^8.5.6",
+        "tailwindcss": "^4.1.18"
+    }
 }

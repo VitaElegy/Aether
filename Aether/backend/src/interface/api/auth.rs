@@ -29,9 +29,29 @@ pub struct AuthenticatedUser {
     pub permissions: u64,
 }
 
+use crate::domain::models::permissions;
+
+#[allow(dead_code)]
 impl AuthenticatedUser {
     pub fn has_permission(&self, required_perm: u64) -> bool {
         (self.permissions & required_perm) == required_perm
+    }
+
+    pub fn can_comment(&self) -> bool {
+        self.has_permission(permissions::COMMENT)
+    }
+
+    pub fn can_create_post(&self) -> bool {
+        self.has_permission(permissions::CREATE_POST)
+    }
+
+    // Future proofing methods
+    pub fn can_manage_todos(&self) -> bool {
+        self.has_permission(permissions::TODO_READ | permissions::TODO_WRITE)
+    }
+
+    pub fn is_admin(&self) -> bool {
+        self.has_permission(permissions::ADMIN)
     }
 }
 

@@ -2,12 +2,12 @@ use axum::{
     extract::{Path, State, Json},
     response::IntoResponse,
     http::StatusCode,
-    Extension,
+
 };
 use std::sync::Arc;
 use uuid::Uuid;
 use chrono::Utc;
-use crate::domain::models::{Comment, CommentId, ContentId, UserId, AuthClaims};
+use crate::domain::models::{Comment, CommentId, ContentId, UserId};
 use crate::domain::ports::CommentRepository;
 
 #[derive(serde::Deserialize)]
@@ -18,7 +18,7 @@ pub struct CreateCommentRequest {
 
 pub async fn create_comment_handler(
     State(repo): State<Arc<dyn CommentRepository>>,
-    Extension(claims): Extension<AuthClaims>,
+    user: crate::interface::api::auth::AuthenticatedUser,
     Path(content_id): Path<Uuid>,
     Json(payload): Json<CreateCommentRequest>,
 ) -> impl IntoResponse {
@@ -38,15 +38,10 @@ pub async fn create_comment_handler(
         None
     };
 
-    let user_uuid = match uuid::Uuid::parse_str(&claims.sub) {
-        Ok(u) => u,
-        Err(_) => return (StatusCode::UNAUTHORIZED, "Invalid user ID").into_response(),
-    };
-
     let comment = Comment {
         id: CommentId(comment_id),
         content_id: ContentId(content_id),
-        user_id: UserId(user_uuid),
+        user_id: UserId(user.id),
         user_name: None, // Will be filled on read
         user_avatar: None,
         parent_id: parent_uuid,

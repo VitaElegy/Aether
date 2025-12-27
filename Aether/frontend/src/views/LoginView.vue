@@ -90,7 +90,12 @@ const handleSubmit = async () => {
                 </div>
             </form>
 
-            <div class="mt-8 text-center">
+            <div class="mt-8 text-center space-y-4">
+                <button @click="router.push('/')"
+                    class="block w-full text-center text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-ink transition-colors pb-1 border-b border-transparent hover:border-neutral-200">
+                    Continue as Guest
+                </button>
+
                 <button @click="toggleMode"
                     class="text-xs font-mono text-neutral-400 hover:text-ink uppercase tracking-widest transition-colors">
                     {{ isLogin ? 'Need an account?' : 'Have an account?' }}

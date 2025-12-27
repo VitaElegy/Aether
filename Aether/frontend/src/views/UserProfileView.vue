@@ -52,8 +52,36 @@ const profile = computed(() => {
 
 const loadData = async () => {
     if (isCurrentUser.value) {
-        // If we don't have full user data (e.g. missing username), force fetch
-        if (!authStore.user || !authStore.user.username) {
+        // Check if we are actually logged in
+        if (!authStore.isAuthenticated) {
+            // GUEST MODE
+            try {
+                // Try to get IP
+                const ipRes = await axios.get('https://api.ipify.org?format=json');
+                const ip = ipRes.data.ip;
+
+                remoteProfile.value = {
+                    id: 'guest',
+                    username: 'guest',
+                    display_name: 'Visitor',
+                    bio: `Exploring the network from ${ip}`,
+                    location: 'Deep Space',
+                    avatar_url: '', // Will fall back to dicebear
+                    stats: { entries: 0, collections: 0 }
+                };
+            } catch (e) {
+                // Fallback if IP fetch fails
+                remoteProfile.value = {
+                    id: 'guest',
+                    username: 'guest',
+                    display_name: 'Visitor',
+                    bio: 'Exploring the network anonymously.',
+                    location: 'Deep Space',
+                    avatar_url: '',
+                    stats: { entries: 0, collections: 0 }
+                };
+            }
+        } else if (!authStore.user || !authStore.user.username) {
             await authStore.fetchUser();
         }
     } else {

@@ -7,7 +7,7 @@ use uuid::Uuid;
 use chrono::Utc;
 use crate::domain::{
     ports::ContentRepository,
-    models::{ContentAggregate, ContentId, ContentStatus, Visibility, ContentBody},
+    models::{ContentAggregate, ContentId, ContentStatus, Visibility, ContentBody, UserId},
     diff_service::DiffService,
 };
 use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
@@ -77,8 +77,20 @@ pub async fn create_content_handler(
         _ => ContentStatus::Published,
     };
 
+    // Generate deterministic ID based on User + Title to prevent duplicates
+    let name = format!("{}:{}", user.id, payload.title);
+    let id = ContentId(Uuid::new_v5(&Uuid::NAMESPACE_OID, name.as_bytes()));
+
+    // Check for existing content to prevent duplicates/overwrites on create
+    if let Ok(Some(_)) = repo.find_by_id(&id).await {
+         return (StatusCode::CONFLICT, Json(serde_json::json!({
+             "error": "Content already exists",
+             "id": id.0
+         }))).into_response();
+    }
+
     let content = ContentAggregate {
-        id: ContentId(Uuid::new_v4()),
+        id,
         author_id: user.id,
         author_name: None, // Filled by Repo on read, not needed on write
         title: payload.title.clone(),
@@ -158,35 +170,25 @@ pub async fn update_content_handler(
     }
 }
 
+#[derive(serde::Deserialize)]
+pub struct ListParams {
+    pub offset: Option<u64>,
+    pub limit: Option<u64>,
+}
+
 pub async fn list_content_handler(
     State(repo): State<Arc<dyn ContentRepository>>,
     user: MaybeAuthenticatedUser,
+    Query(params): Query<ListParams>,
 ) -> impl IntoResponse {
-    let user = user.0;
+    let viewer_id = user.0.map(|u| UserId(u.id));
+    let limit = params.limit.unwrap_or(20).min(100);
+    let offset = params.offset.unwrap_or(0);
 
-    let contents = match repo.list(100, 0).await {
-        Ok(c) => c,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
-    };
-
-    let filtered: Vec<_> = contents.into_iter().filter(|c| {
-        // Filter out Drafts if not the author
-        if c.status == ContentStatus::Draft {
-             if let Some(ref u) = user {
-                 if u.id != c.author_id { return false; }
-             } else {
-                 return false;
-             }
-        }
-
-        match c.visibility {
-            Visibility::Public => true,
-            Visibility::Internal => user.is_some(),
-            Visibility::Private => user.as_ref().map(|u| u.id == c.author_id).unwrap_or(false),
-        }
-    }).collect();
-
-    (StatusCode::OK, Json(filtered)).into_response()
+    match repo.list(viewer_id, limit, offset).await {
+        Ok(contents) => (StatusCode::OK, Json(contents)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
 }
 
 pub async fn get_content_handler(
@@ -250,30 +252,114 @@ pub async fn get_content_diff_handler(
     Path((id, v1, v2)): Path<(Uuid, i32, i32)>,
 ) -> impl IntoResponse {
     // 1. Check access (simplified: author or public)
-    // Ideally we should reuse the `get_content_handler` logic, but for now:
     let _content = match repo.find_by_id(&ContentId(id)).await {
         Ok(Some(c)) => c,
         _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
     };
 
-    // Permission check... (omitted for brevity, assume similar to get)
-
     // 2. Fetch both versions
-    let body1 = repo.get_version(&ContentId(id), v1).await.unwrap_or(None);
-    let body2 = repo.get_version(&ContentId(id), v2).await.unwrap_or(None);
+    let v1_data = repo.get_version(&ContentId(id), v1).await.unwrap_or(None);
+    let v2_data = repo.get_version(&ContentId(id), v2).await.unwrap_or(None);
 
-    if body1.is_none() || body2.is_none() {
+    if v1_data.is_none() || v2_data.is_none() {
          return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Version not found" }))).into_response();
     }
 
-    let b1 = body1.unwrap(); // This is JSON string: "\"Markdown Content\"" or "{\"type\":...}"
-    let b2 = body2.unwrap();
+    let (title1, body1) = v1_data.unwrap();
+    let (title2, body2) = v2_data.unwrap();
 
-    // 3. Compute Diff
-    // Note: We are diffing the raw JSON string here.
-    // Ideally we should extract the markdown content if it's a Markdown type.
-    // But raw JSON diff is also useful for structure changes.
-    let diff = DiffService::compute_diff(&b1, &b2);
+    // Helper to extract text from JSON body (e.g. Markdown data)
+    let extract_text = |title: &str, json_body: &str| -> String {
+        let body_text = if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_body) {
+             // Expecting { type: "Markdown", data: "..." }
+             if let Some(data) = val.get("data").and_then(|v| v.as_str()) {
+                 data.to_string()
+             } else {
+                 json_body.to_string()
+             }
+        } else {
+            json_body.to_string()
+        };
+        format!("Title: {}\n\n{}", title, body_text)
+    };
+
+    let t1 = extract_text(&title1, &body1);
+    let t2 = extract_text(&title2, &body2);
+
+    let diff = DiffService::compute_diff(&t1, &t2);
 
     (StatusCode::OK, Json(diff)).into_response()
+}
+
+pub async fn get_history_handler(
+    State(repo): State<Arc<dyn ContentRepository>>,
+    user: MaybeAuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    // 1. Check visibility permission
+    let content = match repo.find_by_id(&ContentId(id)).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    let user = user.0;
+    let is_author = user.as_ref().map(|u| u.id == content.author_id).unwrap_or(false);
+    let can_view = match content.visibility {
+        Visibility::Public => true,
+        Visibility::Internal => user.is_some(),
+        Visibility::Private => is_author,
+    };
+
+    if !can_view {
+         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+    }
+
+    // 2. Fetch History
+    match repo.get_history(&ContentId(id)).await {
+        Ok(history) => (StatusCode::OK, Json(history)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+pub async fn get_version_handler(
+    State(repo): State<Arc<dyn ContentRepository>>,
+    user: MaybeAuthenticatedUser,
+    Path((id, version)): Path<(Uuid, i32)>,
+) -> impl IntoResponse {
+    // 1. Check permission
+     let content = match repo.find_by_id(&ContentId(id)).await {
+        Ok(Some(c)) => c,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    let user = user.0;
+    let is_author = user.as_ref().map(|u| u.id == content.author_id).unwrap_or(false);
+    let can_view = match content.visibility {
+        Visibility::Public => true,
+        Visibility::Internal => user.is_some(),
+        Visibility::Private => is_author,
+    };
+
+    if !can_view {
+         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+    }
+
+    // 2. Fetch Version
+    match repo.get_version(&ContentId(id), version).await {
+        Ok(Some((title, body_str))) => {
+            // Unpack JSON body to embed in response object
+            let body_json: serde_json::Value = serde_json::from_str(&body_str).unwrap_or(serde_json::Value::String(body_str));
+
+            let response = serde_json::json!({
+                "title": title,
+                "body": body_json
+            });
+
+            (StatusCode::OK, Json(response)).into_response()
+        },
+        Ok(None) => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Version not found" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
 }

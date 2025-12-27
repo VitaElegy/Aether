@@ -190,8 +190,17 @@ const saveDraft = async () => {
     }
     // Update local timestamp feedback
     timestamps.value.updated = new Date().toISOString();
-  } catch (err) {
-    console.error('Auto-save failed', err);
+  } catch (err: any) {
+    if (err.response && err.response.status === 409) {
+        const existingId = err.response.data.id;
+        if (existingId && existingId !== draftId.value) {
+            draftId.value = existingId;
+            router.replace({ name: 'editor', params: { id: existingId } });
+            MessagePlugin.warning('Title matches existing entry. Switched to editing mode.', 3000);
+        }
+    } else {
+        console.error('Auto-save failed', err);
+    }
   } finally {
     isSaving.value = false;
   }
@@ -274,9 +283,21 @@ const handlePublish = async () => {
     localCache.value = null; // Clear cache on publish
     MessagePlugin.success('Published.');
     await router.push('/');
-  } catch (err) {
-    console.error(err);
-    MessagePlugin.error('Failed to publish.');
+  } catch (err: any) {
+    if (err.response && err.response.status === 409) {
+        MessagePlugin.warning('Article with this title already exists. Redirecting to edit mode...', 2000);
+        const existingId = err.response.data.id;
+        if (existingId) {
+             // Delay slightly to let toast show
+             setTimeout(() => {
+                draftId.value = existingId;
+                router.push(`/editor/${existingId}`);
+             }, 1000);
+        }
+    } else {
+        console.error(err);
+        MessagePlugin.error('Failed to publish.');
+    }
   } finally {
     isPublishing.value = false;
   }
@@ -303,6 +324,10 @@ onBeforeUnmount(() => {
        </div>
 
        <div class="flex items-center gap-6">
+          <button v-if="draftId" @click="router.push(`/content/${draftId}/history`)" class="flex items-center gap-2 group cursor-pointer hover:text-ink text-neutral-400 transition-colors" title="View Version History">
+             <i class="ri-history-line text-lg"></i>
+             <span class="text-[10px] uppercase tracking-widest group-hover:text-neutral-600 hidden sm:inline">History</span>
+          </button>
          <div class="flex items-center gap-2 mr-4 group cursor-pointer" @click="autoSaveEnabled = !autoSaveEnabled">
             <div class="w-2 h-2 rounded-full transition-colors" :class="autoSaveEnabled ? 'bg-green-500' : 'bg-neutral-300'"></div>
             <span class="text-[10px] uppercase tracking-widest text-neutral-400 group-hover:text-neutral-600">Auto-Save</span>
