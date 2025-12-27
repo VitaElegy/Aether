@@ -20,7 +20,7 @@
          <div v-if="isDiffMode">
              <t-card title="Diff with Previous Version" class="mb-4">
                  <!-- GitHub-style Diff Table -->
-                 <DiffViewer :changes="diffContent" />
+                 <DiffViewer :changes="diffContent" :empty-message="diffEmptyMessage" />
              </t-card>
          </div>
 
@@ -66,6 +66,13 @@ const renderMarkdown = (body: any) => {
     return JSON.stringify(body);
 };
 
+const diffEmptyMessage = computed(() => {
+    if (versionId === 1) {
+        return 'This is the first version, nothing to compare against.';
+    }
+    return 'No differences found.';
+});
+
 const loadData = async () => {
     try {
         loading.value = true;
@@ -78,6 +85,8 @@ const loadData = async () => {
         if (isDiffMode.value && versionId > 1) {
              const diff = await contentApi.getDiff(originalId, versionId - 1, versionId);
              diffContent.value = diff.changes;
+        } else if (isDiffMode.value && versionId === 1) {
+             diffContent.value = []; // Set empty for v1
         }
 
     } catch (e) {
@@ -94,7 +103,7 @@ const toggleDiff = async () => {
     // If switching to diff mode and data not loaded yet
     if (isDiffMode.value && !diffContent.value) {
          if (versionId <= 1) {
-             MessagePlugin.warning('This is the first version, nothing to compare against.');
+             diffContent.value = []; // Mark as loaded but empty
              return;
          }
 
