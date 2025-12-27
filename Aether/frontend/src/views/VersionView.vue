@@ -1,16 +1,32 @@
 <template>
   <div class="version-view p-6 max-w-5xl mx-auto">
     <div class="header mb-6 flex justify-between items-center">
-      <div>
-         <h1 class="text-2xl font-bold mb-1">Version View</h1>
-         <div class="text-gray-500 text-sm">
-            Evaluating Version {{ versionId }} of {{ originalId }}
+      <div class="flex flex-col">
+         <h1 class="text-3xl font-serif text-gray-900 tracking-wide italic">
+            Version {{ versionId }}
+         </h1>
+         <div class="text-gray-400 text-[10px] font-mono mt-1 tracking-widest uppercase opacity-50 pl-1">
+            Ref: {{ originalId.slice(0, 8) }}
          </div>
       </div>
-      <div class="space-x-2">
-         <t-button variant="outline" @click="router.push(`/content/${originalId}/history`)">Back to History</t-button>
-         <t-button v-if="!isDiffMode" theme="primary" @click="toggleDiff">Show Diff</t-button>
-         <t-button v-else theme="default" @click="toggleDiff">Show Content</t-button>
+
+      <div class="flex items-center gap-3">
+         <button
+            class="text-gray-500 hover:text-gray-800 font-serif italic text-lg transition-colors duration-200"
+            @click="router.push(`/content/${originalId}/history`)"
+         >
+            ← return to history
+         </button>
+
+         <div class="w-px h-4 bg-gray-200 rotate-12"></div>
+
+         <button
+            class="font-serif italic text-lg transition-colors duration-200"
+            :class="isDiffMode ? 'text-gray-900 underline decoration-1 underline-offset-4' : 'text-gray-400 hover:text-gray-600'"
+            @click="toggleDiff"
+         >
+            {{ isDiffMode ? 'reading changes' : 'read content' }}
+         </button>
       </div>
     </div>
 
@@ -42,6 +58,7 @@ import { ref, onMounted, computed } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { contentApi } from '@/api/content';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { ArrowLeftIcon, HistoryIcon, ComponentCheckboxIcon, FileIcon } from 'tdesign-icons-vue-next';
 import MarkdownIt from 'markdown-it';
 import DiffViewer from '@/components/DiffViewer.vue';
 
