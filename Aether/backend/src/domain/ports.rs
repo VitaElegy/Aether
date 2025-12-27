@@ -34,6 +34,7 @@ pub trait ContentRepository: Send + Sync {
     async fn find_by_id(&self, id: &ContentId) -> Result<Option<ContentAggregate>, RepositoryError>;
     async fn find_by_slug(&self, slug: &str) -> Result<Option<ContentAggregate>, RepositoryError>;
     async fn list(&self, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError>;
+    async fn search(&self, query: &str) -> Result<Vec<ContentAggregate>, RepositoryError>;
     async fn delete(&self, id: &ContentId) -> Result<(), RepositoryError>;
     async fn get_version(&self, id: &ContentId, version: i32) -> Result<Option<String>, RepositoryError>; // Returns JSON body
 }

@@ -23,7 +23,7 @@ use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
 use crate::domain::models::User;
 use crate::interface::api::auth::{login_handler, register_handler, get_user_handler, update_user_handler};
-use crate::interface::api::content::{create_content_handler, list_content_handler, get_content_handler, update_content_handler, delete_content_handler, get_content_diff_handler};
+use crate::interface::api::content::{create_content_handler, list_content_handler, get_content_handler, update_content_handler, delete_content_handler, get_content_diff_handler, search_content_handler};
 use crate::interface::api::comment::{create_comment_handler, get_comments_handler};
 use crate::interface::api::upload::upload_handler;
 
@@ -203,6 +203,7 @@ async fn main() {
         .route("/api/content", post(create_content_handler).get(list_content_handler))
         .route("/api/content/:id", get(get_content_handler).put(update_content_handler).delete(delete_content_handler))
         .route("/api/content/:id/diff/:v1/:v2", get(get_content_diff_handler))
+        .route("/api/search", get(search_content_handler))
         .route("/api/content/:id/comments", post(create_comment_handler).get(get_comments_handler))
         .route("/api/upload", post(upload_handler))
         .nest_service("/uploads", ServeDir::new("uploads"))

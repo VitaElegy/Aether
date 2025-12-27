@@ -1,5 +1,5 @@
 use axum::{
-    Json, extract::{State, Path}, response::IntoResponse, http::StatusCode,
+    Json, extract::{State, Path, Query}, response::IntoResponse, http::StatusCode,
 };
 use serde::Deserialize;
 use std::sync::Arc;
@@ -21,6 +21,43 @@ pub struct CreateContentRequest {
     visibility: String, // "Public", "Private", "Internal"
     status: Option<String>, // Added status field
     reason: Option<String>, // Git-like commit message
+}
+
+#[derive(Deserialize)]
+pub struct SearchQuery {
+    q: String,
+}
+
+pub async fn search_content_handler(
+    State(repo): State<Arc<dyn ContentRepository>>,
+    user: MaybeAuthenticatedUser,
+    Query(params): Query<SearchQuery>,
+) -> impl IntoResponse {
+    let user = user.0;
+
+    let contents = match repo.search(&params.q).await {
+        Ok(c) => c,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    let filtered: Vec<_> = contents.into_iter().filter(|c| {
+        // Filter out Drafts if not the author
+        if c.status == ContentStatus::Draft {
+             if let Some(ref u) = user {
+                 if u.id != c.author_id { return false; }
+             } else {
+                 return false;
+             }
+        }
+
+        match c.visibility {
+            Visibility::Public => true,
+            Visibility::Internal => user.is_some(),
+            Visibility::Private => user.as_ref().map(|u| u.id == c.author_id).unwrap_or(false),
+        }
+    }).collect();
+
+    (StatusCode::OK, Json(filtered)).into_response()
 }
 
 pub async fn create_content_handler(

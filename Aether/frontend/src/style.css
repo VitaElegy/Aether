@@ -3,17 +3,61 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    @apply bg-paper text-ink font-sans antialiased selection:bg-ink selection:text-paper;
-  }
+    :root {
+        --color-paper: 255 255 255;
+        --color-ink: 26 26 26;
+        --color-ash: 243 244 246;
+        --color-accent: 37 99 235;
+    }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-bold tracking-tight;
-  }
+    .dark {
+        --color-paper: 13 17 23;
+        --color-ink: 240 246 252;
+        --color-ash: 48 54 61;
+        --color-accent: 88 166 255;
+    }
+
+    body {
+        @apply bg-paper text-ink font-sans antialiased;
+    }
+
+    ::selection {
+        background-color: rgba(88, 166, 255, 0.3);
+        color: rgb(var(--color-ink));
+    }
+
+    h1,
+    h2,
+    h3,
+    h4,
+    h5,
+    h6 {
+        @apply font-bold tracking-tight text-ink;
+    }
 }
 
-/* 隐藏滚动条但保留功能 (Windows) */
+@layer components {
+    .glass-card {
+        @apply bg-paper/50 backdrop-blur-md border border-ash/50 shadow-sm transition-all duration-300;
+    }
+
+    /* Standard CSS for hover shadow to avoid Tailwind @apply parsing issues */
+    .glow-hover {
+        transition-property: box-shadow;
+        transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+        transition-duration: 300ms;
+    }
+
+    .glow-hover:hover {
+        box-shadow: 0 0 20px rgba(88, 166, 255, 0.15);
+    }
+
+    .btn-accent {
+        @apply px-4 py-2 bg-accent text-paper font-black text-[10px] uppercase tracking-[0.2em] rounded-sm hover:brightness-110 transition-all shadow-sm;
+    }
+}
+
 ::-webkit-scrollbar {
-  width: 0px;
-  background: transparent;
+    width: 0px;
+    background: transparent;
 }

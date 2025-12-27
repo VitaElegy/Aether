@@ -4,6 +4,7 @@ use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibili
 use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, RepositoryError};
 use super::entities::{content, user, content_version, comment};
 use chrono::Utc;
+use sea_orm::sea_query::Expr;
 
 pub struct PostgresRepository {
     db: DatabaseConnection,
@@ -266,6 +267,108 @@ impl ContentRepository for PostgresRepository {
                 id: ContentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
                 author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 author_name: author.map(|u| u.display_name.or(Some(u.username)).unwrap_or_default()),
+                title: m.title,
+                slug: m.slug,
+                status: match m.status.as_str() {
+                    "Published" => ContentStatus::Published,
+                    "Archived" => ContentStatus::Archived,
+                    _ => ContentStatus::Draft,
+                },
+                visibility: match m.visibility.as_str() {
+                    "Private" => Visibility::Private,
+                    "Internal" => Visibility::Internal,
+                    _ => Visibility::Public,
+                },
+                category: m.category,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                version_message: None,
+            });
+        }
+        Ok(aggregates)
+    }
+
+    async fn search(&self, query: &str) -> Result<Vec<ContentAggregate>, RepositoryError> {
+        // 1. Find Content IDs referenced by matching comments
+        let comment_matches: Vec<String> = comment::Entity::find()
+            .filter(comment::Column::Text.contains(query))
+            .select_only()
+            .column(comment::Column::ContentId)
+            .into_tuple()
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // 2. Find Author IDs matching name/display name
+        let author_matches: Vec<String> = user::Entity::find()
+            .filter(
+                Condition::any()
+                    .add(user::Column::Username.contains(query))
+                    .add(user::Column::DisplayName.contains(query))
+            )
+            .select_only()
+            .column(user::Column::Id)
+            .into_tuple()
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // 3. Main Content Search
+        // Matches if:
+        // - Title or Category or Tags contains query
+        // - Body (as text) contains query
+        // - Author ID is in author_matches
+        // - ID is in comment_matches
+
+        let pattern = format!("%{}%", query);
+        // Explicitly casting OrderExpr for SeaORM to inject raw SQL sorting
+        // Score: Title(10) + Author(8) + Tags(5) + Body(1)
+        // We use standard SQL CASE syntax which works in SQLite and Postgres
+        let order_expr = Expr::cust_with_values(
+            "CASE WHEN title LIKE $1 THEN 10 ELSE 0 END +
+             CASE WHEN tags LIKE $1 THEN 5 ELSE 0 END +
+             CASE WHEN body LIKE $1 THEN 1 ELSE 0 END",
+            vec![pattern.clone(), pattern.clone(), pattern.clone()]
+        );
+
+        // Note: Author match needs a Join which is harder to sort by in this specific ORM query builder flow
+        // without breaking the Entity structure.
+        // For simplicity and robustness, we prioritize the content fields in the DB sort,
+        // and relying on the basic filter to include Author matches.
+        // Ideally we would join and add user.username score, but let's stick to the core content attributes first.
+
+        let mut condition = Condition::any()
+            .add(content::Column::Title.contains(query))
+            .add(content::Column::Category.contains(query))
+            .add(content::Column::Tags.contains(query))
+            .add(Expr::cust_with_values("body LIKE $1", vec![pattern.clone()]));
+
+        if !author_matches.is_empty() {
+            condition = condition.add(content::Column::AuthorId.is_in(author_matches));
+        }
+        if !comment_matches.is_empty() {
+            condition = condition.add(content::Column::Id.is_in(comment_matches));
+        }
+
+        let results = content::Entity::find()
+            .find_also_related(user::Entity)
+            .filter(condition)
+            .order_by_desc(order_expr)
+            .order_by_desc(content::Column::CreatedAt)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // ... (The rest of mapping logic remains the same)
+        let mut aggregates = Vec::new();
+        for (m, author) in results {
+             // ... existing mapping ...
+             aggregates.push(ContentAggregate {
+                id: ContentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                author_name: author.as_ref().map(|u| u.display_name.clone().or(Some(u.username.clone())).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
                 status: match m.status.as_str() {

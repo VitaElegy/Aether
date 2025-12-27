@@ -4,120 +4,150 @@ import { useRouter } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import axios from 'axios';
 import DynamicRenderer from '../components/DynamicRenderer.vue';
+import SearchBar from '../components/SearchBar.vue';
 
 const router = useRouter();
 const authStore = useAuthStore();
 const posts = ref<any[]>([]);
 
 onMounted(async () => {
-  // Ensure we have user data for the avatar
-  if (!authStore.user || !authStore.user.username) {
-      await authStore.fetchUser();
-  }
+    if (!authStore.user || !authStore.user.username) {
+        await authStore.fetchUser();
+    }
 
-  try {
-    const res = await axios.get('/api/content');
+    try {
+        const res = await axios.get('/api/content');
+        const uniqueData = Array.from(new Map(res.data.map((item: any) => [item.id, item])).values());
 
-    // Deduplicate posts based on ID (Temporary fix for data issues)
-    const uniqueData = Array.from(new Map(res.data.map((item: any) => [item.id, item])).values());
-
-    posts.value = uniqueData.map((p: any) => ({
-      id: p.id,
-      title: p.title,
-      author: p.author_name || 'Unknown',
-      date: new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-      category: p.category || 'Uncategorized',
-      type: p.body.type,
-      data: p.body.type === 'Markdown' ? { content: p.body.data } : p.body.data,
-      tags: p.tags
-    }));
-  } catch (err) {
-    console.error(err);
-  }
+        posts.value = uniqueData.map((p: any) => ({
+            id: p.id,
+            title: p.title,
+            author: p.author_name || 'Unknown',
+            date: new Date(p.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
+            category: p.category || 'Uncategorized',
+            type: p.body.type,
+            data: p.body.type === 'Markdown' ? { content: p.body.data } : p.body.data,
+            tags: p.tags
+        }));
+    } catch (err) {
+        console.error(err);
+    }
 });
 
 const goToProfile = (id: string) => router.push(`/profile/${id}`);
 </script>
 
 <template>
-  <div class="min-h-screen bg-paper text-ink selection:bg-black selection:text-white">
-    <!-- Navbar -->
-    <nav class="fixed top-0 left-0 w-full bg-paper/90 backdrop-blur-sm border-b border-neutral-100 z-50 px-6 py-4 flex justify-between items-center">
-      <div class="flex items-center gap-2">
-         <span class="font-bold tracking-tighter text-xl">Aether.</span>
-         <span class="text-[10px] font-mono uppercase bg-neutral-100 px-2 py-0.5 rounded-full text-neutral-500">v2.0</span>
-      </div>
-
-      <div class="flex items-center gap-6">
-        <button class="text-xs font-bold uppercase tracking-widest hover:text-neutral-500 transition-colors">Journal</button>
-        <button class="text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-ink transition-colors">Archive</button>
-        <button class="text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-ink transition-colors">About</button>
-
-        <div class="h-4 w-px bg-neutral-200 mx-2"></div>
-
-        <button @click="router.push('/editor')" class="flex items-center gap-2 group">
-          <div class="w-8 h-8 rounded-full bg-ink text-paper flex items-center justify-center group-hover:bg-neutral-800 transition-colors">
-            <i class="ri-add-line"></i>
-          </div>
-        </button>
-
-        <div class="w-8 h-8 bg-neutral-100 rounded-full overflow-hidden cursor-pointer hover:ring-2 ring-neutral-200 transition-all" @click="goToProfile(authStore.user?.id || 'me')">
-           <img :src="authStore.user?.avatar_url || `https://api.dicebear.com/9.x/notionists/svg?seed=${authStore.user?.username || 'User'}`" class="w-full h-full object-cover mix-blend-multiply" />
-        </div>
-      </div>
-    </nav>
-
-    <!-- Main Content -->
-    <main class="pt-32 pb-20 max-w-5xl mx-auto px-6">
-
-      <!-- Header Section -->
-      <header class="mb-20">
-        <h1 class="text-6xl md:text-8xl font-bold tracking-tighter mb-6 leading-[0.9]">
-          Digital <br/> <span class="text-neutral-300">Consciousness.</span>
-        </h1>
-        <div class="flex items-center gap-4 text-xs font-mono uppercase tracking-widest text-neutral-500 border-t border-black pt-4 max-w-xs">
-           <span>System Status: Online</span>
-           <span class="flex-1"></span>
-           <span>{{ posts.length }} Entries</span>
-        </div>
-      </header>
-
-      <!-- Feed Grid -->
-      <div class="grid grid-cols-1 gap-16">
-        <article v-for="post in posts" :key="post.id" class="group relative flex flex-col md:flex-row gap-8 md:gap-16 border-t border-neutral-100 pt-16">
-
-          <!-- Meta (Left) -->
-          <div class="md:w-1/4 flex flex-col gap-2">
-            <span class="text-xs font-mono text-neutral-400 uppercase tracking-widest">{{ post.author }}</span>
-            <span class="text-[10px] font-mono text-neutral-300 uppercase tracking-widest">{{ post.date }}</span>
-            <div class="flex flex-wrap gap-2">
-              <span class="text-[10px] font-bold uppercase tracking-widest bg-neutral-100 px-2 py-1">{{ post.category }}</span>
+    <div class="min-h-screen bg-paper text-ink selection:bg-accent/20">
+        <!-- Navbar -->
+        <nav
+            class="fixed top-0 left-0 w-full bg-paper/80 backdrop-blur-xl border-b border-ash/50 z-50 px-6 py-4 flex justify-between items-center transition-all duration-500">
+            <div class="flex items-center gap-2">
+                <span class="font-black tracking-tighter text-2xl text-ink">Aether.</span>
+                <span
+                    class="text-[9px] font-mono font-bold uppercase bg-accent/10 text-accent px-2 py-0.5 rounded-full border border-accent/20">v2.0</span>
             </div>
-            <div class="mt-auto hidden md:block">
-               <button @click="router.push(`/article/${post.id}`)" class="text-xs font-bold uppercase tracking-widest flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity -ml-4 group-hover:ml-0 duration-300">
-                 Read Entry <i class="ri-arrow-right-line"></i>
-               </button>
+
+            <div class="flex items-center gap-6">
+                <SearchBar />
+
+                <button
+                    class="text-xs font-bold uppercase tracking-widest text-ink hover:text-accent transition-colors">Journal</button>
+                <div class="h-4 w-px bg-ash mx-2"></div>
+
+                <div class="flex items-center gap-4">
+                    <button @click="router.push('/editor')" class="flex items-center gap-2 group">
+                        <div
+                            class="w-8 h-8 rounded-full bg-ink text-paper flex items-center justify-center group-hover:bg-accent group-hover:scale-110 transition-all">
+                            <i class="ri-add-line"></i>
+                        </div>
+                    </button>
+
+                    <div class="w-8 h-8 bg-ash rounded-full overflow-hidden cursor-pointer hover:ring-2 ring-accent transition-all border border-ash/50"
+                        @click="goToProfile(authStore.user?.id || 'me')">
+                        <img :src="authStore.user?.avatar_url || `https://api.dicebear.com/9.x/notionists/svg?seed=${authStore.user?.username || 'User'}`"
+                            class="w-full h-full object-cover dark:contrast-125" />
+                    </div>
+                </div>
             </div>
-          </div>
+        </nav>
 
-          <!-- Content (Right) -->
-          <div class="md:w-3/4">
-             <h2 @click="router.push(`/article/${post.id}`)" class="text-3xl font-bold tracking-tight mb-4 group-hover:text-neutral-600 transition-colors cursor-pointer">{{ post.title }}</h2>
+        <!-- Main Content -->
+        <main class="pt-40 pb-20 max-w-5xl mx-auto px-6">
+            <header class="mb-24 border-b border-ash/50 pb-16">
+                <h1 class="text-6xl md:text-8xl font-bold tracking-tighter mb-6 leading-[0.9]">
+                    Digital <br /> <span class="text-neutral-300">Consciousness.</span>
+                </h1>
+                <div
+                    class="flex items-center gap-6 text-[10px] font-mono uppercase tracking-[0.3em] text-ink/50 pt-8 max-w-md">
+                    <span class="flex items-center gap-2 text-green-500">
+                        <span class="w-2 h-2 rounded-full bg-current animate-pulse"></span>
+                        Status: Active
+                    </span>
+                    <span class="flex-1"></span>
+                    <span class="text-ink/80 font-bold">{{ posts.length }} ARCHIVES FOUND</span>
+                </div>
+            </header>
 
-             <!-- Preview Content (Truncated) -->
-             <div class="prose prose-neutral prose-lg max-w-none text-neutral-600 line-clamp-3 mb-6">
-                <DynamicRenderer :type="post.type" :data="post.data" />
-             </div>
+            <!-- Feed Grid -->
+            <div v-if="posts.length > 0" class="grid grid-cols-1 gap-12">
+                <article v-for="post in posts" :key="post.id"
+                    class="group relative flex flex-col md:flex-row gap-8 md:gap-16 border-t border-ash/50 pt-16 pb-8 hover:bg-ash/5 transition-all duration-700 rounded-3xl p-8 -mx-8 glow-hover">
 
-             <!-- Tags -->
-             <div class="flex flex-wrap gap-3">
-               <span v-for="tag in post.tags" :key="tag" class="text-xs text-neutral-400">#{{ tag }}</span>
-             </div>
-          </div>
+                    <!-- Meta (Left) -->
+                    <div class="md:w-1/4 flex flex-col gap-6">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-accent">Author</span>
+                            <span class="text-base font-bold text-ink">{{ post.author }}</span>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-ink/40">Timestamp</span>
+                            <span class="text-xs font-mono text-ink/80">{{ post.date }}</span>
+                        </div>
+                        <div>
+                            <span
+                                class="text-[10px] font-black uppercase tracking-[0.1em] border border-accent/30 text-accent px-3 py-1 rounded-sm bg-accent/5">{{ post.category }}</span>
+                        </div>
+                        <div class="mt-auto hidden md:block">
+                            <button @click="router.push(`/article/${post.id}`)"
+                                class="text-[10px] font-black uppercase tracking-[0.3em] flex items-center gap-3 text-ink group-hover:text-accent transition-all">
+                                READ ENTRY <i class="ri-arrow-right-line"></i>
+                            </button>
+                        </div>
+                    </div>
 
-        </article>
-      </div>
+                    <!-- Content (Right) -->
+                    <div class="md:w-3/4">
+                        <h2 @click="router.push(`/article/${post.id}`)"
+                            class="text-4xl md:text-5xl font-black tracking-tight mb-6 group-hover:translate-x-2 transition-transform cursor-pointer leading-tight uppercase">
+                            {{ post.title }}
+                        </h2>
 
-    </main>
-  </div>
+                        <div
+                            class="prose prose-lg max-w-none text-ink/90 line-clamp-3 mb-8 leading-relaxed font-medium">
+                            <DynamicRenderer :type="post.type" :data="post.data" />
+                        </div>
+
+                        <div class="flex flex-wrap gap-2">
+                            <span v-for="tag in post.tags" :key="tag"
+                                class="text-[10px] font-bold text-ink/60 bg-ash/30 px-3 py-1 rounded-full hover:bg-accent/10 hover:text-accent transition-all cursor-crosshair">
+                                #{{ tag.toUpperCase() }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <!-- Detail Link (Mobile) -->
+                    <div class="md:hidden mt-4">
+                        <button @click="router.push(`/article/${post.id}`)" class="btn-accent w-full text-center">Open
+                            entry</button>
+                    </div>
+                </article>
+            </div>
+
+            <div v-else class="py-32 text-center">
+                <p class="text-ink/20 font-mono uppercase tracking-[0.5em] text-sm animate-pulse">Transmission Void
+                    Detected</p>
+            </div>
+        </main>
+    </div>
 </template>
