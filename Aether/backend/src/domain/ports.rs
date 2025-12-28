@@ -73,6 +73,12 @@ pub trait KnowledgeBaseRepository: Send + Sync {
     async fn delete(&self, id: &super::models::KnowledgeBaseId) -> Result<(), RepositoryError>;
 }
 
+/// Tag Repository Port
+#[async_trait]
+pub trait TagRepository: Send + Sync {
+    async fn get_all_tags(&self) -> Result<Vec<String>, RepositoryError>;
+}
+
 // --- Export Domain ---
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
