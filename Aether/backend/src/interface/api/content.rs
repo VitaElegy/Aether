@@ -7,7 +7,7 @@ use uuid::Uuid;
 use chrono::Utc;
 use crate::domain::{
     ports::ContentRepository,
-    models::{ContentAggregate, ContentId, ContentStatus, Visibility, ContentBody, UserId},
+    models::{ContentAggregate, ContentId, ContentStatus, Visibility, ContentBody, UserId, ContentType},
     diff_service::DiffService,
 };
 use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
@@ -22,6 +22,9 @@ pub struct CreateContentRequest {
     status: Option<String>, // Added status field
     reason: Option<String>, // Git-like commit message
     snapshot: Option<bool>, // Control version snapshot creation
+    knowledge_base_id: Option<Uuid>,
+    parent_id: Option<Uuid>,
+    r#type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -90,6 +93,27 @@ pub async fn create_content_handler(
         _ => ContentStatus::Published,
     };
 
+    let mut knowledge_base_id = payload.knowledge_base_id;
+
+    // Validate Parent and Inherit Context
+    if let Some(parent_id) = payload.parent_id {
+        match repo.find_by_id(&ContentId(parent_id)).await {
+            Ok(Some(parent)) => {
+                // Enforce KB consistency
+                if let Some(parent_kb_id) = parent.knowledge_base_id {
+                    if let Some(req_kb_id) = knowledge_base_id {
+                        if req_kb_id != parent_kb_id {
+                            return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Content cannot belong to a different Knowledge Base than its parent" }))).into_response();
+                        }
+                    }
+                    knowledge_base_id = Some(parent_kb_id);
+                }
+            },
+            Ok(None) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Parent content not found" }))).into_response(),
+            Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        }
+    }
+
     // Generate deterministic ID based on User + Title to prevent duplicates
     let name = format!("{}:{}", user.id, payload.title);
     let id = ContentId(Uuid::new_v5(&Uuid::NAMESPACE_OID, name.as_bytes()));
@@ -116,7 +140,12 @@ pub async fn create_content_handler(
         body: ContentBody::Markdown(payload.body),
         tags: payload.tags,
         version_message: payload.reason,
-        knowledge_base_id: None,
+        knowledge_base_id,
+        parent_id: payload.parent_id,
+        content_type: match payload.r#type.as_deref().unwrap_or("Article") {
+            "Directory" => ContentType::Directory,
+            _ => ContentType::Article,
+        },
     };
 
     // Default snapshot policy: true if Published, false if Draft (unless overridden)
@@ -175,7 +204,9 @@ pub async fn update_content_handler(
         body: ContentBody::Markdown(payload.body),
         tags: payload.tags,
         version_message: payload.reason,
-        knowledge_base_id: None,
+        knowledge_base_id: existing.knowledge_base_id, // Keep existing or update if payload has it? For now keep existing or implement move logic later
+        parent_id: payload.parent_id.or(existing.parent_id), // Allow moving if supplied
+        content_type: existing.content_type, // Immutable type for now
     };
 
     // Default snapshot policy: true if Published, false if Draft (unless overridden)

@@ -7,7 +7,7 @@ use axum::{
 use std::sync::Arc;
 use uuid::Uuid;
 use chrono::Utc;
-use crate::domain::models::{KnowledgeBase, KnowledgeBaseId, UserId};
+use crate::domain::models::{KnowledgeBase, KnowledgeBaseId, UserId, Visibility};
 use crate::domain::ports::KnowledgeBaseRepository;
 use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
 
@@ -15,12 +15,18 @@ use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
 pub struct CreateKnowledgeBaseRequest {
     pub title: String,
     pub description: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub cover_image: Option<String>,
+    pub visibility: Option<String>,
 }
 
 #[derive(serde::Deserialize)]
 pub struct UpdateKnowledgeBaseRequest {
     pub title: Option<String>,
     pub description: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub cover_image: Option<String>,
+    pub visibility: Option<String>,
 }
 
 pub async fn list_knowledge_bases_handler(
@@ -46,6 +52,13 @@ pub async fn create_knowledge_base_handler(
         author_id: user.id,
         title: payload.title,
         description: payload.description,
+        tags: payload.tags.unwrap_or_default(),
+        cover_image: payload.cover_image,
+        visibility: match payload.visibility.as_deref() {
+            Some("Public") => Visibility::Public,
+            Some("Internal") => Visibility::Internal,
+            _ => Visibility::Private,
+        },
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
@@ -114,6 +127,20 @@ pub async fn update_knowledge_base_handler(
     }
     if let Some(d) = payload.description {
         existing.description = Some(d);
+    }
+    if let Some(tags) = payload.tags {
+        existing.tags = tags;
+    }
+    if let Some(cover) = payload.cover_image {
+        existing.cover_image = Some(cover);
+    }
+    if let Some(vis) = payload.visibility {
+        existing.visibility = match vis.as_str() {
+             "Public" => Visibility::Public,
+             "Internal" => Visibility::Internal,
+             "Private" => Visibility::Private,
+             _ => existing.visibility,
+        };
     }
     existing.updated_at = Utc::now();
 

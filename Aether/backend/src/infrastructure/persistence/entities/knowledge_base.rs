@@ -12,6 +12,12 @@ pub struct Model {
     pub title: String,
     #[sea_orm(column_type = "Text", nullable)]
     pub description: Option<String>,
+    #[sea_orm(column_type = "Text")]
+    pub tags: String, // Stored as JSON string
+    #[sea_orm(column_type = "Text", nullable)]
+    pub cover_image: Option<String>,
+    #[sea_orm(column_type = "Text")]
+    pub visibility: String,
     pub created_at: String,
     pub updated_at: String,
 }
