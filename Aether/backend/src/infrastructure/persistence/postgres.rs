@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use sea_orm::*;
-use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot, Memo, MemoId, CommentableId, CommentableType, KnowledgeBase, KnowledgeBaseId};
+use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot, Memo, MemoId, CommentableId, CommentableType, KnowledgeBase, KnowledgeBaseId, ContentType};
 use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, MemoRepository, KnowledgeBaseRepository, RepositoryError};
 use super::entities::{content, user, content_version, comment, memo, knowledge_base};
 use chrono::Utc;
@@ -188,6 +188,11 @@ impl ContentRepository for PostgresRepository {
             body: Set(serialized_body.clone()),
             tags: Set(serialized_tags),
             knowledge_base_id: Set(content.knowledge_base_id.map(|id| id.to_string())),
+            parent_id: Set(content.parent_id.map(|id| id.to_string())),
+            content_type: Set(match content.content_type {
+                ContentType::Article => "Article".to_string(),
+                ContentType::Directory => "Directory".to_string(),
+            }),
         };
 
         content::Entity::insert(model)
@@ -201,7 +206,10 @@ impl ContentRepository for PostgresRepository {
                         content::Column::Body,
                         content::Column::UpdatedAt,
                         content::Column::Tags,
+                        content::Column::Tags,
                         content::Column::KnowledgeBaseId,
+                        content::Column::ParentId,
+                        content::Column::ContentType,
                     ])
                     .to_owned()
             )
@@ -306,6 +314,11 @@ impl ContentRepository for PostgresRepository {
                 tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 version_message: None,
                 knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                parent_id: m.parent_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                content_type: match m.content_type.as_str() {
+                    "Directory" => ContentType::Directory,
+                    _ => ContentType::Article,
+                },
             }))
         } else {
             Ok(None)
@@ -390,6 +403,11 @@ impl ContentRepository for PostgresRepository {
                 tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 version_message: None,
                 knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                parent_id: m.parent_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                content_type: match m.content_type.as_str() {
+                    "Directory" => ContentType::Directory,
+                    _ => ContentType::Article,
+                },
             });
         }
         Ok(aggregates)
@@ -494,6 +512,11 @@ impl ContentRepository for PostgresRepository {
                 tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 version_message: None,
                 knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                parent_id: m.parent_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                content_type: match m.content_type.as_str() {
+                    "Directory" => ContentType::Directory,
+                    _ => ContentType::Article,
+                },
             });
         }
         Ok(aggregates)
@@ -766,6 +789,13 @@ impl KnowledgeBaseRepository for PostgresRepository {
             author_id: Set(kb.author_id.to_string()),
             title: Set(kb.title),
             description: Set(kb.description),
+            tags: Set(serde_json::to_string(&kb.tags).unwrap_or_else(|_| "[]".to_string())),
+            cover_image: Set(kb.cover_image),
+            visibility: Set(match kb.visibility {
+                Visibility::Public => "Public".to_string(),
+                Visibility::Internal => "Internal".to_string(),
+                Visibility::Private => "Private".to_string(),
+            }),
             created_at: Set(kb.created_at.to_rfc3339()),
             updated_at: Set(kb.updated_at.to_rfc3339()),
         };
@@ -776,6 +806,9 @@ impl KnowledgeBaseRepository for PostgresRepository {
                     .update_columns([
                         knowledge_base::Column::Title,
                         knowledge_base::Column::Description,
+                        knowledge_base::Column::Tags,
+                        knowledge_base::Column::CoverImage,
+                        knowledge_base::Column::Visibility,
                         knowledge_base::Column::UpdatedAt,
                     ])
                     .to_owned()
@@ -799,6 +832,13 @@ impl KnowledgeBaseRepository for PostgresRepository {
                 author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 title: m.title,
                 description: m.description,
+                tags: serde_json::from_str(&m.tags).unwrap_or_default(),
+                cover_image: m.cover_image,
+                visibility: match m.visibility.as_str() {
+                    "Public" => Visibility::Public,
+                    "Internal" => Visibility::Internal,
+                    _ => Visibility::Private,
+                },
                 created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
                 updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
             }))
@@ -821,6 +861,13 @@ impl KnowledgeBaseRepository for PostgresRepository {
                 author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 title: m.title,
                 description: m.description,
+                tags: serde_json::from_str(&m.tags).unwrap_or_default(),
+                cover_image: m.cover_image,
+                visibility: match m.visibility.as_str() {
+                    "Public" => Visibility::Public,
+                    "Internal" => Visibility::Internal,
+                    _ => Visibility::Private,
+                },
                 created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
                 updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
             })
@@ -835,5 +882,68 @@ impl KnowledgeBaseRepository for PostgresRepository {
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(())
+    }
+}
+
+#[async_trait]
+impl crate::domain::ports::TagRepository for PostgresRepository {
+    async fn get_all_tags(&self) -> Result<Vec<String>, RepositoryError> {
+        use std::collections::HashSet;
+        let mut all_tags = HashSet::new();
+
+        // 1. Fetch tags from Knowledge Bases (JSON String)
+        let kb_models = knowledge_base::Entity::find()
+            .select_only()
+            .column(knowledge_base::Column::Tags)
+            .into_model::<knowledge_base::Model>()
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        for kb in kb_models {
+            if let Ok(tags) = serde_json::from_str::<Vec<String>>(&kb.tags) {
+                for tag in tags {
+                    all_tags.insert(tag);
+                }
+            }
+        }
+
+        // 2. Fetch tags from Memos (JSON String)
+        let memo_models = memo::Entity::find()
+            .select_only()
+            .column(memo::Column::Tags)
+            .into_model::<memo::Model>()
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+         for m in memo_models {
+            if let Ok(tags) = serde_json::from_str::<Vec<String>>(&m.tags) {
+                 for tag in tags {
+                    all_tags.insert(tag);
+                }
+            }
+        }
+
+        // 3. Fetch tags from Contents (Postgres Array)
+        let content_models = content::Entity::find()
+            .select_only()
+            .column(content::Column::Tags)
+             .into_model::<content::Model>()
+             .all(&self.db)
+             .await
+             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+         for c in content_models {
+             for tag in c.tags {
+                 all_tags.insert(tag);
+             }
+         }
+
+        // Convert to sorted vector
+        let mut sorted_tags: Vec<String> = all_tags.into_iter().collect();
+        sorted_tags.sort();
+
+        Ok(sorted_tags)
     }
 }

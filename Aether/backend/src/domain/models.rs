@@ -18,6 +18,12 @@ pub enum Visibility {
     Internal, // Visible to any logged-in user
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum ContentType {
+    Article,
+    Directory,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentId(pub Uuid);
 
@@ -32,6 +38,8 @@ pub struct ContentAggregate {
     pub visibility: Visibility, // Added
     pub category: Option<String>, // "Parent/Child" format or just a string
     pub knowledge_base_id: Option<Uuid>, // [NEW] Link to KnowledgeBase
+    pub parent_id: Option<Uuid>, // [NEW] Hierarchy
+    pub content_type: ContentType, // [NEW] Article vs Directory
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub body: ContentBody,
@@ -70,6 +78,9 @@ pub struct KnowledgeBase {
     pub author_id: Uuid,
     pub title: String,
     pub description: Option<String>,
+    pub tags: Vec<String>,
+    pub cover_image: Option<String>,
+    pub visibility: Visibility,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }

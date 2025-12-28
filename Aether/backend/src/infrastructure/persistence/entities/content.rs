@@ -16,6 +16,10 @@ pub struct Model {
     pub category: Option<String>, // Added
     #[sea_orm(column_type = "Text", nullable)]
     pub knowledge_base_id: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub parent_id: Option<String>,
+    #[sea_orm(column_type = "Text")]
+    pub content_type: String,
     pub created_at: String,
     pub updated_at: String,
     #[sea_orm(column_type = "Text")]
@@ -41,6 +45,14 @@ pub enum Relation {
         on_delete = "SetNull"
     )]
     KnowledgeBase,
+    #[sea_orm(
+        belongs_to = "Entity",
+        from = "Column::ParentId",
+        to = "Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Parent,
 }
 
 impl Related<super::user::Entity> for Entity {
