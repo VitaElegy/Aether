@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use sea_orm::*;
-use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot, Memo, MemoId, CommentableId, CommentableType};
-use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, MemoRepository, RepositoryError};
-use super::entities::{content, user, content_version, comment, memo};
+use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot, Memo, MemoId, CommentableId, CommentableType, KnowledgeBase, KnowledgeBaseId};
+use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, MemoRepository, KnowledgeBaseRepository, RepositoryError};
+use super::entities::{content, user, content_version, comment, memo, knowledge_base};
 use chrono::Utc;
 use sea_orm::sea_query::{Expr, Func};
 
@@ -187,6 +187,7 @@ impl ContentRepository for PostgresRepository {
             updated_at: Set(Utc::now().to_rfc3339()),
             body: Set(serialized_body.clone()),
             tags: Set(serialized_tags),
+            knowledge_base_id: Set(content.knowledge_base_id.map(|id| id.to_string())),
         };
 
         content::Entity::insert(model)
@@ -200,6 +201,7 @@ impl ContentRepository for PostgresRepository {
                         content::Column::Body,
                         content::Column::UpdatedAt,
                         content::Column::Tags,
+                        content::Column::KnowledgeBaseId,
                     ])
                     .to_owned()
             )
@@ -302,7 +304,8 @@ impl ContentRepository for PostgresRepository {
                 updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
                 body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
-                version_message: None, // Not persisted in main table
+                version_message: None,
+                knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
             }))
         } else {
             Ok(None)
@@ -386,6 +389,7 @@ impl ContentRepository for PostgresRepository {
                 body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 version_message: None,
+                knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
             });
         }
         Ok(aggregates)
@@ -489,6 +493,7 @@ impl ContentRepository for PostgresRepository {
                 body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 version_message: None,
+                knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
             });
         }
         Ok(aggregates)
@@ -746,6 +751,86 @@ impl MemoRepository for PostgresRepository {
 
     async fn delete(&self, id: &MemoId) -> Result<(), RepositoryError> {
         memo::Entity::delete_by_id(id.0.to_string())
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl KnowledgeBaseRepository for PostgresRepository {
+    async fn save(&self, kb: KnowledgeBase) -> Result<KnowledgeBaseId, RepositoryError> {
+        let model = knowledge_base::ActiveModel {
+            id: Set(kb.id.0.to_string()),
+            author_id: Set(kb.author_id.to_string()),
+            title: Set(kb.title),
+            description: Set(kb.description),
+            created_at: Set(kb.created_at.to_rfc3339()),
+            updated_at: Set(kb.updated_at.to_rfc3339()),
+        };
+
+        knowledge_base::Entity::insert(model)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(knowledge_base::Column::Id)
+                    .update_columns([
+                        knowledge_base::Column::Title,
+                        knowledge_base::Column::Description,
+                        knowledge_base::Column::UpdatedAt,
+                    ])
+                    .to_owned()
+            )
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(kb.id)
+    }
+
+    async fn find_by_id(&self, id: &KnowledgeBaseId) -> Result<Option<KnowledgeBase>, RepositoryError> {
+        let model = knowledge_base::Entity::find_by_id(id.0.to_string())
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        if let Some(m) = model {
+            Ok(Some(KnowledgeBase {
+                id: KnowledgeBaseId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                title: m.title,
+                description: m.description,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list(&self, author_id: UserId) -> Result<Vec<KnowledgeBase>, RepositoryError> {
+        let results = knowledge_base::Entity::find()
+            .filter(knowledge_base::Column::AuthorId.eq(author_id.0.to_string()))
+            .order_by_desc(knowledge_base::Column::CreatedAt)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let kbs = results.into_iter().map(|m| {
+            Ok(KnowledgeBase {
+                id: KnowledgeBaseId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                title: m.title,
+                description: m.description,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+            })
+        }).collect::<Result<Vec<_>, RepositoryError>>()?;
+
+        Ok(kbs)
+    }
+
+    async fn delete(&self, id: &KnowledgeBaseId) -> Result<(), RepositoryError> {
+        knowledge_base::Entity::delete_by_id(id.0.to_string())
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
