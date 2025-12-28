@@ -12,8 +12,6 @@ use sea_orm::{Database, DatabaseConnection, ConnectionTrait};
 use dotenvy::dotenv;
 use std::env;
 use uuid::Uuid;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, Layer};
-
 mod domain;
 mod infrastructure;
 mod interface;
@@ -56,30 +54,6 @@ impl FromRef<AppState> for Arc<dyn CommentRepository> {
     fn from_ref(state: &AppState) -> Self {
         state.repo.clone() as Arc<dyn CommentRepository>
     }
-}
-
-#[allow(dead_code)]
-fn setup_logging() {
-    // 1. File Appender (Non-blocking)
-    let file_appender = tracing_appender::rolling::daily("logs", "aether-core.log");
-    let (non_blocking, _guard) = tracing_appender::non_blocking(file_appender);
-
-    // 2. Layers
-    // Stdout: Human readable
-    let stdout_layer = tracing_subscriber::fmt::layer()
-        .pretty()
-        .with_filter(tracing_subscriber::EnvFilter::from_default_env());
-
-    // File: JSON Structured
-    let file_layer = tracing_subscriber::fmt::layer()
-        .with_writer(non_blocking)
-        .with_filter(tracing_subscriber::EnvFilter::new("info")); // Always log info+ to file
-
-    // 3. Registry
-    tracing_subscriber::registry()
-        .with(stdout_layer)
-        .with(file_layer)
-        .init();
 }
 
 #[tokio::main]
