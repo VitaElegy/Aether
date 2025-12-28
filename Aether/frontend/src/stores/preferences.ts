@@ -34,10 +34,22 @@ export const usePreferencesStore = defineStore('preferences', () => {
         localStorage.setItem('aether_default_commit_msg', newVal);
     });
 
+    const readViewShowTree = ref<boolean>(localStorage.getItem('aether_read_show_tree') !== 'false');
+    const readViewShowOutline = ref<boolean>(localStorage.getItem('aether_read_show_outline') !== 'false');
+    const readViewTreeSide = ref<'left' | 'right'>((localStorage.getItem('aether_read_tree_side') as 'left' | 'right') || 'left');
+
+    // Persistence
+    watch(readViewShowTree, (v) => localStorage.setItem('aether_read_show_tree', v.toString()));
+    watch(readViewShowOutline, (v) => localStorage.setItem('aether_read_show_outline', v.toString()));
+    watch(readViewTreeSide, (v) => localStorage.setItem('aether_read_tree_side', v));
+
     return {
         theme,
         isSidebarCollapsed,
         defaultCommitMessage,
+        readViewShowTree,
+        readViewShowOutline,
+        readViewTreeSide,
         toggleTheme,
         toggleSidebar
     };
