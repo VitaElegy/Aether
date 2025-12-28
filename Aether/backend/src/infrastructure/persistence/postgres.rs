@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use sea_orm::*;
-use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot};
-use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, RepositoryError};
-use super::entities::{content, user, content_version, comment};
+use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot, Memo, MemoId, CommentableId, CommentableType};
+use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, MemoRepository, RepositoryError};
+use super::entities::{content, user, content_version, comment, memo};
 use chrono::Utc;
 use sea_orm::sea_query::{Expr, Func};
 
@@ -395,8 +395,9 @@ impl ContentRepository for PostgresRepository {
         // 1. Find Content IDs referenced by matching comments
         let comment_matches: Vec<String> = comment::Entity::find()
             .filter(comment::Column::Text.contains(query))
+            .filter(comment::Column::TargetType.eq("Content")) // Only match comments on Content
             .select_only()
-            .column(comment::Column::ContentId)
+            .column(comment::Column::TargetId)
             .into_tuple()
             .all(&self.db)
             .await
@@ -552,9 +553,15 @@ impl ContentRepository for PostgresRepository {
 #[async_trait]
 impl CommentRepository for PostgresRepository {
     async fn add_comment(&self, c: Comment) -> Result<CommentId, RepositoryError> {
+        let (target_type, target_id) = match c.target.target_type {
+            CommentableType::Content => ("Content", c.target.target_id.to_string()),
+            CommentableType::Memo => ("Memo", c.target.target_id.to_string()),
+        };
+
         let model = comment::ActiveModel {
             id: Set(c.id.0.to_string()),
-            content_id: Set(c.content_id.0.to_string()),
+            target_type: Set(target_type.to_string()),
+            target_id: Set(target_id),
             user_id: Set(c.user_id.0.to_string()),
             parent_id: Set(c.parent_id.map(|id| id.0.to_string())),
             text: Set(c.text),
@@ -569,9 +576,15 @@ impl CommentRepository for PostgresRepository {
         Ok(c.id)
     }
 
-    async fn get_comments(&self, content_id: &ContentId) -> Result<Vec<Comment>, RepositoryError> {
+    async fn get_comments(&self, target: &CommentableId) -> Result<Vec<Comment>, RepositoryError> {
+        let (t_type, t_id) = match target.target_type {
+            CommentableType::Content => ("Content", target.target_id.to_string()),
+            CommentableType::Memo => ("Memo", target.target_id.to_string()),
+        };
+
         let results = comment::Entity::find()
-            .filter(comment::Column::ContentId.eq(content_id.0.to_string()))
+            .filter(comment::Column::TargetType.eq(t_type))
+            .filter(comment::Column::TargetId.eq(t_id))
             .find_also_related(user::Entity)
             .order_by_asc(comment::Column::CreatedAt)
             .all(&self.db)
@@ -583,7 +596,14 @@ impl CommentRepository for PostgresRepository {
         for (m, author) in results {
              let c = Comment {
                 id: CommentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                content_id: ContentId(uuid::Uuid::parse_str(&m.content_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                target: CommentableId {
+                    target_type: match m.target_type.as_str() {
+                        "Content" => CommentableType::Content,
+                        "Memo" => CommentableType::Memo,
+                        _ => CommentableType::Content, // Default fallback
+                    },
+                    target_id: uuid::Uuid::parse_str(&m.target_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                },
                 user_id: UserId(uuid::Uuid::parse_str(&m.user_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
                 user_name: author.as_ref().map(|u| u.display_name.clone().or(Some(u.username.clone())).unwrap_or_default()),
                 user_avatar: author.as_ref().and_then(|u| u.avatar_url.clone()),
@@ -596,5 +616,139 @@ impl CommentRepository for PostgresRepository {
         }
 
         Ok(flat_list)
+    }
+
+    async fn get_comments_batch(&self, targets: &[CommentableId]) -> Result<Vec<Comment>, RepositoryError> {
+        // Naive implementation Loop for now, optimizing later if needed
+        let mut all_comments = Vec::new();
+        for target in targets {
+            let mut comments = self.get_comments(target).await?;
+            all_comments.append(&mut comments);
+        }
+        Ok(all_comments)
+    }
+}
+
+#[async_trait]
+impl MemoRepository for PostgresRepository {
+    async fn save(&self, memo: Memo) -> Result<MemoId, RepositoryError> {
+        let serialized_tags = serde_json::to_string(&memo.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
+
+        let model = memo::ActiveModel {
+            id: Set(memo.id.0.to_string()),
+            author_id: Set(memo.author_id.to_string()),
+            title: Set(memo.title),
+            content: Set(memo.content),
+            tags: Set(serialized_tags),
+            created_at: Set(memo.created_at.to_rfc3339()),
+            updated_at: Set(memo.updated_at.to_rfc3339()),
+            visibility: Set(match memo.visibility {
+                Visibility::Public => "Public".to_string(),
+                Visibility::Private => "Private".to_string(),
+                Visibility::Internal => "Internal".to_string(),
+            }),
+        };
+
+        memo::Entity::insert(model)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(memo::Column::Id)
+                    .update_columns([
+                        memo::Column::Title,
+                        memo::Column::Content,
+                        memo::Column::Tags,
+                        memo::Column::UpdatedAt,
+                        memo::Column::Visibility,
+                    ])
+                    .to_owned()
+            )
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(memo.id)
+    }
+
+    async fn find_by_id(&self, id: &MemoId) -> Result<Option<Memo>, RepositoryError> {
+        let result = memo::Entity::find_by_id(id.0.to_string())
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        if let Some(m) = result {
+             Ok(Some(Memo {
+                id: MemoId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                title: m.title,
+                content: m.content,
+                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                visibility: match m.visibility.to_lowercase().as_str() {
+                    "private" => Visibility::Private,
+                    "internal" => Visibility::Internal,
+                    _ => Visibility::Public,
+                },
+             }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>) -> Result<Vec<Memo>, RepositoryError> {
+         let mut condition = Condition::all();
+
+         if let Some(aid) = author_id {
+             condition = condition.add(memo::Column::AuthorId.eq(aid.0.to_string()));
+         }
+
+         // Visibility Logic (Simplified for Memo compared to Content)
+         // If viewer is author, show everything.
+         // Else show Public.
+         // Internal not fully spec'd for Memo yet, assuming same as Content?
+         let vid_str = viewer_id.as_ref().map(|v| v.0.to_string());
+
+         let visibility_cond = if let Some(v_id) = vid_str {
+             Condition::any()
+                .add(memo::Column::Visibility.eq("Public"))
+                .add(memo::Column::AuthorId.eq(v_id)) // Own memos
+         } else {
+             Condition::all().add(memo::Column::Visibility.eq("Public"))
+         };
+
+         condition = condition.add(visibility_cond);
+
+         let results = memo::Entity::find()
+            .filter(condition)
+            .order_by_desc(memo::Column::CreatedAt)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+         let mut memos = Vec::new();
+         for m in results {
+             memos.push(Memo {
+                id: MemoId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                title: m.title,
+                content: m.content,
+                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                visibility: match m.visibility.to_lowercase().as_str() {
+                    "private" => Visibility::Private,
+                    "internal" => Visibility::Internal,
+                    _ => Visibility::Public,
+                },
+             });
+         }
+         Ok(memos)
+    }
+
+    async fn delete(&self, id: &MemoId) -> Result<(), RepositoryError> {
+        memo::Entity::delete_by_id(id.0.to_string())
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(())
     }
 }
