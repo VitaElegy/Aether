@@ -260,7 +260,6 @@ async fn main() {
         // Export
         .route("/api/export/content/:id", get(export_content_handler))
         .route("/api/export/memo/:id", get(export_memo_handler))
-        .route("/api/export/memo/:id", get(export_memo_handler))
         .route("/api/upload", post(upload_handler))
         .route("/api/tags", get(list_tags_handler))
         .nest_service("/uploads", ServeDir::new("uploads"))
