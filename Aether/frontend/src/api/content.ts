@@ -15,7 +15,64 @@ export interface ContentDiff {
     changes: string; // Unified Diff format
 }
 
+
+export interface Content {
+    id: string;
+    title: string;
+    slug: string;
+    body: any; // ContentBody
+    status: 'Draft' | 'Published' | 'Archived';
+    visibility: 'Public' | 'Private' | 'Internal';
+    category?: string;
+    tags: string[];
+    author_id: string;
+    author_name?: string;
+    knowledge_base_id?: string;
+    parent_id?: string;
+    content_type: 'Article' | 'Directory';
+    created_at: string;
+    updated_at: string;
+}
+
+export interface CreateContentPayload {
+    title: string;
+    body: string;
+    tags: string[];
+    category?: string;
+    visibility: 'Public' | 'Private' | 'Internal';
+    status?: 'Draft' | 'Published' | 'Archived';
+    reason?: string;
+    snapshot?: boolean;
+    knowledge_base_id?: string;
+    parent_id?: string;
+    type?: 'Article' | 'Directory';
+}
+
 export const contentApi = {
+    list: async (params?: { offset?: number; limit?: number; author_id?: string }): Promise<Content[]> => {
+        const res = await axios.get('/api/content', { params });
+        return res.data;
+    },
+
+    get: async (id: string): Promise<Content> => {
+        const res = await axios.get(`/api/content/${id}`);
+        return res.data;
+    },
+
+    create: async (payload: CreateContentPayload): Promise<{ id: string }> => {
+        const res = await axios.post('/api/content', payload);
+        return res.data;
+    },
+
+    update: async (id: string, payload: CreateContentPayload): Promise<{ id: string }> => {
+        const res = await axios.put(`/api/content/${id}`, payload);
+        return res.data;
+    },
+
+    delete: async (id: string): Promise<void> => {
+        await axios.delete(`/api/content/${id}`);
+    },
+
     getHistory: async (id: string): Promise<ContentVersionSnapshot[]> => {
         const res = await axios.get(`/api/content/${id}/history`);
         return res.data;
@@ -23,7 +80,6 @@ export const contentApi = {
 
     getVersion: async (id: string, version: string): Promise<any> => {
         const res = await axios.get(`/api/content/${id}/version/${version}`);
-        // The endpoint returns raw JSON body of the article (ContentBody format usually)
         return res.data;
     },
 
