@@ -64,6 +64,15 @@ pub trait MemoRepository: Send + Sync {
     async fn delete(&self, id: &MemoId) -> Result<(), RepositoryError>;
 }
 
+/// Knowledge Base Repository Port
+#[async_trait]
+pub trait KnowledgeBaseRepository: Send + Sync {
+    async fn save(&self, kb: super::models::KnowledgeBase) -> Result<super::models::KnowledgeBaseId, RepositoryError>;
+    async fn find_by_id(&self, id: &super::models::KnowledgeBaseId) -> Result<Option<super::models::KnowledgeBase>, RepositoryError>;
+    async fn list(&self, author_id: UserId) -> Result<Vec<super::models::KnowledgeBase>, RepositoryError>;
+    async fn delete(&self, id: &super::models::KnowledgeBaseId) -> Result<(), RepositoryError>;
+}
+
 // --- Export Domain ---
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

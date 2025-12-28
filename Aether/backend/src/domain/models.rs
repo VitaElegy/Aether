@@ -30,7 +30,8 @@ pub struct ContentAggregate {
     pub slug: String,
     pub status: ContentStatus,
     pub visibility: Visibility, // Added
-    pub category: Option<String>, // Added: "Parent/Child" format
+    pub category: Option<String>, // "Parent/Child" format or just a string
+    pub knowledge_base_id: Option<Uuid>, // [NEW] Link to KnowledgeBase
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub body: ContentBody,
@@ -56,6 +57,21 @@ pub enum ContentBody {
     CodeSnippet { language: String, code: String },
     Video { url: String, duration_sec: u32 },
     Custom(serde_json::Value),
+}
+
+// --- Knowledge Base Domain ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeBaseId(pub Uuid);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeBase {
+    pub id: KnowledgeBaseId,
+    pub author_id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 // --- Authentication Domain ---
