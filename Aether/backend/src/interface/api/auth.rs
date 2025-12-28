@@ -24,6 +24,7 @@ pub struct RegisterRequest {
     password: String,
 }
 
+#[derive(Clone, Copy, Debug)]
 pub struct AuthenticatedUser {
     pub id: Uuid,
     pub permissions: u64,

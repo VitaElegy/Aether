@@ -1,67 +1,83 @@
 use axum::{
-    extract::{Path, State, Json},
-    response::IntoResponse,
+    extract::{Path, State},
     http::StatusCode,
-
+    Json,
+    response::IntoResponse,
 };
 use std::sync::Arc;
 use uuid::Uuid;
 use chrono::Utc;
-use crate::domain::models::{Comment, CommentId, ContentId, UserId};
+use crate::domain::models::{Comment, CommentId, CommentableId, CommentableType};
 use crate::domain::ports::CommentRepository;
+use crate::interface::api::auth::AuthenticatedUser;
 
-#[derive(serde::Deserialize)]
+#[derive(serde::Deserialize, Debug)]
 pub struct CreateCommentRequest {
     pub text: String,
-    pub parent_id: Option<String>,
+    pub parent_id: Option<Uuid>,
+}
+
+fn parse_target(target_type: &str, target_id: Uuid) -> Option<CommentableId> {
+    let c_type = match target_type.to_lowercase().as_str() {
+        "content" => CommentableType::Content,
+        "memo" => CommentableType::Memo,
+        _ => return None,
+    };
+    Some(CommentableId {
+        target_type: c_type,
+        target_id,
+    })
 }
 
 pub async fn create_comment_handler(
     State(repo): State<Arc<dyn CommentRepository>>,
-    user: crate::interface::api::auth::AuthenticatedUser,
-    Path(content_id): Path<Uuid>,
+    user: AuthenticatedUser,
+    Path((target_type, target_id)): Path<(String, Uuid)>,
     Json(payload): Json<CreateCommentRequest>,
 ) -> impl IntoResponse {
-    // Validate
-    if payload.text.trim().is_empty() {
-        return (StatusCode::BAD_REQUEST, "Comment cannot be empty").into_response();
-    }
-
-    let comment_id = Uuid::new_v4();
-    // Safety check for parent_id validity could be added here, but DB will catch FK error usually.
-    let parent_uuid = if let Some(pid) = payload.parent_id {
-        match uuid::Uuid::parse_str(&pid) {
-            Ok(u) => Some(CommentId(u)),
-            Err(_) => return (StatusCode::BAD_REQUEST, "Invalid parent ID").into_response(),
-        }
-    } else {
-        None
+    let target = match parse_target(&target_type, target_id) {
+        Some(t) => t,
+        None => return (StatusCode::BAD_REQUEST, "Invalid target type").into_response(),
     };
 
     let comment = Comment {
-        id: CommentId(comment_id),
-        content_id: ContentId(content_id),
-        user_id: UserId(user.id),
-        user_name: None, // Will be filled on read
+        id: CommentId(Uuid::new_v4()),
+        target,
+        user_id: crate::domain::models::UserId(user.id),
+        user_name: None, // Will be filled by repo join (or should be provided?)
+        // Actually repo join fills it on read. On write we just save IDs.
+        // But for response we might want it? The repo returns CommentId currently.
+        // Let's assume repo won't return full object immediately or we don't need it.
         user_avatar: None,
-        parent_id: parent_uuid,
+        parent_id: payload.parent_id.map(CommentId),
         text: payload.text,
         created_at: Utc::now(),
-        replies: Vec::new(),
+        replies: vec![],
     };
 
     match repo.add_comment(comment).await {
         Ok(id) => (StatusCode::CREATED, Json(id)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => {
+            tracing::error!("Failed to create comment: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create comment").into_response()
+        }
     }
 }
 
 pub async fn get_comments_handler(
     State(repo): State<Arc<dyn CommentRepository>>,
-    Path(content_id): Path<Uuid>,
+    Path((target_type, target_id)): Path<(String, Uuid)>,
 ) -> impl IntoResponse {
-    match repo.get_comments(&ContentId(content_id)).await {
+    let target = match parse_target(&target_type, target_id) {
+        Some(t) => t,
+        None => return (StatusCode::BAD_REQUEST, "Invalid target type").into_response(),
+    };
+
+    match repo.get_comments(&target).await {
         Ok(comments) => Json(comments).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
+        Err(e) => {
+             tracing::error!("Failed to fetch comments: {:?}", e);
+             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch comments").into_response()
+        }
     }
 }
