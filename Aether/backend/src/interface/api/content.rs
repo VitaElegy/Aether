@@ -116,6 +116,7 @@ pub async fn create_content_handler(
         body: ContentBody::Markdown(payload.body),
         tags: payload.tags,
         version_message: payload.reason,
+        knowledge_base_id: None,
     };
 
     // Default snapshot policy: true if Published, false if Draft (unless overridden)
@@ -174,6 +175,7 @@ pub async fn update_content_handler(
         body: ContentBody::Markdown(payload.body),
         tags: payload.tags,
         version_message: payload.reason,
+        knowledge_base_id: None,
     };
 
     // Default snapshot policy: true if Published, false if Draft (unless overridden)
