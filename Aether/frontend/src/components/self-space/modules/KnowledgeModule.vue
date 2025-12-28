@@ -8,6 +8,7 @@ import TagInput from '../../common/TagInput.vue';
 
 // -- State --
 // -- State --
+const router = useRouter();
 const viewMode = ref<'list' | 'detail' | 'settings'>('list');
 const knowledgeBases = ref<KnowledgeBase[]>([]);
 const currentKb = ref<KnowledgeBase | null>(null);
@@ -95,8 +96,12 @@ const updateKbSettings = async () => {
 
         viewMode.value = 'detail';
         fetchKBs(); // Type of reload
-    } catch (e) {
-        console.error("Failed to update KB", e);
+    } catch (e: any) {
+        if (e.response && e.response.status === 409) {
+            alert("A Knowledge Base with this title already exists.");
+        } else {
+            console.error("Failed to update KB", e);
+        }
     }
 };
 
@@ -156,6 +161,10 @@ const navigateInto = (folder: Content) => {
     refreshContent();
 };
 
+const navigateToArticle = (article: Content) => {
+    router.push(`/article/${article.id}`);
+};
+
 const navigateUp = (index?: number) => {
     if (index === undefined) {
         // Go to root
@@ -189,8 +198,12 @@ const createKb = async () => {
         kbFormVisible.value = false;
         kbForm.value = { title: '', description: '', tags: '', cover_image: '' };
         fetchKBs();
-    } catch (e) {
-        console.error(e);
+    } catch (e: any) {
+        if (e.response && e.response.status === 409) {
+            alert("A Knowledge Base with this title already exists.");
+        } else {
+            console.error(e);
+        }
     }
 };
 
@@ -339,7 +352,7 @@ onMounted(() => {
             </div>
 
             <!-- SETTINGS VIEW -->
-            <div v-else-if="viewMode === 'settings'" class="max-w-2xl mx-auto">
+            <div v-else-if="viewMode === 'settings'" class="max-w-2xl mx-auto pb-32">
                 <div class="bg-surface rounded-lg border border-ink/5 p-8">
                     <h3 class="text-xl font-bold font-serif mb-6 pb-4 border-b border-ink/5">Knowledge Base Settings
                     </h3>
