@@ -16,13 +16,16 @@ mod domain;
 mod infrastructure;
 mod interface;
 
-use crate::domain::ports::{UserRepository, AuthService, ContentRepository, CommentRepository};
+use crate::domain::ports::{UserRepository, AuthService, ContentRepository, CommentRepository, MemoRepository, ExportService};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
+use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::api::auth::{login_handler, register_handler, get_user_handler, update_user_handler};
 use crate::interface::api::content::{create_content_handler, list_content_handler, get_content_handler, update_content_handler, delete_content_handler, get_content_diff_handler, search_content_handler, get_history_handler, get_version_handler};
 use crate::interface::api::comment::{create_comment_handler, get_comments_handler};
+use crate::interface::api::memo::{create_memo_handler, get_memo_handler, list_memos_handler, delete_memo_handler};
+use crate::interface::api::export::{export_content_handler, export_memo_handler};
 use crate::interface::api::upload::upload_handler;
 
 // Define the Global State
@@ -30,6 +33,7 @@ use crate::interface::api::upload::upload_handler;
 struct AppState {
     repo: Arc<PostgresRepository>,
     auth_service: Arc<dyn AuthService>,
+    export_service: Arc<dyn ExportService>,
 }
 
 impl FromRef<AppState> for Arc<dyn AuthService> {
@@ -53,6 +57,18 @@ impl FromRef<AppState> for Arc<dyn ContentRepository> {
 impl FromRef<AppState> for Arc<dyn CommentRepository> {
     fn from_ref(state: &AppState) -> Self {
         state.repo.clone() as Arc<dyn CommentRepository>
+    }
+}
+
+impl FromRef<AppState> for Arc<dyn MemoRepository> {
+    fn from_ref(state: &AppState) -> Self {
+        state.repo.clone() as Arc<dyn MemoRepository>
+    }
+}
+
+impl FromRef<AppState> for Arc<dyn ExportService> {
+    fn from_ref(state: &AppState) -> Self {
+        state.export_service.clone()
     }
 }
 
@@ -101,11 +117,22 @@ async fn main() {
         );
         CREATE TABLE IF NOT EXISTS comments (
             id UUID PRIMARY KEY,
-            content_id UUID NOT NULL,
+            target_type TEXT NOT NULL,
+            target_id UUID NOT NULL,
             user_id UUID NOT NULL,
             parent_id UUID,
             text TEXT NOT NULL,
             created_at TIMESTAMPTZ NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS memos (
+            id UUID PRIMARY KEY,
+            author_id UUID NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT NOT NULL,
+            tags TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            visibility TEXT NOT NULL
         );
     ").await.expect("Failed to initialize DB schema");
 
@@ -118,6 +145,12 @@ async fn main() {
         "ALTER TABLE content_versions ADD COLUMN change_reason TEXT",
         "ALTER TABLE content_versions ADD COLUMN content_hash TEXT DEFAULT ''",
         "ALTER TABLE content_versions ADD COLUMN editor_id UUID",
+        // Comment Migration
+        "ALTER TABLE comments ADD COLUMN target_type TEXT DEFAULT 'Content'",
+        "ALTER TABLE comments ADD COLUMN target_id TEXT",
+        "UPDATE comments SET target_id = content_id WHERE target_id IS NULL AND content_id IS NOT NULL",
+        // Note: We leave content_id for now as dropping columns in SQLite can be tricky depending on version,
+        // and we want to be safe. It becomes zombie column.
     ];
 
     for sql in migrations {
@@ -163,9 +196,16 @@ async fn main() {
         UserRepository::save(&*repo, admin).await.expect("Failed to seed admin");
     }
 
+    let export_service = Arc::new(DataExportService::new(
+        repo.clone() as Arc<dyn ContentRepository>,
+        repo.clone() as Arc<dyn CommentRepository>,
+        repo.clone() as Arc<dyn MemoRepository>,
+    ));
+
     let state = AppState {
         repo,
         auth_service,
+        export_service,
     };
 
     // --- 4. Build Router with Trace Middleware ---
@@ -180,7 +220,14 @@ async fn main() {
         .route("/api/content/:id/history", get(get_history_handler))
         .route("/api/content/:id/version/:version", get(get_version_handler))
         .route("/api/search", get(search_content_handler))
-        .route("/api/content/:id/comments", post(create_comment_handler).get(get_comments_handler))
+        // Polymorphic Comments
+        .route("/api/comments/:type/:id", post(create_comment_handler).get(get_comments_handler))
+        // Memos
+        .route("/api/memos", post(create_memo_handler).get(list_memos_handler))
+        .route("/api/memos/:id", get(get_memo_handler).delete(delete_memo_handler))
+        // Export
+        .route("/api/export/content/:id", get(export_content_handler))
+        .route("/api/export/memo/:id", get(export_memo_handler))
         .route("/api/upload", post(upload_handler))
         .nest_service("/uploads", ServeDir::new("uploads"))
         .with_state(state)
