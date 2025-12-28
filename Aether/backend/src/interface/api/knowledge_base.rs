@@ -45,6 +45,11 @@ pub async fn create_knowledge_base_handler(
     user: AuthenticatedUser,
     Json(payload): Json<CreateKnowledgeBaseRequest>,
 ) -> impl IntoResponse {
+    // 1. Check if title exists
+    if let Ok(Some(_)) = repo.find_by_title(&UserId(user.id), &payload.title).await {
+         return (StatusCode::CONFLICT, Json(serde_json::json!({ "error": "Knowledge Base with this title already exists" }))).into_response();
+    }
+
     let id = KnowledgeBaseId(Uuid::new_v4());
 
     let kb = KnowledgeBase {
@@ -123,6 +128,12 @@ pub async fn update_knowledge_base_handler(
 
     // 3. Update fields
     if let Some(t) = payload.title {
+        // Check uniqueness if title is changing
+        if t != existing.title {
+             if let Ok(Some(_)) = repo.find_by_title(&UserId(user.id), &t).await {
+                return (StatusCode::CONFLICT, Json(serde_json::json!({ "error": "Knowledge Base with this title already exists" }))).into_response();
+            }
+        }
         existing.title = t;
     }
     if let Some(d) = payload.description {

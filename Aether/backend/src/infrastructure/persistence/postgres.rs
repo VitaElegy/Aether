@@ -186,7 +186,7 @@ impl ContentRepository for PostgresRepository {
             created_at: Set(content.created_at.to_rfc3339()),
             updated_at: Set(Utc::now().to_rfc3339()),
             body: Set(serialized_body.clone()),
-            tags: Set(serialized_tags),
+            tags: Set(serialized_tags), // Use Vec<String> directly
             knowledge_base_id: Set(content.knowledge_base_id.map(|id| id.to_string())),
             parent_id: Set(content.parent_id.map(|id| id.to_string())),
             content_type: Set(match content.content_type {
@@ -206,7 +206,7 @@ impl ContentRepository for PostgresRepository {
                         content::Column::Body,
                         content::Column::UpdatedAt,
                         content::Column::Tags,
-                        content::Column::Tags,
+                        // Duplicate Tags removed
                         content::Column::KnowledgeBaseId,
                         content::Column::ParentId,
                         content::Column::ContentType,
@@ -847,6 +847,38 @@ impl KnowledgeBaseRepository for PostgresRepository {
         }
     }
 
+    async fn find_by_title(&self, author_id: &UserId, title: &str) -> Result<Option<KnowledgeBase>, RepositoryError> {
+        let model = knowledge_base::Entity::find()
+             .filter(
+                Condition::all()
+                    .add(knowledge_base::Column::AuthorId.eq(author_id.0.to_string()))
+                    .add(Expr::expr(Func::lower(Expr::col(knowledge_base::Column::Title))).eq(title.to_lowercase()))
+            )
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        if let Some(m) = model {
+            Ok(Some(KnowledgeBase {
+                id: KnowledgeBaseId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                title: m.title,
+                description: m.description,
+                tags: serde_json::from_str(&m.tags).unwrap_or_default(),
+                cover_image: m.cover_image,
+                visibility: match m.visibility.as_str() {
+                    "Public" => Visibility::Public,
+                    "Internal" => Visibility::Internal,
+                    _ => Visibility::Private,
+                },
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
     async fn list(&self, author_id: UserId) -> Result<Vec<KnowledgeBase>, RepositoryError> {
         let results = knowledge_base::Entity::find()
             .filter(knowledge_base::Column::AuthorId.eq(author_id.0.to_string()))
@@ -935,8 +967,11 @@ impl crate::domain::ports::TagRepository for PostgresRepository {
              .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
          for c in content_models {
-             for tag in c.tags {
-                 all_tags.insert(tag);
+             // Parse JSON string similar to KnowledgeBase and Memo
+             if let Ok(tags) = serde_json::from_str::<Vec<String>>(&c.tags) {
+                 for tag in tags {
+                     all_tags.insert(tag);
+                 }
              }
          }
 
