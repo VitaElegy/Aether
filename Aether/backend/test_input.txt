@@ -1,0 +1,22 @@
+ Volume in drive D has no label.
+ Volume Serial Number is C40A-2E95
+
+ Directory of d:\Work\tools\GIT\project\Blog\Aether\backend
+
+2025/12/28  14:28    <DIR>          .
+2025/12/22  05:14    <DIR>          ..
+2025/12/22  00:52               206 .env
+2025/12/28  12:52                18 .gitattributes
+2025/12/28  14:16            49,152 aether.db
+2025/12/28  13:20            84,451 Cargo.lock
+2025/12/28  13:10             1,108 Cargo.toml
+2025/12/22  03:54    <DIR>          logs
+2025/12/28  13:51    <DIR>          src
+2025/12/28  12:50               166 start_backend.bat
+2025/12/28  13:58               460 start_backend.sh
+2025/12/28  05:01    <DIR>          target
+2025/12/22  15:47             2,873 technical_specification.md
+2025/12/28  14:28                 0 test_input.txt
+2025/12/22  05:01    <DIR>          uploads
+               9 File(s)        138,434 bytes
+               6 Dir(s)  1,169,103,974,400 bytes free
