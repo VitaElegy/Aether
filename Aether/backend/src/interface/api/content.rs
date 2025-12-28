@@ -21,11 +21,24 @@ pub struct CreateContentRequest {
     visibility: String, // "Public", "Private", "Internal"
     status: Option<String>, // Added status field
     reason: Option<String>, // Git-like commit message
+    snapshot: Option<bool>, // Control version snapshot creation
 }
 
 #[derive(Deserialize)]
 pub struct SearchQuery {
     q: String,
+}
+
+
+fn parse_version(version_str: &str) -> Result<i32, String> {
+    if version_str.starts_with("0.0.") {
+        version_str.split('.').nth(2)
+            .and_then(|s| s.parse::<i32>().ok())
+            .ok_or_else(|| "Invalid version format".to_string())
+    } else {
+        version_str.parse::<i32>()
+            .map_err(|_| "Invalid version format".to_string())
+    }
 }
 
 pub async fn search_content_handler(
@@ -105,7 +118,10 @@ pub async fn create_content_handler(
         version_message: payload.reason,
     };
 
-    match repo.save(content, crate::domain::models::UserId(user.id)).await {
+    // Default snapshot policy: true if Published, false if Draft (unless overridden)
+    let should_snapshot = payload.snapshot.unwrap_or(content.status == ContentStatus::Published);
+
+    match repo.save(content, crate::domain::models::UserId(user.id), should_snapshot).await {
         Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id.0 }))).into_response(),
         Err(e) => {
             tracing::error!("Failed to create content: {:?}", e);
@@ -160,8 +176,11 @@ pub async fn update_content_handler(
         version_message: payload.reason,
     };
 
+    // Default snapshot policy: true if Published, false if Draft (unless overridden)
+    let should_snapshot = payload.snapshot.unwrap_or(updated_content.status == ContentStatus::Published);
+
     // 3. Save
-    match repo.save(updated_content, crate::domain::models::UserId(user.id)).await {
+    match repo.save(updated_content, crate::domain::models::UserId(user.id), should_snapshot).await {
         Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "id": id }))).into_response(),
         Err(e) => {
             tracing::error!("Failed to update content: {:?}", e);
@@ -174,6 +193,7 @@ pub async fn update_content_handler(
 pub struct ListParams {
     pub offset: Option<u64>,
     pub limit: Option<u64>,
+    pub author_id: Option<Uuid>,
 }
 
 pub async fn list_content_handler(
@@ -184,10 +204,25 @@ pub async fn list_content_handler(
     let viewer_id = user.0.map(|u| UserId(u.id));
     let limit = params.limit.unwrap_or(20).min(100);
     let offset = params.offset.unwrap_or(0);
+    let author_id = params.author_id.map(UserId);
 
-    match repo.list(viewer_id, limit, offset).await {
-        Ok(contents) => (StatusCode::OK, Json(contents)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    tracing::info!(
+        "List content request: viewer_id={:?}, author_id={:?}, limit={}, offset={}",
+        viewer_id.as_ref().map(|id| id.0),
+        author_id.as_ref().map(|id| id.0),
+        limit,
+        offset
+    );
+
+    match repo.list(viewer_id, author_id, limit, offset).await {
+        Ok(contents) => {
+            tracing::info!("Found {} contents", contents.len());
+            (StatusCode::OK, Json(contents)).into_response()
+        },
+        Err(e) => {
+            tracing::error!("Failed to list contents: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
+        },
     }
 }
 
@@ -249,8 +284,17 @@ pub async fn delete_content_handler(
 pub async fn get_content_diff_handler(
     State(repo): State<Arc<dyn ContentRepository>>,
     _user: AuthenticatedUser,
-    Path((id, v1, v2)): Path<(Uuid, i32, i32)>,
+    Path((id, v1_str, v2_str)): Path<(Uuid, String, String)>,
 ) -> impl IntoResponse {
+    let v1 = match parse_version(&v1_str) {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
+    };
+    let v2 = match parse_version(&v2_str) {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
+    };
+
     // 1. Check access (simplified: author or public)
     let _content = match repo.find_by_id(&ContentId(id)).await {
         Ok(Some(c)) => c,
@@ -325,8 +369,13 @@ pub async fn get_history_handler(
 pub async fn get_version_handler(
     State(repo): State<Arc<dyn ContentRepository>>,
     user: MaybeAuthenticatedUser,
-    Path((id, version)): Path<(Uuid, i32)>,
+    Path((id, version_str)): Path<(Uuid, String)>,
 ) -> impl IntoResponse {
+    let version = match parse_version(&version_str) {
+        Ok(v) => v,
+        Err(e) => return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": e }))).into_response(),
+    };
+
     // 1. Check permission
      let content = match repo.find_by_id(&ContentId(id)).await {
         Ok(Some(c)) => c,
