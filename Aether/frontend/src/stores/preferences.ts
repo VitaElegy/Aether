@@ -5,6 +5,7 @@ export const usePreferencesStore = defineStore('preferences', () => {
     // State
     const theme = ref<'light' | 'dark'>(localStorage.getItem('aether_theme') as 'light' | 'dark' || 'light');
     const isSidebarCollapsed = ref<boolean>(localStorage.getItem('aether_sidebar_collapsed') === 'true');
+    const defaultCommitMessage = ref<string>(localStorage.getItem('aether_default_commit_msg') || 'Update content');
 
     // Actions
     const toggleTheme = () => {
@@ -29,9 +30,14 @@ export const usePreferencesStore = defineStore('preferences', () => {
         localStorage.setItem('aether_sidebar_collapsed', newVal.toString());
     });
 
+    watch(defaultCommitMessage, (newVal) => {
+        localStorage.setItem('aether_default_commit_msg', newVal);
+    });
+
     return {
         theme,
         isSidebarCollapsed,
+        defaultCommitMessage,
         toggleTheme,
         toggleSidebar
     };

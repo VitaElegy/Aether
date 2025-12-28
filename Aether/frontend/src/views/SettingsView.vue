@@ -248,6 +248,18 @@ const save = async () => {
                             </div>
                         </div>
 
+                        <!-- Default Commit Message -->
+                        <div class="pt-8 border-t border-neutral-100">
+                             <div class="font-bold text-ink mb-2">Default Change Reason</div>
+                             <div class="text-xs text-neutral-400 mb-4">Template for your version history messages.</div>
+                             <textarea
+                                v-model="prefStore.defaultCommitMessage"
+                                rows="2"
+                                class="w-full bg-transparent border-b border-neutral-200 py-2 text-sm font-mono text-ink focus:outline-none focus:border-black transition-colors resize-none placeholder:text-neutral-300"
+                                placeholder="Update content..."
+                             ></textarea>
+                        </div>
+
                     </div>
                 </div>
 

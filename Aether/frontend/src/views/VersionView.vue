@@ -75,7 +75,7 @@ import TextAction from '@/components/ui/TextAction.vue';
 const route = useRoute();
 const router = useRouter();
 const originalId = route.params.id as string;
-const versionId = parseInt(route.params.version as string);
+const versionId = ref(route.params.version as string);
 const isDiffMode = ref(route.query.diff === 'true');
 
 const loading = ref(true);
@@ -83,6 +83,15 @@ const contentData = ref<any>({});
 const diffContent = ref<any[] | null>(null);
 
 const md = new MarkdownIt();
+
+// SemVer Helpers
+const parseSemVer = (v: string | number) => {
+    if (typeof v === 'number') return v;
+    if (v.startsWith('0.0.')) return parseInt(v.split('.')[2]);
+    return parseInt(v) || 0;
+};
+
+const formatSemVer = (v: number) => `0.0.${v}`;
 
 const renderMarkdown = (body: any) => {
     if (!body) return '';
@@ -94,7 +103,7 @@ const renderMarkdown = (body: any) => {
 };
 
 const diffEmptyMessage = computed(() => {
-    if (versionId === 1) {
+    if (parseSemVer(versionId.value) === 1) {
         return 'This is the first version, nothing to compare against.';
     }
     return 'No differences found.';
@@ -108,16 +117,20 @@ const cardTitle = computed(() => {
 const loadData = async () => {
     try {
         loading.value = true;
+        versionId.value = route.params.version as string; // Ensure reactive update
 
         // Load Version Content
-        const data = await contentApi.getVersion(originalId, versionId);
+        const data = await contentApi.getVersion(originalId, versionId.value);
         contentData.value = typeof data === 'string' ? JSON.parse(data) : data;
 
+        const currentV = parseSemVer(versionId.value);
+
         // Load Diff if requested
-        if (isDiffMode.value && versionId > 1) {
-             const diff = await contentApi.getDiff(originalId, versionId - 1, versionId);
+        if (isDiffMode.value && currentV > 1) {
+             const prevV = formatSemVer(currentV - 1);
+             const diff = await contentApi.getDiff(originalId, prevV, versionId.value);
              diffContent.value = diff.changes;
-        } else if (isDiffMode.value && versionId === 1) {
+        } else if (isDiffMode.value && currentV === 1) {
              diffContent.value = []; // Set empty for v1
         }
 
@@ -131,17 +144,19 @@ const loadData = async () => {
 
 const toggleDiff = async () => {
     isDiffMode.value = !isDiffMode.value;
+    const currentV = parseSemVer(versionId.value);
 
     // If switching to diff mode and data not loaded yet
     if (isDiffMode.value && !diffContent.value) {
-         if (versionId <= 1) {
+         if (currentV <= 1) {
              diffContent.value = []; // Mark as loaded but empty
              return;
          }
 
          try {
              loading.value = true;
-             const diff = await contentApi.getDiff(originalId, versionId - 1, versionId);
+             const prevV = formatSemVer(currentV - 1);
+             const diff = await contentApi.getDiff(originalId, prevV, versionId.value);
              diffContent.value = diff.changes;
          } catch (e) {
              MessagePlugin.error('Failed to load diff');

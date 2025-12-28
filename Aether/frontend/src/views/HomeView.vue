@@ -17,6 +17,14 @@ onMounted(async () => {
 
     try {
         const res = await axios.get('/api/content');
+        console.log('API Response:', res.data);
+
+        if (!Array.isArray(res.data)) {
+            console.error('Invalid response format:', res.data);
+            posts.value = [];
+            return;
+        }
+
         const uniqueData = Array.from(new Map(res.data.map((item: any) => [item.id, item])).values());
 
         posts.value = uniqueData.map((p: any) => ({
@@ -29,8 +37,12 @@ onMounted(async () => {
             data: p.body.type === 'Markdown' ? { content: p.body.data } : p.body.data,
             tags: p.tags
         }));
-    } catch (err) {
-        console.error(err);
+
+        console.log('Processed posts:', posts.value.length);
+    } catch (err: any) {
+        console.error('Failed to fetch content:', err);
+        console.error('Error response:', err.response?.data);
+        posts.value = [];
     }
 });
 

@@ -48,6 +48,7 @@ onMounted(async () => {
             title: data.title,
             author_id: data.author_id,
             author_name: data.author_name || 'Unknown',
+            author_avatar: data.author_avatar,
             created_at: new Date(data.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
             category: data.category,
             tags: data.tags,
@@ -139,14 +140,14 @@ const handleEdit = () => {
                             {{ post.title }}
                         </h1>
 
-                        <div class="flex items-center gap-5">
-                            <div class="w-12 h-12 bg-ash/50 rounded-full overflow-hidden border-2 border-accent/20">
-                                <img :src="`https://api.dicebear.com/9.x/notionists/svg?seed=${post.author_name}`"
+                        <div class="flex items-center gap-5 cursor-pointer group" @click="router.push(`/profile/${post.author_id}`)">
+                            <div class="w-12 h-12 bg-ash/50 rounded-full overflow-hidden border-2 border-accent/20 group-hover:border-accent transition-colors">
+                                <img :src="post.author_avatar || `https://api.dicebear.com/9.x/notionists/svg?seed=${post.author_name}`"
                                     class="w-full h-full object-cover dark:contrast-125" />
                             </div>
                             <div class="flex flex-col">
                                 <span
-                                    class="text-sm font-black text-ink uppercase tracking-widest">{{ post.author_name }}</span>
+                                    class="text-sm font-black text-ink uppercase tracking-widest group-hover:text-accent transition-colors">{{ post.author_name }}</span>
                                 <span
                                     class="text-[10px] font-mono text-ink/50 uppercase tracking-[0.2em]">{{ post.created_at }}</span>
                             </div>

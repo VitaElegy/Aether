@@ -8,50 +8,55 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('../views/LoginView.vue'),
+      meta: { transition: 'fade' }
     },
     {
       path: '/',
       name: 'home',
       component: () => import('../views/HomeView.vue'),
+      meta: { transition: 'fade' }
     },
     {
       path: '/search',
       name: 'search',
       component: () => import('../views/SearchView.vue'),
+      meta: { transition: 'fade' }
     },
     {
       path: '/editor/:id?',
       name: 'editor',
       component: () => import('../views/EditorView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'zoom' }
     },
     {
       path: '/article/:id',
       name: 'article',
       component: () => import('../views/ReadView.vue'),
+      meta: { transition: 'slide-right' }
     },
     {
       path: '/profile/:id',
       name: 'profile',
       component: () => import('../views/UserProfileView.vue'),
+      meta: { transition: 'slide-left' }
     },
     {
       path: '/settings',
       name: 'settings',
       component: () => import('../views/SettingsView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'fade' }
     },
     {
       path: '/content/:id/history',
       name: 'history',
       component: () => import('../views/HistoryView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'slide-right' }
     },
     {
       path: '/content/:id/version/:version',
       name: 'version',
       component: () => import('../views/VersionView.vue'),
-      meta: { requiresAuth: true }
+      meta: { requiresAuth: true, transition: 'slide-right' }
     },
     // Wildcard redirect for safety
     {

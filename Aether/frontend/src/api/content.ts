@@ -2,7 +2,7 @@ import axios from 'axios';
 
 export interface ContentVersionSnapshot {
     id: string;
-    version: number;
+    version: string;
     title: string;
     created_at: string;
     reason?: string;
@@ -10,8 +10,8 @@ export interface ContentVersionSnapshot {
 }
 
 export interface ContentDiff {
-    old_version: number;
-    new_version: number;
+    old_version: string;
+    new_version: string;
     changes: string; // Unified Diff format
 }
 
@@ -21,13 +21,13 @@ export const contentApi = {
         return res.data;
     },
 
-    getVersion: async (id: string, version: number): Promise<any> => {
+    getVersion: async (id: string, version: string): Promise<any> => {
         const res = await axios.get(`/api/content/${id}/version/${version}`);
         // The endpoint returns raw JSON body of the article (ContentBody format usually)
         return res.data;
     },
 
-    getDiff: async (id: string, v1: number, v2: number): Promise<ContentDiff> => {
+    getDiff: async (id: string, v1: string, v2: string): Promise<ContentDiff> => {
         const res = await axios.get(`/api/content/${id}/diff/${v1}/${v2}`);
         return res.data;
     }

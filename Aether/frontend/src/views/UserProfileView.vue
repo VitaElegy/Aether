@@ -12,6 +12,8 @@ const userId = computed(() => route.params.id as string);
 const isCurrentUser = computed(() => userId.value === 'me' || userId.value === authStore.user?.id);
 
 const remoteProfile = ref<any>(null);
+const entries = ref<any[]>([]);
+const loadingEntries = ref(false);
 
 const profile = computed(() => {
     if (isCurrentUser.value && authStore.user) {
@@ -23,7 +25,7 @@ const profile = computed(() => {
              bio: authStore.user.bio || 'Searching for meaning in the noise.',
              location: 'Unknown',
              avatar_url: authStore.user.avatar_url || '',
-             stats: { entries: 0, collections: 0 }
+             stats: { entries: entries.value.length, collections: 0 }
          };
     } else if (remoteProfile.value) {
         return {
@@ -34,7 +36,7 @@ const profile = computed(() => {
              bio: remoteProfile.value.bio || 'Searching for meaning in the noise.',
              location: 'Unknown',
              avatar_url: remoteProfile.value.avatar_url || '',
-             stats: { entries: 0, collections: 0 }
+             stats: { entries: entries.value.length, collections: 0 }
         };
     }
 
@@ -46,11 +48,14 @@ const profile = computed(() => {
         bio: '...',
         location: 'Unknown',
         avatar_url: '',
-        stats: { entries: 0, collections: 0 }
+        stats: { entries: entries.value.length, collections: 0 }
     };
 });
 
 const loadData = async () => {
+    // Reset entries
+    entries.value = [];
+
     if (isCurrentUser.value) {
         // Check if we are actually logged in
         if (!authStore.isAuthenticated) {
@@ -84,13 +89,32 @@ const loadData = async () => {
         } else if (!authStore.user || !authStore.user.username) {
             await authStore.fetchUser();
         }
+
+        // Load own articles
+        if (authStore.user) {
+            await loadArticles(authStore.user.id);
+        }
     } else {
         try {
             const res = await axios.get(`/api/users/${userId.value}`);
             remoteProfile.value = res.data;
+            await loadArticles(userId.value);
         } catch (e) {
             console.error("Failed to load profile", e);
         }
+    }
+};
+
+const loadArticles = async (uid: string) => {
+    loadingEntries.value = true;
+    try {
+        const res = await axios.get(`/api/content`, { params: { author_id: uid } });
+        entries.value = res.data;
+    } catch (e) {
+        console.error("Failed to load articles", e);
+        entries.value = [];
+    } finally {
+        loadingEntries.value = false;
     }
 };
 
@@ -156,12 +180,27 @@ const handleLogout = () => {
          </div>
       </div>
 
-      <!-- Recent Activity (Placeholder) -->
+      <!-- Recent Activity -->
       <div class="mt-24 border-t border-neutral-100 pt-12">
         <h3 class="text-xs font-bold uppercase tracking-widest mb-8">Recent Transmissions</h3>
-        <div class="space-y-4">
-          <div class="h-4 bg-ash w-3/4"></div>
-          <div class="h-4 bg-ash w-1/2"></div>
+
+        <div v-if="loadingEntries" class="space-y-4">
+           <div class="h-4 bg-ash w-3/4 animate-pulse"></div>
+           <div class="h-4 bg-ash w-1/2 animate-pulse"></div>
+        </div>
+
+        <div v-else-if="entries.length === 0" class="text-neutral-400 italic">
+            No transmissions detected.
+        </div>
+
+        <div v-else class="space-y-8">
+           <div v-for="post in entries" :key="post.id" class="group cursor-pointer" @click="router.push(`/article/${post.id}`)">
+               <h4 class="text-xl font-bold group-hover:text-accent transition-colors">{{ post.title }}</h4>
+               <div class="flex gap-4 mt-2 text-xs font-mono text-neutral-400 uppercase tracking-widest">
+                   <span>{{ new Date(post.created_at).toLocaleDateString() }}</span>
+                   <span>{{ post.category }}</span>
+               </div>
+           </div>
         </div>
       </div>
     </div>

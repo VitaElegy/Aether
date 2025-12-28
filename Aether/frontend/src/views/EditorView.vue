@@ -9,6 +9,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from 'tiptap-markdown';
 import { useDebounceFn, useStorage } from '@vueuse/core';
 import TopNavBar from '@/components/TopNavBar.vue';
+import { usePreferencesStore } from '@/stores/preferences';
 
 const router = useRouter();
 const route = useRoute();
@@ -21,6 +22,10 @@ const draftId = ref<string | null>(route.params.id as string || null);
 const isSaving = ref(false);
 const autoSaveEnabled = ref(true);
 const timestamps = ref<{ created: string | null; updated: string | null }>({ created: null, updated: null });
+
+const prefStore = usePreferencesStore();
+const showCommitModal = ref(false);
+const commitMessage = ref('');
 
 // Local Storage Cache
 const localCache = useStorage('aether_editor_current', {
@@ -128,7 +133,7 @@ onMounted(async () => {
         updated: data.updated_at
       };
 
-      if (localCache.value.body && localCache.value.timestamp > new Date(data.updated_at).getTime()) {
+      if (localCache.value?.body && localCache.value?.timestamp > new Date(data.updated_at).getTime()) {
          MessagePlugin.info('Restored unsaved progress from local cache.', 2000);
          Object.assign(form, localCache.value);
       } else {
@@ -141,7 +146,7 @@ onMounted(async () => {
       }
     } catch (err) {
       console.error('Failed to fetch draft', err);
-      if (localCache.value.body) {
+      if (localCache.value?.body) {
          Object.assign(form, localCache.value);
          MessagePlugin.warning('Server offline. Restored local cache.');
       }
@@ -149,7 +154,7 @@ onMounted(async () => {
   } else {
     // New Entry
     timestamps.value = { created: new Date().toISOString(), updated: new Date().toISOString() };
-    if (localCache.value.body || localCache.value.title) {
+    if (localCache.value?.body || localCache.value?.title) {
        Object.assign(form, localCache.value);
        if (form.body.length > 10) MessagePlugin.info('Restored unsaved draft.', 2000);
     }
@@ -172,7 +177,8 @@ const saveDraft = async () => {
       tags: form.tags,
       category: form.category || null,
       visibility: form.visibility,
-      status: 'Draft'
+      status: 'Draft',
+      snapshot: false // Do not create version snapshot for auto-save
     };
 
     // Explicitly set header with current token
@@ -236,8 +242,14 @@ const scrollToHeading = (pos: number) => {
 // Publish
 const isPublishing = ref(false);
 
-const handlePublish = async () => {
+const onPublishClick = () => {
+  commitMessage.value = prefStore.defaultCommitMessage;
+  showCommitModal.value = true;
+};
+
+const executePublish = async () => {
   if (isPublishing.value) return;
+  showCommitModal.value = false;
 
   // Cancel any pending auto-save
   if (debouncedAutoSave && typeof debouncedAutoSave.cancel === 'function') {
@@ -264,7 +276,9 @@ const handlePublish = async () => {
       tags: form.tags,
       category: form.category || null,
       visibility: form.visibility,
-      status: 'Published'
+      status: 'Published',
+      reason: commitMessage.value,
+      snapshot: true // Explicitly create version snapshot
     };
 
     // Explicitly set header with current token
@@ -281,7 +295,16 @@ const handlePublish = async () => {
         draftId.value = res.data.id;
     }
 
-    localCache.value = null; // Clear cache on publish
+    // Reset cache to initial empty state to prevent "stuck" drafts
+    localCache.value = {
+      title: '',
+      body: '',
+      category: '',
+      tags: [],
+      visibility: 'Public',
+      status: 'Draft',
+      timestamp: 0
+    };
     MessagePlugin.success('Published.');
     await router.push('/');
   } catch (err: any) {
@@ -359,7 +382,7 @@ onBeforeUnmount(() => {
 
              <div class="h-4 w-px bg-neutral-200"></div>
 
-             <button @click="handlePublish" :disabled="isPublishing" class="bg-ink text-paper px-6 py-2 text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-center min-w-[100px]">
+             <button @click="onPublishClick" :disabled="isPublishing" class="bg-ink text-paper px-6 py-2 text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-center min-w-[100px]">
                {{ isPublishing ? '...' : 'Publish' }}
              </button>
           </div>
@@ -481,6 +504,45 @@ onBeforeUnmount(() => {
          </div>
       </aside>
     </div>
+
+    <!-- Commit Modal -->
+    <Transition
+      enter-active-class="transition duration-200 ease-out"
+      enter-from-class="opacity-0 scale-95"
+      enter-to-class="opacity-100 scale-100"
+      leave-active-class="transition duration-150 ease-in"
+      leave-from-class="opacity-100 scale-100"
+      leave-to-class="opacity-0 scale-95"
+    >
+      <div v-if="showCommitModal" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <!-- Backdrop -->
+        <div class="absolute inset-0 bg-white/80 dark:bg-black/80 backdrop-blur-sm" @click="showCommitModal = false"></div>
+
+        <!-- Modal Content -->
+        <div class="relative bg-paper w-full max-w-md border border-neutral-100 shadow-2xl p-8 flex flex-col gap-6 animate-in fade-in zoom-in-95 duration-200">
+           <div>
+              <h3 class="text-xl font-bold text-ink">Save Changes</h3>
+              <p class="text-xs text-neutral-400 mt-1 uppercase tracking-widest">Describes this version in history</p>
+           </div>
+
+           <textarea
+             v-model="commitMessage"
+             class="w-full h-32 bg-ash/30 p-4 text-sm font-mono text-ink focus:outline-none focus:ring-1 focus:ring-ink resize-none placeholder:text-neutral-400"
+             placeholder="What did you change?"
+             autofocus
+           ></textarea>
+
+           <div class="flex justify-end gap-4">
+              <button @click="showCommitModal = false" class="text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-ink transition-colors">
+                Cancel
+              </button>
+              <button @click="executePublish" class="bg-ink text-paper px-6 py-2 text-xs font-bold uppercase tracking-widest hover:bg-neutral-800 transition-colors">
+                Commit & Publish
+              </button>
+           </div>
+        </div>
+      </div>
+    </Transition>
   </div>
 </template>
 

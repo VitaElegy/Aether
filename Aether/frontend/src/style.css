@@ -8,6 +8,10 @@
         --color-ink: 26 26 26;
         --color-ash: 243 244 246;
         --color-accent: 37 99 235;
+
+        /* Premium Animation Easings */
+        --ease-out-expo: cubic-bezier(0.19, 1, 0.22, 1);
+        --ease-in-out-quart: cubic-bezier(0.76, 0, 0.24, 1);
     }
 
     .dark {
@@ -19,6 +23,7 @@
 
     body {
         @apply bg-paper text-ink font-sans antialiased;
+        overflow-x: hidden; /* Prevent horizontal scroll during transitions */
     }
 
     ::selection {
@@ -26,12 +31,7 @@
         color: rgb(var(--color-ink));
     }
 
-    h1,
-    h2,
-    h3,
-    h4,
-    h5,
-    h6 {
+    h1, h2, h3, h4, h5, h6 {
         @apply font-bold tracking-tight text-ink;
     }
 }
@@ -41,7 +41,6 @@
         @apply bg-paper/50 backdrop-blur-md border border-ash/50 shadow-sm transition-all duration-300;
     }
 
-    /* Standard CSS for hover shadow to avoid Tailwind @apply parsing issues */
     .glow-hover {
         transition-property: box-shadow;
         transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
@@ -55,6 +54,70 @@
     .btn-accent {
         @apply px-4 py-2 bg-accent text-paper font-black text-[10px] uppercase tracking-[0.2em] rounded-sm hover:brightness-110 transition-all shadow-sm;
     }
+}
+
+/*
+   --------------------------------------------------------------------------
+   Cinema-Quality Page Transitions
+   "Mean, Elegant, Professional"
+   --------------------------------------------------------------------------
+*/
+
+/* DEFAULT FADE */
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.4s var(--ease-out-expo), filter 0.4s var(--ease-out-expo);
+}
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+    filter: blur(4px);
+}
+
+/* SLIDE RIGHT (Navigating Forward/Left) */
+.slide-right-enter-active,
+.slide-right-leave-active,
+.slide-left-enter-active,
+.slide-left-leave-active {
+    transition: transform 0.5s var(--ease-out-expo), opacity 0.5s var(--ease-out-expo), filter 0.5s var(--ease-out-expo);
+}
+
+/* Slide Right: Incoming page slides in from Right */
+.slide-right-enter-from {
+    opacity: 0;
+    transform: translateX(20px);
+    filter: blur(2px);
+}
+.slide-right-leave-to {
+    opacity: 0;
+    transform: translateX(-20px);
+    filter: blur(2px);
+}
+
+/* Slide Left: Incoming page slides in from Left */
+.slide-left-enter-from {
+    opacity: 0;
+    transform: translateX(-20px);
+    filter: blur(2px);
+}
+.slide-left-leave-to {
+    opacity: 0;
+    transform: translateX(20px);
+    filter: blur(2px);
+}
+
+/* ZOOM (Modal-like) */
+.zoom-enter-active,
+.zoom-leave-active {
+    transition: transform 0.4s var(--ease-in-out-quart), opacity 0.4s var(--ease-in-out-quart);
+}
+.zoom-enter-from {
+    opacity: 0;
+    transform: scale(0.96);
+}
+.zoom-leave-to {
+    opacity: 0;
+    transform: scale(1.04);
 }
 
 ::-webkit-scrollbar {

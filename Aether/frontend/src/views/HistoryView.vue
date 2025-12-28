@@ -70,11 +70,11 @@ const formatDate = (iso: string) => {
     return new Date(iso).toLocaleString();
 };
 
-const viewVersion = (v: number) => {
+const viewVersion = (v: string) => {
     router.push(`/content/${contentId}/version/${v}`);
 };
 
-const compareWithCurrent = (v: number) => {
+const compareWithCurrent = (v: string) => {
     router.push(`/content/${contentId}/version/${v}?diff=true`);
 };
 
