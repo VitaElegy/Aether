@@ -94,18 +94,18 @@ onMounted(() => {
              <div class="flex-1">
                  <textarea
                     v-model="newCommentText"
-                    class="w-full bg-white border border-neutral-200 rounded-sm p-4 text-sm focus:border-ink focus:ring-0 outline-none resize-none transition-colors"
+                    class="w-full bg-white dark:bg-ash/10 border border-neutral-200 dark:border-neutral-700 rounded-sm p-4 text-sm focus:border-ink focus:ring-0 outline-none resize-none transition-colors"
                     rows="3"
                     placeholder="Add to the discussion..."
                 ></textarea>
                 <div class="flex justify-end mt-2">
-                    <button @click="handlePostComment" class="bg-ink text-white text-xs font-bold uppercase tracking-widest px-6 py-2 rounded-sm hover:bg-neutral-800 transition-colors">
+                    <button @click="handlePostComment" class="bg-ink text-white dark:text-paper text-xs font-bold uppercase tracking-widest px-6 py-2 rounded-sm hover:bg-neutral-800 dark:hover:bg-neutral-200 transition-colors">
                         Post Comment
                     </button>
                 </div>
              </div>
         </div>
-        <div v-else class="mb-10 p-6 bg-neutral-50 text-center rounded-sm">
+        <div v-else class="mb-10 p-6 bg-neutral-50 dark:bg-ash/10 text-center rounded-sm">
             <p class="text-sm text-neutral-500 mb-4">Log in to join the discussion.</p>
             <router-link to="/login" class="text-xs font-bold uppercase tracking-widest text-ink border-b-2 border-ink pb-0.5 hover:text-neutral-600 hover:border-neutral-300 transition-colors">
                 Login / Register

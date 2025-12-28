@@ -111,7 +111,7 @@ const editor = useEditor({
     Placeholder.configure({ placeholder: 'Start writing... (Markdown supported)' }),
   ],
   editorProps: {
-    attributes: { class: 'prose prose-neutral prose-lg max-w-none focus:outline-none min-h-[500px]' },
+    attributes: { class: 'prose prose-neutral prose-lg dark:prose-invert max-w-none focus:outline-none min-h-[500px]' },
   },
   onUpdate: ({ editor }) => {
     form.body = editor.storage.markdown.getMarkdown();
@@ -433,7 +433,7 @@ onBeforeUnmount(() => {
                 v-else
                 v-model="form.body"
                 placeholder="# Start typing..."
-                class="w-full h-full min-h-[500px] resize-none text-base leading-relaxed text-neutral-700 placeholder:text-neutral-200 focus:outline-none bg-transparent font-mono pb-32"
+                class="w-full h-full min-h-[500px] resize-none text-base leading-relaxed text-neutral-700 dark:text-neutral-200 placeholder:text-neutral-200 focus:outline-none bg-transparent font-mono pb-32"
               ></textarea>
             </div>
          </div>
