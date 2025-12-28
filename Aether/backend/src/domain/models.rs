@@ -120,13 +120,25 @@ pub struct AuthClaims {
 
 // --- Comment Domain ---
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub enum CommentableType {
+    Content,
+    Memo,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct CommentableId {
+    pub target_type: CommentableType,
+    pub target_id: Uuid,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommentId(pub Uuid);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Comment {
     pub id: CommentId,
-    pub content_id: ContentId,
+    pub target: CommentableId, // Replaces content_id
     pub user_id: UserId,
     pub user_name: Option<String>,
     pub user_avatar: Option<String>,
@@ -134,4 +146,21 @@ pub struct Comment {
     pub text: String,
     pub created_at: DateTime<Utc>,
     pub replies: Vec<Comment>, // For nested display
+}
+
+// --- Memo Domain ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoId(pub Uuid);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Memo {
+    pub id: MemoId,
+    pub author_id: Uuid,
+    pub title: String,
+    pub content: String,
+    pub tags: Vec<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub visibility: Visibility,
 }
