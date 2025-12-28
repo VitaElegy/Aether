@@ -42,7 +42,7 @@ pub struct ContentAggregate {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentVersionSnapshot {
     pub id: String,
-    pub version: i32,
+    pub version: String,
     pub title: String,
     pub created_at: DateTime<Utc>,
     pub reason: Option<String>,
@@ -62,16 +62,21 @@ pub enum ContentBody {
 
 #[allow(dead_code)]
 pub mod permissions {
+    #[allow(dead_code)]
     pub const READ_PUBLIC: u64 = 1 << 0; // 1
     pub const COMMENT: u64     = 1 << 1; // 2
 
     // Content (Articles)
     pub const CREATE_POST: u64 = 1 << 4; // 16
+    #[allow(dead_code)]
     pub const EDIT_POST: u64   = 1 << 5; // 32
+    #[allow(dead_code)]
     pub const DELETE_POST: u64 = 1 << 6; // 64
 
     // Feature: Memos (Future Proofing)
+    #[allow(dead_code)]
     pub const MEMO_READ: u64   = 1 << 8; // 256
+    #[allow(dead_code)]
     pub const MEMO_WRITE: u64  = 1 << 9; // 512
 
     // Feature: Todos (Future Proofing)

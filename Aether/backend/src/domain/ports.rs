@@ -28,12 +28,11 @@ pub enum AuthError {
 
 /// The Input Port: Defines what the application CORE expects from the storage layer.
 #[async_trait]
-#[allow(dead_code)]
 pub trait ContentRepository: Send + Sync {
-    async fn save(&self, content: ContentAggregate, editor_id: UserId) -> Result<ContentId, RepositoryError>;
+    async fn save(&self, content: ContentAggregate, editor_id: UserId, should_create_snapshot: bool) -> Result<ContentId, RepositoryError>;
     async fn find_by_id(&self, id: &ContentId) -> Result<Option<ContentAggregate>, RepositoryError>;
     async fn find_by_slug(&self, slug: &str) -> Result<Option<ContentAggregate>, RepositoryError>;
-    async fn list(&self, viewer_id: Option<UserId>, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError>;
+    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError>;
     async fn search(&self, query: &str) -> Result<Vec<ContentAggregate>, RepositoryError>;
     async fn delete(&self, id: &ContentId) -> Result<(), RepositoryError>;
     async fn get_version(&self, id: &ContentId, version: i32) -> Result<Option<(String, String)>, RepositoryError>; // Returns (Title, JSON body)

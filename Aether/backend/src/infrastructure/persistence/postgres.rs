@@ -4,7 +4,7 @@ use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibili
 use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, RepositoryError};
 use super::entities::{content, user, content_version, comment};
 use chrono::Utc;
-use sea_orm::sea_query::Expr;
+use sea_orm::sea_query::{Expr, Func};
 
 pub struct PostgresRepository {
     db: DatabaseConnection,
@@ -13,6 +13,48 @@ pub struct PostgresRepository {
 impl PostgresRepository {
     pub fn new(db: DatabaseConnection) -> Self {
         Self { db }
+    }
+
+    /// 构建内容可见性查询条件
+    ///
+    /// 规则：
+    /// - Public Published: 所有用户（包括 Guest）可见
+    /// - Internal Published: 仅登录用户可见
+    /// - 自己的内容: 登录用户可以看到自己的所有内容（包括 Draft/Private）
+    fn build_visibility_condition(
+        &self,
+        viewer_id: Option<&UserId>,
+        is_own_content: bool,
+    ) -> Condition {
+        // 基础条件：Public 文章对所有用户无条件可见
+        // 使用不区分大小写的匹配以兼容不同的数据源
+        // 使用 Func::lower(Expr::col(...)) 以确保 SeaORM 正确处理表别名 (在 join 查询中至关重要)
+        let public_published = Condition::all()
+            .add(Expr::expr(Func::lower(Expr::col(content::Column::Visibility))).eq("public"))
+            .add(Expr::expr(Func::lower(Expr::col(content::Column::Status))).eq("published"));
+
+        // Guest 用户：只能看到 Public Published
+        if viewer_id.is_none() {
+            return public_published;
+        }
+
+        // 登录用户可以额外看到：
+        let uid = viewer_id.unwrap();
+        let mut condition = Condition::any()
+            .add(public_published);
+
+        // 1. Internal Published 文章
+        let internal_published = Condition::all()
+            .add(Expr::expr(Func::lower(Expr::col(content::Column::Visibility))).eq("internal"))
+            .add(Expr::expr(Func::lower(Expr::col(content::Column::Status))).eq("published"));
+        condition = condition.add(internal_published);
+
+        // 2. 如果是自己的内容，可以看到所有状态（包括 Draft/Private/Archived）
+        if is_own_content {
+            condition = condition.add(content::Column::AuthorId.eq(uid.0.to_string()));
+        }
+
+        condition
     }
 }
 
@@ -99,12 +141,10 @@ impl UserRepository for PostgresRepository {
 
 #[async_trait]
 impl ContentRepository for PostgresRepository {
-    async fn save(&self, content: ContentAggregate, editor_id: UserId) -> Result<ContentId, RepositoryError> {
+    async fn save(&self, content: ContentAggregate, editor_id: UserId, should_create_snapshot: bool) -> Result<ContentId, RepositoryError> {
         let serialized_body = serde_json::to_string(&content.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
         let serialized_tags = serde_json::to_string(&content.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
 
-        // Calculate Hash (SHA256)
-        // Combine all semantic fields to detect any change
         // Calculate Hash (SHA256)
         // Combine only versioned fields (Title + Body) to detect content changes.
         // Status/Visibility/Tags are currently not versioned in 'content_versions', so changing them shouldn't trigger a snapshot.
@@ -123,13 +163,25 @@ impl ContentRepository for PostgresRepository {
         // However, if we insert, we must ensure we don't duplicate via logic error elsewhere.
         // The ID is Primary Key, so duplicate ID insert will trigger OnConflict Update.
 
+        // Convert enum to string using serde serialization for consistency
+        let status_str = match content.status {
+            ContentStatus::Draft => "Draft",
+            ContentStatus::Published => "Published",
+            ContentStatus::Archived => "Archived",
+        };
+        let visibility_str = match content.visibility {
+            Visibility::Public => "Public",
+            Visibility::Private => "Private",
+            Visibility::Internal => "Internal",
+        };
+
         let model = content::ActiveModel {
             id: Set(content.id.0.to_string()),
             author_id: Set(content.author_id.to_string()),
             title: Set(content.title.clone()),
             slug: Set(content.slug),
-            status: Set(format!("{:?}", content.status)),
-            visibility: Set(format!("{:?}", content.visibility)),
+            status: Set(status_str.to_string()),
+            visibility: Set(visibility_str.to_string()),
             category: Set(content.category),
             created_at: Set(content.created_at.to_rfc3339()),
             updated_at: Set(Utc::now().to_rfc3339()),
@@ -157,53 +209,63 @@ impl ContentRepository for PostgresRepository {
 
         // --- Versioning Logic ---
 
-        let last_version = content_version::Entity::find()
-            .filter(content_version::Column::ContentId.eq(content.id.0.to_string()))
-            .order_by_desc(content_version::Column::Version)
-            .one(&txn) // Use transaction
-            .await
-            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-
-        let should_snapshot = if let Some(lv) = &last_version {
-            // 1. Explicit reason -> Force snapshot
-            if content.version_message.is_some() {
-                true
-            } else {
-                // 2. Hash Changed -> Snapshot
-                // We handle legacy records (empty hash) by assuming change if hash is empty
-                if lv.content_hash.is_empty() {
-                    true
-                } else {
-                    lv.content_hash != current_hash
-                }
-            }
-        } else {
-            true // First version
-        };
-
-        if should_snapshot {
-            // FIX: If last_version is None, we start at 1. If it exists, we increment.
-            // CAUTION: 'last_version' is Option<Model>.
-            let next_version = last_version.as_ref().map(|v| v.version + 1).unwrap_or(1);
-
-            let version_model = content_version::ActiveModel {
-                id: Set(uuid::Uuid::new_v4().to_string()),
-                content_id: Set(content.id.0.to_string()),
-                version: Set(next_version),
-                title: Set(content.title.clone()),
-                body: Set(serialized_body), // Back to String
-                change_reason: Set(content.version_message.clone()),
-                content_hash: Set(current_hash),
-                editor_id: Set(editor_id.0.to_string()), // Back to String
-                created_at: Set(Utc::now().to_rfc3339()),
-            };
-            content_version::Entity::insert(version_model)
-                .exec(&txn) // Use transaction
+        if should_create_snapshot {
+             let last_version = content_version::Entity::find()
+                .filter(content_version::Column::ContentId.eq(content.id.0.to_string()))
+                .order_by_desc(content_version::Column::Version)
+                .one(&txn) // Use transaction
                 .await
-                .map_err(|e| {
-                    tracing::error!("Failed to insert content_version: {:?}", e);
-                    RepositoryError::ConnectionError(e.to_string())
-                })?;
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+             // Double check if content actually changed to avoid spamming equivalent snapshots if forced?
+             // Requirement says: "Backend currently creates snapshots on every save, change to only create when snapshot: true"
+             // It implies we should TRUST the snapshot flag primarily.
+             // But usually systems also check if hash changed so we don't have duplicates.
+             // However, "snapshot: true" acts as a force commit in many systems (like "Publish new version").
+             // Yet, let's keep the content hash check as a "safety" or just rely on the flag?
+             // "Default behavior: if snapshot not provided, create for Published".
+             // If I edit a Published post but don't change anything and hit save... do I want a new version?
+             // Let's assume if `should_create_snapshot` is TRUE, we create one, UNLESS it's identical-identical?
+             // The prompt says: "change to ONLY create when snapshot: true". This implies the flag is the primary gate.
+             // Let's perform a lightweight check: if last version hash == current hash AND reasons are empty, maybe skip?
+             // But if user provided a "reason", we surely want a snapshot.
+
+             let perform_insert = if let Some(_lv) = &last_version {
+                    // If content unchanged AND no specific version message, effectively skip?
+                    // Or should we obey the flag strictly?
+                    // Strict obedience is safer for "Force Snapshot" feature.
+                    // But prevent exact duplicates if unintended?
+                    // Let's implement strict obedience to `should_create_snapshot` BUT
+                    // maybe we want to avoid 100% duplicates.
+                    // For now, I will trust the flag as the Gatekeeper.
+                    // If the user sends snapshot=true, they get a snapshot.
+                    true
+             } else {
+                 true // First version always
+             };
+
+             if perform_insert {
+                 let next_version = last_version.as_ref().map(|v| v.version + 1).unwrap_or(1);
+
+                 let version_model = content_version::ActiveModel {
+                    id: Set(uuid::Uuid::new_v4().to_string()),
+                    content_id: Set(content.id.0.to_string()),
+                    version: Set(next_version),
+                    title: Set(content.title.clone()),
+                    body: Set(serialized_body), // Back to String
+                    change_reason: Set(content.version_message.clone()),
+                    content_hash: Set(current_hash),
+                    editor_id: Set(editor_id.0.to_string()), // Back to String
+                    created_at: Set(Utc::now().to_rfc3339()),
+                };
+                content_version::Entity::insert(version_model)
+                    .exec(&txn) // Use transaction
+                    .await
+                    .map_err(|e| {
+                        tracing::error!("Failed to insert content_version: {:?}", e);
+                        RepositoryError::ConnectionError(e.to_string())
+                    })?;
+             }
         }
 
         txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
@@ -225,14 +287,14 @@ impl ContentRepository for PostgresRepository {
                 author_name: author.map(|u| u.display_name.or(Some(u.username)).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
-                status: match m.status.as_str() {
-                    "Published" => ContentStatus::Published,
-                    "Archived" => ContentStatus::Archived,
+                status: match m.status.to_lowercase().as_str() {
+                    "published" => ContentStatus::Published,
+                    "archived" => ContentStatus::Archived,
                     _ => ContentStatus::Draft,
                 },
-                visibility: match m.visibility.as_str() {
-                    "Private" => Visibility::Private,
-                    "Internal" => Visibility::Internal,
+                visibility: match m.visibility.to_lowercase().as_str() {
+                    "private" => Visibility::Private,
+                    "internal" => Visibility::Internal,
                     _ => Visibility::Public,
                 },
                 category: m.category,
@@ -251,26 +313,41 @@ impl ContentRepository for PostgresRepository {
         todo!("Implement slug lookup")
     }
 
-    async fn list(&self, viewer_id: Option<UserId>, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError> {
-         let mut condition = Condition::any()
-            .add(
-                Condition::all()
-                    .add(content::Column::Visibility.eq("Public"))
-                    .add(content::Column::Status.eq("Published"))
-            );
+    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>, limit: u64, offset: u64) -> Result<Vec<ContentAggregate>, RepositoryError> {
+        tracing::debug!(
+            "Querying contents: viewer_id={:?}, author_id={:?}, limit={}, offset={}",
+            viewer_id.as_ref().map(|id| id.0),
+            author_id.as_ref().map(|id| id.0),
+            limit,
+            offset
+        );
 
-         if let Some(uid) = viewer_id {
-             // Logged in: Can see Internal Published
-             condition = condition.add(
-                Condition::all()
-                    .add(content::Column::Visibility.eq("Internal"))
-                    .add(content::Column::Status.eq("Published"))
-             );
-             // Logged in: Can see ALL my own content (Drafts, Private, etc.)
-             condition = condition.add(content::Column::AuthorId.eq(uid.0.to_string()));
-         }
+        let condition = if let Some(ref aid) = author_id {
+            // 查询特定作者的内容
+            let aid_str = aid.0.to_string();
+            let is_own_content = viewer_id.as_ref().map(|vid| vid.0 == aid.0).unwrap_or(false);
 
-         let results = content::Entity::find()
+            if is_own_content {
+                // 查看自己的资料：看到所有内容（无状态/可见性限制）
+                Condition::all().add(content::Column::AuthorId.eq(aid_str))
+            } else {
+                // 查看别人的资料：必须同时满足作者ID和可见性规则
+                // 对于 Guest: author_id = X AND (visibility = 'Public' AND status = 'Published')
+                // 对于登录用户: author_id = X AND ((visibility = 'Public' AND status = 'Published') OR (visibility = 'Internal' AND status = 'Published'))
+                let visibility_cond = self.build_visibility_condition(viewer_id.as_ref(), false);
+                Condition::all()
+                    .add(content::Column::AuthorId.eq(aid_str))
+                    .add(visibility_cond)
+            }
+        } else {
+            // Feed 模式：使用统一的可见性规则
+            // Guest: 只能看到 Public Published（所有作者的）
+            // 登录用户: Public Published + Internal Published + 自己的所有内容
+            // 这里的 is_own_content = true 允许 visibility logic 添加 "OR AuthorId = Me" 的条件
+            self.build_visibility_condition(viewer_id.as_ref(), viewer_id.is_some())
+        };
+
+        let results = content::Entity::find()
             .find_also_related(user::Entity)
             .filter(condition)
             .order_by_desc(content::Column::CreatedAt) // Fix pagination order
@@ -278,7 +355,12 @@ impl ContentRepository for PostgresRepository {
             .offset(offset)
             .all(&self.db)
             .await
-            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            .map_err(|e| {
+                tracing::error!("Database query error: {:?}", e);
+                RepositoryError::ConnectionError(e.to_string())
+            })?;
+
+        tracing::debug!("Query returned {} results", results.len());
 
         let mut aggregates = Vec::new();
         for (m, author) in results {
@@ -288,14 +370,14 @@ impl ContentRepository for PostgresRepository {
                 author_name: author.map(|u| u.display_name.or(Some(u.username)).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
-                status: match m.status.as_str() {
-                    "Published" => ContentStatus::Published,
-                    "Archived" => ContentStatus::Archived,
+                status: match m.status.to_lowercase().as_str() {
+                    "published" => ContentStatus::Published,
+                    "archived" => ContentStatus::Archived,
                     _ => ContentStatus::Draft,
                 },
-                visibility: match m.visibility.as_str() {
-                    "Private" => Visibility::Private,
-                    "Internal" => Visibility::Internal,
+                visibility: match m.visibility.to_lowercase().as_str() {
+                    "private" => Visibility::Private,
+                    "internal" => Visibility::Internal,
                     _ => Visibility::Public,
                 },
                 category: m.category,
@@ -390,14 +472,14 @@ impl ContentRepository for PostgresRepository {
                 author_name: author.as_ref().map(|u| u.display_name.clone().or(Some(u.username.clone())).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
-                status: match m.status.as_str() {
-                    "Published" => ContentStatus::Published,
-                    "Archived" => ContentStatus::Archived,
+                status: match m.status.to_lowercase().as_str() {
+                    "published" => ContentStatus::Published,
+                    "archived" => ContentStatus::Archived,
                     _ => ContentStatus::Draft,
                 },
-                visibility: match m.visibility.as_str() {
-                    "Private" => Visibility::Private,
-                    "Internal" => Visibility::Internal,
+                visibility: match m.visibility.to_lowercase().as_str() {
+                    "private" => Visibility::Private,
+                    "internal" => Visibility::Internal,
                     _ => Visibility::Public,
                 },
                 category: m.category,
@@ -454,7 +536,7 @@ impl ContentRepository for PostgresRepository {
 
         let snapshots = versions.into_iter().map(|v| ContentVersionSnapshot {
             id: v.id,
-            version: v.version,
+            version: format!("0.0.{}", v.version),
             title: v.title,
             created_at: chrono::DateTime::parse_from_rfc3339(&v.created_at)
                 .unwrap_or_else(|_| Utc::now().into())
