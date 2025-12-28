@@ -63,12 +63,14 @@ const goToProfile = (id: string) => router.push(`/profile/${id}`);
             <div class="flex items-center gap-6">
                 <SearchBar />
 
-                <button
-                    class="text-xs font-bold uppercase tracking-widest text-ink hover:text-accent transition-colors">Journal</button>
+                <button @click="router.push('/space')"
+                    class="text-xs font-bold uppercase tracking-widest text-ink hover:text-accent transition-colors">Self
+                    Space</button>
                 <div class="h-4 w-px bg-ash mx-2"></div>
 
                 <div class="flex items-center gap-4">
-                    <button v-if="authStore.isAuthenticated" @click="router.push('/editor')" class="flex items-center gap-2 group">
+                    <button v-if="authStore.isAuthenticated" @click="router.push('/editor')"
+                        class="flex items-center gap-2 group">
                         <div
                             class="w-8 h-8 rounded-full bg-ink text-paper flex items-center justify-center group-hover:bg-accent group-hover:scale-110 transition-all">
                             <i class="ri-add-line"></i>

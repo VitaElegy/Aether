@@ -58,6 +58,12 @@ const router = createRouter({
       component: () => import('../views/VersionView.vue'),
       meta: { requiresAuth: true, transition: 'slide-right' }
     },
+    {
+      path: '/space',
+      name: 'space',
+      component: () => import('../views/SelfSpaceView.vue'),
+      meta: { transition: 'fade' }
+    },
     // Wildcard redirect for safety
     {
       path: '/:pathMatch(.*)*',
