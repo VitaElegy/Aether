@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use chrono::Utc;
 use serde_json::json;
-use crate::domain::models::{Comment, CommentableId, CommentableType, ContentId, MemoId, UserId};
+use crate::domain::models::{CommentableId, CommentableType, ContentId, MemoId, UserId};
 use crate::domain::ports::{ContentRepository, CommentRepository, MemoRepository, ExportService, ExportFormat, ExportData, ExportMetadata, RepositoryError};
 
 pub struct DataExportService {

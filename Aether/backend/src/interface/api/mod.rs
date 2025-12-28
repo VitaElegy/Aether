@@ -4,3 +4,4 @@ pub mod comment;
 pub mod upload;
 pub mod memo;
 pub mod export;
+pub mod knowledge_base;

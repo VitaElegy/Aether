@@ -16,7 +16,7 @@ mod domain;
 mod infrastructure;
 mod interface;
 
-use crate::domain::ports::{UserRepository, AuthService, ContentRepository, CommentRepository, MemoRepository, ExportService};
+use crate::domain::ports::{UserRepository, AuthService, ContentRepository, CommentRepository, MemoRepository, ExportService, KnowledgeBaseRepository};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
 use crate::infrastructure::services::export_service::DataExportService;
@@ -27,6 +27,7 @@ use crate::interface::api::comment::{create_comment_handler, get_comments_handle
 use crate::interface::api::memo::{create_memo_handler, get_memo_handler, list_memos_handler, delete_memo_handler};
 use crate::interface::api::export::{export_content_handler, export_memo_handler};
 use crate::interface::api::upload::upload_handler;
+use crate::interface::api::knowledge_base::{create_knowledge_base_handler, get_knowledge_base_handler, list_knowledge_bases_handler, delete_knowledge_base_handler, update_knowledge_base_handler};
 
 // Define the Global State
 #[derive(Clone)]
@@ -63,6 +64,12 @@ impl FromRef<AppState> for Arc<dyn CommentRepository> {
 impl FromRef<AppState> for Arc<dyn MemoRepository> {
     fn from_ref(state: &AppState) -> Self {
         state.repo.clone() as Arc<dyn MemoRepository>
+    }
+}
+
+impl FromRef<AppState> for Arc<dyn KnowledgeBaseRepository> {
+    fn from_ref(state: &AppState) -> Self {
+        state.repo.clone() as Arc<dyn KnowledgeBaseRepository>
     }
 }
 
@@ -134,6 +141,14 @@ async fn main() {
             updated_at TIMESTAMPTZ NOT NULL,
             visibility TEXT NOT NULL
         );
+        CREATE TABLE IF NOT EXISTS knowledge_bases (
+            id UUID PRIMARY KEY,
+            author_id UUID NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL
+        );
     ").await.expect("Failed to initialize DB schema");
 
     // Migration: Add columns (Resilient logic for SQLite/Postgres)
@@ -149,6 +164,8 @@ async fn main() {
         "ALTER TABLE comments ADD COLUMN target_type TEXT DEFAULT 'Content'",
         "ALTER TABLE comments ADD COLUMN target_id TEXT",
         "UPDATE comments SET target_id = content_id WHERE target_id IS NULL AND content_id IS NOT NULL",
+        // Knowledge Base Migration
+        "ALTER TABLE contents ADD COLUMN knowledge_base_id UUID",
         // Note: We leave content_id for now as dropping columns in SQLite can be tricky depending on version,
         // and we want to be safe. It becomes zombie column.
     ];
@@ -225,6 +242,9 @@ async fn main() {
         // Memos
         .route("/api/memos", post(create_memo_handler).get(list_memos_handler))
         .route("/api/memos/:id", get(get_memo_handler).delete(delete_memo_handler))
+        // Knowledge Base
+        .route("/api/knowledge-bases", post(create_knowledge_base_handler).get(list_knowledge_bases_handler))
+        .route("/api/knowledge-bases/:id", get(get_knowledge_base_handler).put(update_knowledge_base_handler).delete(delete_knowledge_base_handler))
         // Export
         .route("/api/export/content/:id", get(export_content_handler))
         .route("/api/export/memo/:id", get(export_memo_handler))
