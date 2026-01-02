@@ -8,7 +8,7 @@ use uuid::Uuid;
 use chrono::Utc;
 use crate::domain::models::{Memo, MemoId, Visibility, UserId};
 use crate::domain::ports::MemoRepository;
-use crate::interface::api::auth::AuthenticatedUser;
+use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
 
 #[derive(serde::Deserialize, Debug)]
 pub struct CreateMemoRequest {
@@ -68,13 +68,21 @@ pub async fn get_memo_handler(
 
 pub async fn list_memos_handler(
     State(repo): State<Arc<dyn MemoRepository>>,
-    user: AuthenticatedUser,
+    user: MaybeAuthenticatedUser,
     Query(params): Query<ListMemosRequest>,
 ) -> impl IntoResponse {
-    let viewer_id = Some(UserId(user.id));
+    let viewer_id = user.0.map(|u| UserId(u.id));
     let author_id = params.author_id.map(UserId);
 
-    match repo.list(viewer_id, author_id).await {
+    // Similar logic: if no author_id, default to viewer's own memos.
+    // If guest and no author_id, return empty.
+    let target_author_id = author_id.or(viewer_id.clone());
+
+    if target_author_id.is_none() {
+         return Json(Vec::<Memo>::new()).into_response();
+    }
+
+    match repo.list(viewer_id, target_author_id).await {
          Ok(memos) => Json(memos).into_response(),
          Err(e) => {
              tracing::error!("Failed to list memos: {:?}", e);

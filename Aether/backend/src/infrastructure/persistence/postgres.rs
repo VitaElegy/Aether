@@ -879,9 +879,28 @@ impl KnowledgeBaseRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, author_id: UserId) -> Result<Vec<KnowledgeBase>, RepositoryError> {
+    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>) -> Result<Vec<KnowledgeBase>, RepositoryError> {
+        let mut condition = Condition::all();
+
+        if let Some(aid) = author_id {
+            condition = condition.add(knowledge_base::Column::AuthorId.eq(aid.0.to_string()));
+        }
+
+        // Visibility Logic
+        let vid_str = viewer_id.as_ref().map(|v| v.0.to_string());
+
+        let mut vis_cond = Condition::any()
+            .add(knowledge_base::Column::Visibility.eq("Public"));
+
+        if let Some(vid) = vid_str {
+            vis_cond = vis_cond.add(knowledge_base::Column::Visibility.eq("Internal"));
+            vis_cond = vis_cond.add(knowledge_base::Column::AuthorId.eq(vid)); // Always see own
+        }
+
+        condition = condition.add(vis_cond);
+
         let results = knowledge_base::Entity::find()
-            .filter(knowledge_base::Column::AuthorId.eq(author_id.0.to_string()))
+            .filter(condition)
             .order_by_desc(knowledge_base::Column::CreatedAt)
             .all(&self.db)
             .await

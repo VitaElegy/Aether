@@ -29,12 +29,43 @@ pub struct UpdateKnowledgeBaseRequest {
     pub visibility: Option<String>,
 }
 
+use axum::extract::Query;
+
+#[derive(serde::Deserialize)]
+pub struct ListKnowledgeBasesRequest {
+    pub author_id: Option<Uuid>,
+}
+
 pub async fn list_knowledge_bases_handler(
     State(repo): State<Arc<dyn KnowledgeBaseRepository>>,
-    user: AuthenticatedUser,
+    user: MaybeAuthenticatedUser,
+    Query(params): Query<ListKnowledgeBasesRequest>,
 ) -> impl IntoResponse {
-    // List KBs owned by the logged-in user
-    match repo.list(UserId(user.id)).await {
+    let viewer_id = user.0.map(|u| UserId(u.id));
+    let author_id = params.author_id.map(UserId);
+
+    // If no author_id specified, assume listing own KBs (backward compatibility behavior)
+    // But for guests, listing "own" KBs is impossible.
+    // So:
+    // If author_id is Some -> List that author's KBs (filtered).
+    // If author_id is None ->
+    //    If Logged In -> List My KBs (author_id = Me).
+    //    If Guest -> Return Empty or Public Feed?
+    //    Let's default to "List My KBs" if logged in.
+    //    If Guest and no author_id, return Empty List (or BadRequest?)
+
+    let target_author_id = if author_id.is_some() {
+        author_id
+    } else {
+        viewer_id.clone()
+    };
+
+    if target_author_id.is_none() {
+        // Guest querying nothing?
+        return (StatusCode::OK, Json(Vec::<KnowledgeBase>::new())).into_response();
+    }
+
+    match repo.list(viewer_id, target_author_id).await {
         Ok(kbs) => (StatusCode::OK, Json(kbs)).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
