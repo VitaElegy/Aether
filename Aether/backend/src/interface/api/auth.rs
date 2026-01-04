@@ -222,3 +222,11 @@ pub async fn update_user_handler(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
     }
 }
+
+pub fn router() -> axum::Router<crate::interface::state::AppState> {
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/api/auth/login", post(login_handler))
+        .route("/api/auth/register", post(register_handler))
+        .route("/api/users/:id", get(get_user_handler).put(update_user_handler))
+}

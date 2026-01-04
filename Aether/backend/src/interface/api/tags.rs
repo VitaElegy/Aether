@@ -17,3 +17,9 @@ pub async fn list_tags_handler(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
+
+pub fn router() -> axum::Router<crate::interface::state::AppState> {
+    use axum::routing::get;
+    axum::Router::new()
+         .route("/api/tags", get(list_tags_handler))
+}

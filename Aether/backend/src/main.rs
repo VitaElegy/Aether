@@ -1,6 +1,6 @@
 use axum::{
-    routing::{get, post},
-    Router, extract::FromRef,
+    routing::get,
+    Router,
 };
 use tower_http::{
     trace::TraceLayer,
@@ -16,75 +16,17 @@ mod domain;
 mod infrastructure;
 mod interface;
 
-use crate::domain::ports::{UserRepository, AuthService, ContentRepository, CommentRepository, MemoRepository, ExportService, KnowledgeBaseRepository, TagRepository};
+use crate::domain::ports::{UserRepository, ContentRepository, CommentRepository, MemoRepository};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
 use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
-use crate::interface::api::auth::{login_handler, register_handler, get_user_handler, update_user_handler};
-use crate::interface::api::content::{create_content_handler, list_content_handler, get_content_handler, update_content_handler, delete_content_handler, get_content_diff_handler, search_content_handler, get_history_handler, get_version_handler};
-use crate::interface::api::comment::{create_comment_handler, get_comments_handler};
-use crate::interface::api::memo::{create_memo_handler, get_memo_handler, list_memos_handler, delete_memo_handler};
-use crate::interface::api::export::{export_content_handler, export_memo_handler};
-use crate::interface::api::upload::upload_handler;
-use crate::interface::api::knowledge_base::{create_knowledge_base_handler, get_knowledge_base_handler, list_knowledge_bases_handler, delete_knowledge_base_handler, update_knowledge_base_handler};
-use crate::interface::api::tags::list_tags_handler;
+use crate::interface::state::AppState;
+use crate::interface::api::{
+    auth, content, comment, memo, export, upload, knowledge_base, tags
+};
 
-// Define the Global State
-#[derive(Clone)]
-struct AppState {
-    repo: Arc<PostgresRepository>,
-    auth_service: Arc<dyn AuthService>,
-    export_service: Arc<dyn ExportService>,
-}
 
-impl FromRef<AppState> for Arc<dyn AuthService> {
-    fn from_ref(state: &AppState) -> Self {
-        state.auth_service.clone()
-    }
-}
-
-impl FromRef<AppState> for Arc<dyn UserRepository> {
-    fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn UserRepository>
-    }
-}
-
-impl FromRef<AppState> for Arc<dyn ContentRepository> {
-    fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn ContentRepository>
-    }
-}
-
-impl FromRef<AppState> for Arc<dyn CommentRepository> {
-    fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn CommentRepository>
-    }
-}
-
-impl FromRef<AppState> for Arc<dyn MemoRepository> {
-    fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn MemoRepository>
-    }
-}
-
-impl FromRef<AppState> for Arc<dyn KnowledgeBaseRepository> {
-    fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn KnowledgeBaseRepository>
-    }
-}
-
-impl FromRef<AppState> for Arc<dyn TagRepository> {
-    fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn TagRepository>
-    }
-}
-
-impl FromRef<AppState> for Arc<dyn ExportService> {
-    fn from_ref(state: &AppState) -> Self {
-        state.export_service.clone()
-    }
-}
 
 #[tokio::main]
 async fn main() {
@@ -238,32 +180,20 @@ async fn main() {
     };
 
     // --- 4. Build Router with Trace Middleware ---
+    let api_routes = auth::router()
+        .merge(content::router())
+        .merge(comment::router())
+        .merge(memo::router())
+        .merge(knowledge_base::router())
+        .merge(export::router())
+        .merge(upload::router())
+        .merge(tags::router())
+        .with_state(state);
+
     let app = Router::new()
         .route("/", get(health_check))
-        .route("/api/auth/login", post(login_handler))
-        .route("/api/auth/register", post(register_handler))
-        .route("/api/users/:id", get(get_user_handler).put(update_user_handler))
-        .route("/api/content", post(create_content_handler).get(list_content_handler))
-        .route("/api/content/:id", get(get_content_handler).put(update_content_handler).delete(delete_content_handler))
-        .route("/api/content/:id/diff/:v1/:v2", get(get_content_diff_handler))
-        .route("/api/content/:id/history", get(get_history_handler))
-        .route("/api/content/:id/version/:version", get(get_version_handler))
-        .route("/api/search", get(search_content_handler))
-        // Polymorphic Comments
-        .route("/api/comments/:type/:id", post(create_comment_handler).get(get_comments_handler))
-        // Memos
-        .route("/api/memos", post(create_memo_handler).get(list_memos_handler))
-        .route("/api/memos/:id", get(get_memo_handler).delete(delete_memo_handler))
-        // Knowledge Base
-        .route("/api/knowledge-bases", post(create_knowledge_base_handler).get(list_knowledge_bases_handler))
-        .route("/api/knowledge-bases/:id", get(get_knowledge_base_handler).put(update_knowledge_base_handler).delete(delete_knowledge_base_handler))
-        // Export
-        .route("/api/export/content/:id", get(export_content_handler))
-        .route("/api/export/memo/:id", get(export_memo_handler))
-        .route("/api/upload", post(upload_handler))
-        .route("/api/tags", get(list_tags_handler))
         .nest_service("/uploads", ServeDir::new("uploads"))
-        .with_state(state)
+        .merge(api_routes)
         .layer(TraceLayer::new_for_http()); // Magic happens here: Automatic logging for every request
 
     let addr = "0.0.0.0:3000";

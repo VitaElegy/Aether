@@ -81,3 +81,9 @@ pub async fn get_comments_handler(
         }
     }
 }
+
+pub fn router() -> axum::Router<crate::interface::state::AppState> {
+    use axum::routing::post;
+    axum::Router::new()
+        .route("/api/comments/:type/:id", post(create_comment_handler).get(get_comments_handler))
+}

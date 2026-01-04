@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
 
+import type { SelfSpacePlugin } from '../../core/plugin';
+
 defineProps<{
     activeModule: string;
+    modules: SelfSpacePlugin[];
 }>();
 
 const emit = defineEmits<{
@@ -11,11 +14,6 @@ const emit = defineEmits<{
 
 const router = useRouter();
 
-const modules = [
-    { id: 'articles', label: 'Articles', icon: 'ri-article-line' },
-    { id: 'knowledge', label: 'Knowledge', icon: 'ri-brain-line' },
-    { id: 'memos', label: 'Memos', icon: 'ri-sticky-note-line' },
-];
 </script>
 
 <template>

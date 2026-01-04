@@ -45,3 +45,9 @@ pub async fn upload_handler(
     (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "No file provided" }))).into_response()
 }
 
+pub fn router() -> axum::Router<crate::interface::state::AppState> {
+    use axum::routing::post;
+    axum::Router::new()
+        .route("/api/upload", post(upload_handler))
+}
+

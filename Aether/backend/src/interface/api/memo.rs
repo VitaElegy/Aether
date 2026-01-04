@@ -116,3 +116,10 @@ pub async fn delete_memo_handler(
         }
     }
 }
+
+pub fn router() -> axum::Router<crate::interface::state::AppState> {
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/api/memos", post(create_memo_handler).get(list_memos_handler))
+        .route("/api/memos/:id", get(get_memo_handler).delete(delete_memo_handler))
+}

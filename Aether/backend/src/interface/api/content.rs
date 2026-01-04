@@ -445,3 +445,14 @@ pub async fn get_version_handler(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
+
+pub fn router() -> axum::Router<crate::interface::state::AppState> {
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/api/content", post(create_content_handler).get(list_content_handler))
+        .route("/api/content/:id", get(get_content_handler).put(update_content_handler).delete(delete_content_handler))
+        .route("/api/content/:id/diff/:v1/:v2", get(get_content_diff_handler))
+        .route("/api/content/:id/history", get(get_history_handler))
+        .route("/api/content/:id/version/:version", get(get_version_handler))
+        .route("/api/search", get(search_content_handler))
+}

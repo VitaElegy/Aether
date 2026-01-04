@@ -89,3 +89,10 @@ pub async fn export_memo_handler(
         }
     }
 }
+
+pub fn router() -> axum::Router<crate::interface::state::AppState> {
+    use axum::routing::get;
+    axum::Router::new()
+        .route("/api/export/content/:id", get(export_content_handler))
+        .route("/api/export/memo/:id", get(export_memo_handler))
+}

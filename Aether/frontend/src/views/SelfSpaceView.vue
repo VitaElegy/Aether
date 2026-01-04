@@ -1,35 +1,29 @@
 <script setup lang="ts">
-import { ref, shallowRef, computed } from 'vue';
+import { ref, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import TopNavBar from '../components/TopNavBar.vue';
 import ModuleSwitcher from '../components/self-space/ModuleSwitcher.vue';
-import ArticlesModule from '../components/self-space/modules/ArticlesModule.vue';
-import KnowledgeModule from '../components/self-space/modules/KnowledgeModule.vue';
-import MemosModule from '../components/self-space/modules/MemosModule.vue';
+import { usePluginStore } from '../stores/plugins';
 
 const router = useRouter();
+const pluginStore = usePluginStore();
+
+// Default to the first registered plugin or fallback to 'articles'
 const currentModuleId = ref('articles');
 
-const moduleMap: Record<string, any> = {
-    articles: ArticlesModule,
-    knowledge: KnowledgeModule,
-    memos: MemosModule,
-};
+const currentPlugin = computed(() => pluginStore.getPlugin(currentModuleId.value));
 
-const moduleLabels: Record<string, string> = {
-    articles: 'Articles',
-    knowledge: 'Knowledge',
-    memos: 'Memos',
-};
-
-const CurrentComponent = shallowRef(ArticlesModule);
+const CurrentComponent = computed(() => currentPlugin.value?.component);
+const currentModuleLabel = computed(() => currentPlugin.value?.label || 'Self Space');
 
 const switchModule = (id: string) => {
     currentModuleId.value = id;
-    CurrentComponent.value = moduleMap[id];
 };
 
-const currentModuleLabel = computed(() => moduleLabels[currentModuleId.value] || 'Self Space');
+// Ensure we have a valid selection on mount if plugins are ready
+if (pluginStore.plugins.length > 0 && !pluginStore.getPlugin(currentModuleId.value)) {
+    currentModuleId.value = pluginStore.plugins[0].id;
+}
 </script>
 
 <template>
@@ -73,6 +67,6 @@ const currentModuleLabel = computed(() => moduleLabels[currentModuleId.value] ||
         </main>
 
         <!-- Dock Navigation -->
-        <ModuleSwitcher :active-module="currentModuleId" @switch="switchModule" />
+        <ModuleSwitcher :active-module="currentModuleId" :modules="pluginStore.plugins" @switch="switchModule" />
     </div>
 </template>

@@ -16,4 +16,15 @@ app.use(router)
 app.use(TDesign)
 app.use(MotionPlugin) // Register Motion
 
+// Register Core Plugins
+import { usePluginStore } from './stores/plugins'
+import { ArticlesPlugin } from './plugins/articles'
+import { KnowledgePlugin } from './plugins/knowledge'
+import { MemosPlugin } from './plugins/memos'
+
+const pluginStore = usePluginStore()
+pluginStore.registerPlugin(ArticlesPlugin)
+pluginStore.registerPlugin(KnowledgePlugin)
+pluginStore.registerPlugin(MemosPlugin)
+
 app.mount('#app')

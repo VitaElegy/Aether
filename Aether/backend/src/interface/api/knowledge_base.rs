@@ -194,3 +194,10 @@ pub async fn update_knowledge_base_handler(
 }
 
 // TODO: Import/Export handlers (Need generic Service or specific implementation)
+
+pub fn router() -> axum::Router<crate::interface::state::AppState> {
+    use axum::routing::{get, post};
+    axum::Router::new()
+        .route("/api/knowledge-bases", post(create_knowledge_base_handler).get(list_knowledge_bases_handler))
+        .route("/api/knowledge-bases/:id", get(get_knowledge_base_handler).put(update_knowledge_base_handler).delete(delete_knowledge_base_handler))
+}
