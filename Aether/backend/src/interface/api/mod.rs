@@ -6,3 +6,4 @@ pub mod memo;
 pub mod export;
 pub mod knowledge_base;
 pub mod tags;
+pub mod vocabulary;
