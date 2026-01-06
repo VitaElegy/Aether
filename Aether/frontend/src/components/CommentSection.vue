@@ -16,7 +16,7 @@ const newCommentText = ref('');
 
 const fetchComments = async () => {
     try {
-        const res = await axios.get(`/api/content/${props.contentId}/comments`);
+        const res = await axios.get(`/api/comments/content/${props.contentId}`);
         comments.value = buildTree(res.data);
     } catch (e) {
         console.error("Failed to fetch comments", e);
@@ -52,7 +52,7 @@ const handlePostComment = async () => {
     if (!newCommentText.value.trim()) return;
 
     try {
-        await axios.post(`/api/content/${props.contentId}/comments`, {
+        await axios.post(`/api/comments/content/${props.contentId}`, {
             text: newCommentText.value
         });
         newCommentText.value = '';
@@ -65,7 +65,7 @@ const handlePostComment = async () => {
 
 const handleReply = async (payload: { text: string; parentId: string }) => {
     try {
-         await axios.post(`/api/content/${props.contentId}/comments`, {
+         await axios.post(`/api/comments/content/${props.contentId}`, {
             text: payload.text,
             parent_id: payload.parentId
         });
