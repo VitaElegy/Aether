@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use sea_orm::*;
-use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot, Memo, MemoId, CommentableId, CommentableType, KnowledgeBase, KnowledgeBaseId, ContentType};
-use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, MemoRepository, KnowledgeBaseRepository, RepositoryError};
-use super::entities::{content, user, content_version, comment, memo, knowledge_base};
+use crate::domain::models::{ContentAggregate, ContentId, ContentStatus, Visibility, User, UserId, Comment, CommentId, ContentVersionSnapshot, Memo, MemoId, CommentableId, CommentableType, KnowledgeBase, KnowledgeBaseId, ContentType, Vocabulary, VocabularyId};
+use crate::domain::ports::{ContentRepository, UserRepository, CommentRepository, MemoRepository, KnowledgeBaseRepository, VocabularyRepository, RepositoryError, TagRepository};
+use super::entities::{content, user, content_version, comment, memo, knowledge_base, vocabulary};
 use chrono::Utc;
 use sea_orm::sea_query::{Expr, Func};
 
@@ -240,16 +240,18 @@ impl ContentRepository for PostgresRepository {
              // Let's perform a lightweight check: if last version hash == current hash AND reasons are empty, maybe skip?
              // But if user provided a "reason", we surely want a snapshot.
 
-             let perform_insert = if let Some(_lv) = &last_version {
-                    // If content unchanged AND no specific version message, effectively skip?
-                    // Or should we obey the flag strictly?
-                    // Strict obedience is safer for "Force Snapshot" feature.
-                    // But prevent exact duplicates if unintended?
-                    // Let's implement strict obedience to `should_create_snapshot` BUT
-                    // maybe we want to avoid 100% duplicates.
-                    // For now, I will trust the flag as the Gatekeeper.
-                    // If the user sends snapshot=true, they get a snapshot.
-                    true
+             let perform_insert = if let Some(lv) = &last_version {
+                    // Verify if content has changed (Title + Body Hash)
+                    // If no change AND no explicit version message/reason, skip snapshot.
+                    let is_redundant = lv.content_hash == current_hash 
+                        && content.version_message.as_ref().map(|s| s.trim().is_empty()).unwrap_or(true);
+                    
+                    if is_redundant {
+                        tracing::info!("Skipping redundant snapshot for content {}", content.id.0);
+                        false
+                    } else {
+                        true
+                    }
              } else {
                  true // First version always
              };
@@ -1007,3 +1009,95 @@ impl crate::domain::ports::TagRepository for PostgresRepository {
 
 
 
+
+
+#[async_trait]
+impl VocabularyRepository for PostgresRepository {
+    async fn save(&self, vocab: Vocabulary) -> Result<VocabularyId, RepositoryError> {
+        let model = vocabulary::ActiveModel {
+            id: Set(vocab.id.0.to_string()),
+            user_id: Set(vocab.user_id.0.to_string()),
+            word: Set(vocab.word),
+            definition: Set(vocab.definition),
+            context_sentence: Set(vocab.context_sentence),
+            status: Set(vocab.status),
+            created_at: Set(vocab.created_at.to_rfc3339()),
+            updated_at: Set(Utc::now().to_rfc3339()),
+        };
+
+        vocabulary::Entity::insert(model)
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::column(vocabulary::Column::Id)
+                    .update_columns([
+                        vocabulary::Column::Definition,
+                        vocabulary::Column::ContextSentence,
+                        vocabulary::Column::Status,
+                        vocabulary::Column::UpdatedAt,
+                    ])
+                    .to_owned()
+            )
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(vocab.id)
+    }
+
+    async fn find_by_word(&self, user_id: &UserId, word: &str) -> Result<Option<Vocabulary>, RepositoryError> {
+        let word_lower = word.to_lowercase();
+        let model = vocabulary::Entity::find()
+            .filter(
+                Condition::all()
+                    .add(vocabulary::Column::UserId.eq(user_id.0.to_string()))
+                    .add(Expr::expr(Func::lower(Expr::col(vocabulary::Column::Word))).eq(word_lower))
+            )
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        if let Some(m) = model {
+             Ok(Some(Vocabulary {
+                id: VocabularyId(uuid::Uuid::parse_str(&m.id).unwrap_or_default()),
+                user_id: UserId(uuid::Uuid::parse_str(&m.user_id).unwrap_or_default()),
+                word: m.word,
+                definition: m.definition,
+                context_sentence: m.context_sentence,
+                status: m.status,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).unwrap_or_default().with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).unwrap_or_default().with_timezone(&Utc),
+            }))
+        } else {
+            Ok(None)
+        }
+    }
+
+    async fn list(&self, user_id: &UserId, limit: u64, offset: u64) -> Result<Vec<Vocabulary>, RepositoryError> {
+        let models = vocabulary::Entity::find()
+            .filter(vocabulary::Column::UserId.eq(user_id.0.to_string()))
+            .order_by_desc(vocabulary::Column::CreatedAt)
+            .limit(limit)
+            .offset(offset)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(models.into_iter().map(|m| Vocabulary {
+                id: VocabularyId(uuid::Uuid::parse_str(&m.id).unwrap_or_default()),
+                user_id: UserId(uuid::Uuid::parse_str(&m.user_id).unwrap_or_default()),
+                word: m.word,
+                definition: m.definition,
+                context_sentence: m.context_sentence,
+                status: m.status,
+                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).unwrap_or_default().with_timezone(&Utc),
+                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).unwrap_or_default().with_timezone(&Utc),
+        }).collect())
+    }
+
+    async fn delete(&self, id: &VocabularyId) -> Result<(), RepositoryError> {
+        vocabulary::Entity::delete_by_id(id.0.to_string())
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(())
+    }
+}

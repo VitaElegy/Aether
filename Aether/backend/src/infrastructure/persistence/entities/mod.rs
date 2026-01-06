@@ -4,3 +4,4 @@ pub mod content_version;
 pub mod comment;
 pub mod memo;
 pub mod knowledge_base;
+pub mod vocabulary;
