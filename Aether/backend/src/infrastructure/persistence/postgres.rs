@@ -589,7 +589,10 @@ impl CommentRepository for PostgresRepository {
         let model = comment::ActiveModel {
             id: Set(c.id.0.to_string()),
             target_type: Set(target_type.to_string()),
-            target_id: Set(target_id),
+            target_id: Set(target_id.clone()),
+            // Legacy Backfill: content_id is NOT NULL in old schema.
+            // We set it to target_id (if valid UUID) or nil UUID if not, to satisfy constraint.
+            content_id: Set(Some(target_id)), 
             user_id: Set(c.user_id.0.to_string()),
             parent_id: Set(c.parent_id.map(|id| id.0.to_string())),
             text: Set(c.text),
@@ -1001,3 +1004,6 @@ impl crate::domain::ports::TagRepository for PostgresRepository {
         Ok(sorted_tags)
     }
 }
+
+
+

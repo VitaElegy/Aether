@@ -10,6 +10,8 @@ pub struct Model {
     pub target_type: String,
     #[sea_orm(column_type = "Text")]
     pub target_id: String,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub content_id: Option<String>, // Legacy support
     #[sea_orm(column_type = "Text")]
     pub user_id: String,
     #[sea_orm(column_type = "Text", nullable)]
