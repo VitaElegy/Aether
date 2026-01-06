@@ -80,6 +80,15 @@ pub trait TagRepository: Send + Sync {
     async fn get_all_tags(&self) -> Result<Vec<String>, RepositoryError>;
 }
 
+/// Vocabulary Repository Port
+#[async_trait]
+pub trait VocabularyRepository: Send + Sync {
+    async fn save(&self, vocab: super::models::Vocabulary) -> Result<super::models::VocabularyId, RepositoryError>;
+    async fn find_by_word(&self, user_id: &UserId, word: &str) -> Result<Option<super::models::Vocabulary>, RepositoryError>;
+    async fn list(&self, user_id: &UserId, limit: u64, offset: u64) -> Result<Vec<super::models::Vocabulary>, RepositoryError>;
+    async fn delete(&self, id: &super::models::VocabularyId) -> Result<(), RepositoryError>;
+}
+
 // --- Export Domain ---
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]

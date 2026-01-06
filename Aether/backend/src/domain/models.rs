@@ -191,3 +191,19 @@ pub struct Memo {
     pub updated_at: DateTime<Utc>,
     pub visibility: Visibility,
 }
+// --- Vocabulary Domain ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VocabularyId(pub Uuid);
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Vocabulary {
+    pub id: VocabularyId,
+    pub user_id: UserId,
+    pub word: String,
+    pub definition: String,
+    pub context_sentence: Option<String>,
+    pub status: String,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
