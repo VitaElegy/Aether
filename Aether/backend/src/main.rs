@@ -23,7 +23,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, knowledge_base, tags
+    auth, content, comment, memo, export, upload, knowledge_base, tags, vocabulary
 };
 
 
@@ -140,6 +140,20 @@ async fn main() {
     // Attempt constraint update (Will fail on SQLite, succeed on Postgres)
     let _ = db.execute_unprepared("ALTER TABLE content_versions ALTER COLUMN editor_id SET NOT NULL;").await;
 
+    // Vocabulary Table
+    db.execute_unprepared("
+        CREATE TABLE IF NOT EXISTS vocabularies (
+            id TEXT PRIMARY KEY,
+            user_id TEXT NOT NULL,
+            word TEXT NOT NULL,
+            definition TEXT NOT NULL,
+            context_sentence TEXT,
+            status TEXT NOT NULL,
+            created_at TEXT NOT NULL,
+            updated_at TEXT NOT NULL
+        );
+    ").await.expect("Failed to create vocabularies table");
+
     let repo = Arc::new(PostgresRepository::new(db.clone()));
     let auth_service = Arc::new(Arg2JwtAuthService::new(
         repo.clone() as Arc<dyn UserRepository>,
@@ -192,6 +206,7 @@ async fn main() {
         .merge(export::router())
         .merge(upload::router())
         .merge(tags::router())
+        .merge(vocabulary::router())
         .with_state(state);
 
     let app = Router::new()
