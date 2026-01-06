@@ -58,7 +58,8 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
             body JSONB NOT NULL,
-            tags TEXT[] NOT NULL
+            body JSONB NOT NULL,
+            tags TEXT NOT NULL
         );
         CREATE TABLE IF NOT EXISTS content_versions (
             id UUID PRIMARY KEY,
@@ -74,7 +75,7 @@ async fn main() {
         CREATE TABLE IF NOT EXISTS comments (
             id UUID PRIMARY KEY,
             target_type TEXT NOT NULL,
-            target_id UUID NOT NULL,
+            target_id TEXT NOT NULL,
             user_id UUID NOT NULL,
             parent_id UUID,
             text TEXT NOT NULL,
@@ -120,6 +121,9 @@ async fn main() {
         "ALTER TABLE knowledge_bases ADD COLUMN visibility TEXT DEFAULT 'Private'",
         "ALTER TABLE contents ADD COLUMN parent_id UUID",
         "ALTER TABLE contents ADD COLUMN content_type TEXT DEFAULT 'Article'",
+        // Fix Schema Mismatches
+        "ALTER TABLE comments ALTER COLUMN target_id TYPE TEXT",
+        "ALTER TABLE contents ALTER COLUMN tags TYPE TEXT",
         // Note: We leave content_id for now as dropping columns in SQLite can be tricky depending on version,
         // and we want to be safe. It becomes zombie column.
     ];
