@@ -14,6 +14,7 @@ use crate::interface::api::auth::AuthenticatedUser;
 #[derive(serde::Deserialize, Debug)]
 pub struct CreateCommentRequest {
     pub text: String,
+    #[serde(default)]
     pub parent_id: Option<Uuid>,
 }
 
@@ -87,3 +88,5 @@ pub fn router() -> axum::Router<crate::interface::state::AppState> {
     axum::Router::new()
         .route("/api/comments/:type/:id", post(create_comment_handler).get(get_comments_handler))
 }
+
+
