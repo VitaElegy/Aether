@@ -2,50 +2,76 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use chrono::{DateTime, Utc};
 
-// --- Content Domain ---
+// --- core Node Domain ---
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum NodeType {
+    Article,
+    Vocabulary,
+    Memo,
+    Folder,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum PermissionMode {
+    Public,
+    Private,
+    Internal,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 pub enum ContentStatus {
     Draft,
     Published,
     Archived,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum Visibility {
-    Public,
-    Private,
-    Internal, // Visible to any logged-in user
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub enum ContentType {
-    Article,
-    Directory,
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContentId(pub Uuid);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ContentAggregate {
-    pub id: ContentId,
+pub struct Node {
+    pub id: Uuid,
+    pub parent_id: Option<Uuid>,
     pub author_id: Uuid,
-    pub author_name: Option<String>, // Added for UI convenience
+    pub r#type: NodeType,
     pub title: String,
-    pub slug: String,
-    pub status: ContentStatus,
-    pub visibility: Visibility, // Added
-    pub category: Option<String>, // "Parent/Child" format or just a string
-    pub knowledge_base_id: Option<Uuid>, // [NEW] Link to KnowledgeBase
-    pub parent_id: Option<Uuid>, // [NEW] Hierarchy
-    pub content_type: ContentType, // [NEW] Article vs Directory
+    pub permission_mode: PermissionMode,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+// --- Specific Domains (Article, Vocabulary, Memo) ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Article {
+    #[serde(flatten)]
+    pub node: Node, // Flattened so JSON looks like {id:..., title:..., slug:...}
+    pub slug: String,
+    pub status: ContentStatus,
+    pub category: Option<String>,
     pub body: ContentBody,
     pub tags: Vec<String>,
-    // Context for persistence, not part of domain state per se, but useful for transport
-    pub version_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Vocabulary {
+    #[serde(flatten)]
+    pub node: Node,
+    pub word: String,
+    pub definition: String,
+    pub translation: Option<String>,
+    pub phonetic: Option<String>,
+    pub context_sentence: Option<String>, 
+    pub image_url: Option<String>, 
+    pub language: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Memo {
+    #[serde(flatten)]
+    pub node: Node,
+    pub content: String,
+    pub priority: Option<String>, // High, Medium, Low
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -58,7 +84,7 @@ pub struct ContentVersionSnapshot {
     pub editor_id: Uuid,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", content = "data")]
 pub enum ContentBody {
     Markdown(String),
@@ -67,49 +93,13 @@ pub enum ContentBody {
     Custom(serde_json::Value),
 }
 
-// --- Knowledge Base Domain ---
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeBaseId(pub Uuid);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct KnowledgeBase {
-    pub id: KnowledgeBaseId,
-    pub author_id: Uuid,
-    pub title: String,
-    pub description: Option<String>,
-    pub tags: Vec<String>,
-    pub cover_image: Option<String>,
-    pub visibility: Visibility,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}
-
-// --- Authentication Domain ---
+// --- Legacy Types / Auth ---
 
 #[allow(dead_code)]
 pub mod permissions {
-    #[allow(dead_code)]
-    pub const READ_PUBLIC: u64 = 1 << 0; // 1
-    pub const COMMENT: u64     = 1 << 1; // 2
-
-    // Content (Articles)
-    pub const CREATE_POST: u64 = 1 << 4; // 16
-    #[allow(dead_code)]
-    pub const EDIT_POST: u64   = 1 << 5; // 32
-    #[allow(dead_code)]
-    pub const DELETE_POST: u64 = 1 << 6; // 64
-
-    // Feature: Memos (Future Proofing)
-    #[allow(dead_code)]
-    pub const MEMO_READ: u64   = 1 << 8; // 256
-    #[allow(dead_code)]
-    pub const MEMO_WRITE: u64  = 1 << 9; // 512
-
-    // Feature: Todos (Future Proofing)
-    pub const TODO_READ: u64   = 1 << 12; // 4096
-    pub const TODO_WRITE: u64  = 1 << 13; // 8192
-
+    pub const READ_PUBLIC: u64 = 1 << 0;
+    pub const COMMENT: u64     = 1 << 1;
+    pub const CREATE_NODE: u64 = 1 << 4; // Generic Create
     pub const ADMIN: u64       = 1 << 63;
 }
 
@@ -124,15 +114,12 @@ pub struct User {
     pub display_name: Option<String>,
     pub bio: Option<String>,
     pub avatar_url: Option<String>,
-    // We never return the password hash to the frontend, forcing manual field exclusion
     #[serde(skip_serializing)]
     pub password_hash: String,
-    // Bitmask for granular permissions. See permissions module.
     pub permissions: u64,
 }
 
 impl User {
-    #[allow(dead_code)]
     pub fn has_permission(&self, required_perm: u64) -> bool {
         (self.permissions & required_perm) == required_perm
     }
@@ -140,74 +127,26 @@ impl User {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuthClaims {
-    pub sub: String, // User ID
-    pub exp: usize,  // Expiry
-    pub perms: u64,  // Permissions snapshot
+    pub sub: String,
+    pub exp: usize,
+    pub perms: u64,
 }
 
-// --- Comment Domain ---
+// --- Comment Domain (Generic) ---
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum CommentableType {
-    Content,
-    Memo,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub struct CommentableId {
-    pub target_type: CommentableType,
-    pub target_id: Uuid,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct CommentId(pub Uuid);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Comment {
     pub id: CommentId,
-    pub target: CommentableId, // Replaces content_id
+    pub target_id: Uuid, // Generic Link to Node
     pub user_id: UserId,
     pub user_name: Option<String>,
     pub user_avatar: Option<String>,
     pub parent_id: Option<CommentId>,
     pub text: String,
     pub created_at: DateTime<Utc>,
-    pub replies: Vec<Comment>, // For nested display
+    pub replies: Vec<Comment>,
 }
 
-// --- Memo Domain ---
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct MemoId(pub Uuid);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Memo {
-    pub id: MemoId,
-    pub author_id: Uuid,
-    pub title: String,
-    pub content: String,
-    pub tags: Vec<String>,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-    pub visibility: Visibility,
-}
-// --- Vocabulary Domain ---
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct VocabularyId(pub Uuid);
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct Vocabulary {
-    pub id: VocabularyId,
-    pub user_id: UserId,
-    pub word: String,
-    pub definition: String,
-    pub translation: Option<String>,
-    pub phonetic: Option<String>,
-    pub context_sentence: Option<String>,
-    pub image_url: Option<String>,
-    pub language: String, // e.g. "en"
-    pub status: String,
-    pub created_at: DateTime<Utc>,
-    pub updated_at: DateTime<Utc>,
-}

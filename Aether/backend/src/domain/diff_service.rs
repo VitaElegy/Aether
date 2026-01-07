@@ -12,9 +12,11 @@ pub struct DiffChange {
     pub value: String,
 }
 
+#[allow(dead_code)]
 pub struct DiffService;
 
 impl DiffService {
+    #[allow(dead_code)]
     pub fn compute_diff(old_text: &str, new_text: &str) -> DiffResult {
         let diff = TextDiff::from_lines(old_text, new_text);
         let mut changes = Vec::new();
