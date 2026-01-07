@@ -57,12 +57,12 @@ if (pluginStore.plugins.length > 0 && !pluginStore.getPlugin(currentModuleId.val
         </TopNavBar>
 
         <!-- Main Content Area -->
-        <main class="flex-1 relative z-10 w-full h-full">
+        <main class="flex-1 relative z-10 w-full h-full flex flex-col">
             <Transition mode="out-in" enter-active-class="transition duration-300 ease-out"
                 enter-from-class="opacity-0 translate-y-4" enter-to-class="opacity-100 translate-y-0"
                 leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100 translate-y-0"
                 leave-to-class="opacity-0 -translate-y-4">
-                <component :is="CurrentComponent" />
+                <component :is="CurrentComponent" class="flex-1 h-full" />
             </Transition>
         </main>
 
