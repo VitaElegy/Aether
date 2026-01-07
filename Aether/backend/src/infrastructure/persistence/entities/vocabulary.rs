@@ -13,7 +13,15 @@ pub struct Model {
     #[sea_orm(column_type = "Text")]
     pub definition: String,
     #[sea_orm(column_type = "Text", nullable)]
+    pub translation: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub phonetic: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
     pub context_sentence: Option<String>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub image_url: Option<String>,
+    #[sea_orm(column_type = "Text")]
+    pub language: String,
     #[sea_orm(column_type = "Text")]
     pub status: String,
     pub created_at: String, // Stored as RFC3339 string

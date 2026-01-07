@@ -1019,7 +1019,11 @@ impl VocabularyRepository for PostgresRepository {
             user_id: Set(vocab.user_id.0.to_string()),
             word: Set(vocab.word),
             definition: Set(vocab.definition),
+            translation: Set(vocab.translation),
+            phonetic: Set(vocab.phonetic),
             context_sentence: Set(vocab.context_sentence),
+            image_url: Set(vocab.image_url),
+            language: Set(vocab.language),
             status: Set(vocab.status),
             created_at: Set(vocab.created_at.to_rfc3339()),
             updated_at: Set(Utc::now().to_rfc3339()),
@@ -1030,7 +1034,11 @@ impl VocabularyRepository for PostgresRepository {
                 sea_orm::sea_query::OnConflict::column(vocabulary::Column::Id)
                     .update_columns([
                         vocabulary::Column::Definition,
+                        vocabulary::Column::Translation,
+                        vocabulary::Column::Phonetic,
                         vocabulary::Column::ContextSentence,
+                        vocabulary::Column::ImageUrl,
+                        vocabulary::Column::Language,
                         vocabulary::Column::Status,
                         vocabulary::Column::UpdatedAt,
                     ])
@@ -1061,7 +1069,11 @@ impl VocabularyRepository for PostgresRepository {
                 user_id: UserId(uuid::Uuid::parse_str(&m.user_id).unwrap_or_default()),
                 word: m.word,
                 definition: m.definition,
+                translation: m.translation,
+                phonetic: m.phonetic,
                 context_sentence: m.context_sentence,
+                image_url: m.image_url,
+                language: m.language,
                 status: m.status,
                 created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).unwrap_or_default().with_timezone(&Utc),
                 updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).unwrap_or_default().with_timezone(&Utc),
@@ -1071,9 +1083,19 @@ impl VocabularyRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, user_id: &UserId, limit: u64, offset: u64) -> Result<Vec<Vocabulary>, RepositoryError> {
+    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>) -> Result<Vec<Vocabulary>, RepositoryError> {
+        let mut condition = Condition::all()
+            .add(vocabulary::Column::UserId.eq(user_id.0.to_string()));
+
+        if let Some(q) = query {
+             if !q.trim().is_empty() {
+                 let pattern = format!("%{}%", q.trim());
+                 condition = condition.add(Expr::cust_with_values("word ILIKE $1", vec![pattern]));
+             }
+        }
+
         let models = vocabulary::Entity::find()
-            .filter(vocabulary::Column::UserId.eq(user_id.0.to_string()))
+            .filter(condition)
             .order_by_desc(vocabulary::Column::CreatedAt)
             .limit(limit)
             .offset(offset)
@@ -1086,7 +1108,11 @@ impl VocabularyRepository for PostgresRepository {
                 user_id: UserId(uuid::Uuid::parse_str(&m.user_id).unwrap_or_default()),
                 word: m.word,
                 definition: m.definition,
+                translation: m.translation,
+                phonetic: m.phonetic,
                 context_sentence: m.context_sentence,
+                image_url: m.image_url,
+                language: m.language,
                 status: m.status,
                 created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).unwrap_or_default().with_timezone(&Utc),
                 updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).unwrap_or_default().with_timezone(&Utc),
