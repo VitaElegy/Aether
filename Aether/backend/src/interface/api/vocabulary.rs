@@ -22,13 +22,17 @@ use uuid::Uuid;
 pub struct CreateVocabularyRequest {
     pub word: String,
     pub definition: String,
+    pub translation: Option<String>,
+    pub phonetic: Option<String>,
     pub context_sentence: Option<String>,
+    pub image_url: Option<String>,
+    pub language: Option<String>,
 }
 
-#[derive(Deserialize)]
 pub struct ListVocabularyRequest {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
+    pub query: Option<String>,
 }
 
 pub fn router() -> Router<AppState> {
@@ -52,7 +56,11 @@ async fn save_vocabulary(
                 user_id: user_id,
                 word: existing.word,
                 definition: payload.definition,
+                translation: payload.translation.or(existing.translation),
+                phonetic: payload.phonetic.or(existing.phonetic),
                 context_sentence: payload.context_sentence,
+                image_url: payload.image_url.or(existing.image_url),
+                language: payload.language.unwrap_or(existing.language),
                 status: existing.status,
                 created_at: existing.created_at,
                 updated_at: Utc::now(),
@@ -68,7 +76,11 @@ async fn save_vocabulary(
                 user_id: user_id,
                 word: payload.word,
                 definition: payload.definition,
+                translation: payload.translation,
+                phonetic: payload.phonetic,
                 context_sentence: payload.context_sentence,
+                image_url: payload.image_url,
+                language: payload.language.unwrap_or("en".to_string()),
                 status: "New".to_string(),
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
@@ -90,7 +102,7 @@ async fn list_vocabulary(
     let limit = params.limit.unwrap_or(50);
     let offset = params.offset.unwrap_or(0);
 
-    match state.repo.list(&UserId(auth.id), limit, offset).await {
+    match state.repo.list(&UserId(auth.id), limit, offset, params.query).await {
         Ok(list) => (StatusCode::OK, Json(serde_json::to_value(list).unwrap())),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
     }
