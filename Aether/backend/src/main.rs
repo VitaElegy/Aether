@@ -147,12 +147,30 @@ async fn main() {
             user_id TEXT NOT NULL,
             word TEXT NOT NULL,
             definition TEXT NOT NULL,
+            translation TEXT,
+            phonetic TEXT,
             context_sentence TEXT,
+            image_url TEXT,
+            language TEXT NOT NULL DEFAULT 'en',
             status TEXT NOT NULL,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         );
     ").await.expect("Failed to create vocabularies table");
+
+    // Vocabulary Migrations (for dev environment upgrades)
+    let vocab_migrations = vec![
+        "ALTER TABLE vocabularies ADD COLUMN translation TEXT",
+        "ALTER TABLE vocabularies ADD COLUMN phonetic TEXT",
+        "ALTER TABLE vocabularies ADD COLUMN image_url TEXT",
+        "ALTER TABLE vocabularies ADD COLUMN language TEXT DEFAULT 'en'",
+    ];
+
+    for sql in vocab_migrations {
+        if let Err(e) = db.execute_unprepared(sql).await {
+             tracing::info!("Vocab migration (minor): {}", e);
+        }
+    }
 
     let repo = Arc::new(PostgresRepository::new(db.clone()));
     let auth_service = Arc::new(Arg2JwtAuthService::new(
