@@ -1,169 +1,83 @@
-use async_trait::async_trait;
+use crate::domain::ports::{ExportService, RepositoryError, ExportFormat,
+    ArticleRepository, MemoRepository, CommentRepository};
+use crate::domain::models::UserId;
+use uuid::Uuid;
 use std::sync::Arc;
-use chrono::Utc;
-use serde_json::json;
-use crate::domain::models::{CommentableId, CommentableType, ContentId, MemoId, UserId};
-use crate::domain::ports::{ContentRepository, CommentRepository, MemoRepository, ExportService, ExportFormat, ExportData, ExportMetadata, RepositoryError};
+use async_trait::async_trait;
 
 pub struct DataExportService {
-    content_repo: Arc<dyn ContentRepository>,
-    comment_repo: Arc<dyn CommentRepository>,
+    article_repo: Arc<dyn ArticleRepository>,
     memo_repo: Arc<dyn MemoRepository>,
+    comment_repo: Arc<dyn CommentRepository>,
 }
 
 impl DataExportService {
     pub fn new(
-        content_repo: Arc<dyn ContentRepository>,
-        comment_repo: Arc<dyn CommentRepository>,
+        article_repo: Arc<dyn ArticleRepository>,
         memo_repo: Arc<dyn MemoRepository>,
+        comment_repo: Arc<dyn CommentRepository>,
     ) -> Self {
-        Self {
-            content_repo,
-            comment_repo,
-            memo_repo,
-        }
+        Self { article_repo, memo_repo, comment_repo }
     }
 
-    fn format_markdown(&self, data: &ExportData) -> String {
-        let mut md = String::new();
-
-        // Metadata
-        md.push_str(&format!("---\n"));
-        md.push_str(&format!("export_date: {}\n", data.metadata.exported_at));
-        md.push_str(&format!("type: {:?}\n", data.entity_type));
-        md.push_str(&format!("---\n\n"));
-
-        // Content
-        match data.entity_type {
-            CommentableType::Content => {
-                if let Some(title) = data.entity_data.get("title").and_then(|v| v.as_str()) {
-                    md.push_str(&format!("# {}\n\n", title));
-                }
-                if let Some(body) = data.entity_data.get("body").and_then(|v| v.get("data")).and_then(|v| v.as_str()) {
-                     md.push_str(body);
-                     md.push_str("\n\n");
-                }
-            },
-            CommentableType::Memo => {
-                if let Some(title) = data.entity_data.get("title").and_then(|v| v.as_str()) {
-                    md.push_str(&format!("# Memo: {}\n\n", title));
-                }
-                if let Some(content) = data.entity_data.get("content").and_then(|v| v.as_str()) {
-                    md.push_str(content);
-                    md.push_str("\n\n");
-                }
+    fn format_markdown(&self, title: &str, body: &str, comments: &[String]) -> String {
+        let mut md = format!("# {}\n\n{}\n\n", title, body);
+        if !comments.is_empty() {
+            md.push_str("## Comments\n\n");
+            for c in comments {
+                md.push_str(&format!("- {}\n", c));
             }
         }
-
-        // Comments
-        if !data.comments.is_empty() {
-            md.push_str("---\n## Comments\n\n");
-            for comment in &data.comments {
-                md.push_str(&format!("**{}** ({}):\n",
-                    comment.user_name.as_deref().unwrap_or("Unknown User"),
-                    comment.created_at.format("%Y-%m-%d %H:%M")
-                ));
-                md.push_str(&format!("> {}\n\n", comment.text.replace("\n", "\n> ")));
-            }
-        }
-
         md
     }
 }
 
 #[async_trait]
 impl ExportService for DataExportService {
-    async fn export_content_with_comments(
+    async fn export_node_with_comments(
         &self,
-        content_id: &ContentId,
+        node_id: &Uuid,
         format: ExportFormat,
-        requester: Option<UserId>
+        _requester: Option<UserId>
     ) -> Result<Vec<u8>, RepositoryError> {
-        let content = self.content_repo.find_by_id(content_id).await?
-            .ok_or(RepositoryError::NotFound)?;
+        // 1. Try to find in Article Repo
+        if let Ok(Some(article)) = self.article_repo.find_by_id(node_id).await {
+            let comments = self.comment_repo.get_comments(node_id).await.unwrap_or_default();
+            let comment_texts: Vec<String> = comments.into_iter().map(|c| format!("{}: {}", c.user_name.unwrap_or("Anon".into()), c.text)).collect();
+            
+            let content_str = match article.body {
+                crate::domain::models::ContentBody::Markdown(s) => s,
+                _ => "Non-text content".to_string(),
+            };
 
-        // Check visibility?? Assuming requester has access logic in Handler or Repo
-        // Repo.list handles visibility, but find_by_id usually returns it regardless?
-        // Let's assume handler checks permissions or we trust repo.
-        // For simple export, we proceed.
-
-        let target = CommentableId {
-            target_type: CommentableType::Content,
-            target_id: content_id.0,
-        };
-        let comments = self.comment_repo.get_comments(&target).await?;
-
-        let export_data = ExportData {
-            entity_type: CommentableType::Content,
-            entity_id: content.id.0,
-            entity_data: serde_json::to_value(&content).unwrap_or(json!({})),
-            comments,
-            metadata: ExportMetadata {
-                exported_at: Utc::now(),
-                exported_by: requester,
-                format: format.clone(),
-            },
-        };
-
-        match format {
-            ExportFormat::Json => {
-                let s = serde_json::to_string_pretty(&export_data).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
-                Ok(s.into_bytes())
-            },
-            ExportFormat::Markdown => {
-                let s = self.format_markdown(&export_data);
-                Ok(s.into_bytes())
-            },
-            ExportFormat::Html => {
-                // Basic HTML wrapper around Markdown or simple structure
-                let md = self.format_markdown(&export_data);
-                let html = format!("<html><body><pre>{}</pre></body></html>", md); // Simplified
-                Ok(html.into_bytes())
+            let md = self.format_markdown(&article.node.title, &content_str, &comment_texts);
+            
+            // Format handling
+            match format {
+                ExportFormat::Markdown => Ok(md.into_bytes()),
+                ExportFormat::Json => Ok(serde_json::to_vec(&serde_json::json!({
+                    "title": article.node.title,
+                    "body": content_str,
+                    "comments": comment_texts
+                })).unwrap()),
+                ExportFormat::Html => Ok(format!("<html><h1>{}</h1><p>{}</p></html>", article.node.title, content_str).into_bytes()),
             }
-        }
-    }
-
-    async fn export_memo_with_comments(
-        &self,
-        memo_id: &MemoId,
-        format: ExportFormat,
-        requester: Option<UserId>
-    ) -> Result<Vec<u8>, RepositoryError> {
-        let memo = self.memo_repo.find_by_id(memo_id).await?
-            .ok_or(RepositoryError::NotFound)?;
-
-        let target = CommentableId {
-            target_type: CommentableType::Memo,
-            target_id: memo_id.0,
-        };
-        let comments = self.comment_repo.get_comments(&target).await?;
-
-        let export_data = ExportData {
-            entity_type: CommentableType::Memo,
-            entity_id: memo.id.0,
-            entity_data: serde_json::to_value(&memo).unwrap_or(json!({})),
-            comments,
-            metadata: ExportMetadata {
-                exported_at: Utc::now(),
-                exported_by: requester,
-                format: format.clone(),
-            },
-        };
-
-        match format {
-            ExportFormat::Json => {
-                let s = serde_json::to_string_pretty(&export_data).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
-                Ok(s.into_bytes())
-            },
-            ExportFormat::Markdown => {
-                let s = self.format_markdown(&export_data);
-                Ok(s.into_bytes())
-            },
-            ExportFormat::Html => {
-                let md = self.format_markdown(&export_data);
-                let html = format!("<html><body><pre>{}</pre></body></html>", md);
-                Ok(html.into_bytes())
-            }
+        } else if let Ok(Some(memo)) = self.memo_repo.find_by_id(node_id).await {
+             let comments = self.comment_repo.get_comments(node_id).await.unwrap_or_default();
+             let comment_texts: Vec<String> = comments.into_iter().map(|c| format!("{}: {}", c.user_name.unwrap_or("Anon".into()), c.text)).collect();
+             
+             let md = self.format_markdown(&memo.node.title, &memo.content, &comment_texts);
+             match format {
+                ExportFormat::Markdown => Ok(md.into_bytes()),
+                ExportFormat::Json => Ok(serde_json::to_vec(&serde_json::json!({
+                    "title": memo.node.title,
+                    "body": memo.content,
+                    "comments": comment_texts
+                })).unwrap()),
+                ExportFormat::Html => Ok(format!("<html><h1>{}</h1><p>{}</p></html>", memo.node.title, memo.content).into_bytes()),
+             }
+        } else {
+            Err(RepositoryError::NotFound("Node not found".to_string()))
         }
     }
 }

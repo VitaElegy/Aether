@@ -4,12 +4,12 @@ use axum::{
     Json,
     response::IntoResponse,
 };
-use std::sync::Arc;
 use uuid::Uuid;
 use chrono::Utc;
-use crate::domain::models::{Comment, CommentId, CommentableId, CommentableType};
+use crate::domain::models::{Comment, CommentId, UserId};
 use crate::domain::ports::CommentRepository;
 use crate::interface::api::auth::AuthenticatedUser;
+use crate::interface::state::AppState;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct CreateCommentRequest {
@@ -18,37 +18,18 @@ pub struct CreateCommentRequest {
     pub parent_id: Option<Uuid>,
 }
 
-fn parse_target(target_type: &str, target_id: Uuid) -> Option<CommentableId> {
-    let c_type = match target_type.to_lowercase().as_str() {
-        "content" => CommentableType::Content,
-        "memo" => CommentableType::Memo,
-        _ => return None,
-    };
-    Some(CommentableId {
-        target_type: c_type,
-        target_id,
-    })
-}
-
 pub async fn create_comment_handler(
-    State(repo): State<Arc<dyn CommentRepository>>,
+    State(state): State<AppState>,
     user: AuthenticatedUser,
-    Path((target_type, target_id)): Path<(String, Uuid)>,
+    Path((_target_type, target_id)): Path<(String, Uuid)>, 
     Json(payload): Json<CreateCommentRequest>,
 ) -> impl IntoResponse {
-    let target = match parse_target(&target_type, target_id) {
-        Some(t) => t,
-        None => return (StatusCode::BAD_REQUEST, "Invalid target type").into_response(),
-    };
-
+   
     let comment = Comment {
         id: CommentId(Uuid::new_v4()),
-        target,
-        user_id: crate::domain::models::UserId(user.id),
-        user_name: None, // Will be filled by repo join (or should be provided?)
-        // Actually repo join fills it on read. On write we just save IDs.
-        // But for response we might want it? The repo returns CommentId currently.
-        // Let's assume repo won't return full object immediately or we don't need it.
+        target_id,
+        user_id: UserId(user.id),
+        user_name: None, 
         user_avatar: None,
         parent_id: payload.parent_id.map(CommentId),
         text: payload.text,
@@ -56,7 +37,7 @@ pub async fn create_comment_handler(
         replies: vec![],
     };
 
-    match repo.add_comment(comment).await {
+    match state.repo.add_comment(comment).await {
         Ok(id) => (StatusCode::CREATED, Json(id)).into_response(),
         Err(e) => {
             tracing::error!("Failed to create comment: {:?}", e);
@@ -66,15 +47,10 @@ pub async fn create_comment_handler(
 }
 
 pub async fn get_comments_handler(
-    State(repo): State<Arc<dyn CommentRepository>>,
-    Path((target_type, target_id)): Path<(String, Uuid)>,
+    State(state): State<AppState>,
+    Path((_target_type, target_id)): Path<(String, Uuid)>, 
 ) -> impl IntoResponse {
-    let target = match parse_target(&target_type, target_id) {
-        Some(t) => t,
-        None => return (StatusCode::BAD_REQUEST, "Invalid target type").into_response(),
-    };
-
-    match repo.get_comments(&target).await {
+    match state.repo.get_comments(&target_id).await {
         Ok(comments) => Json(comments).into_response(),
         Err(e) => {
              tracing::error!("Failed to fetch comments: {:?}", e);
@@ -88,5 +64,3 @@ pub fn router() -> axum::Router<crate::interface::state::AppState> {
     axum::Router::new()
         .route("/api/comments/:type/:id", post(create_comment_handler).get(get_comments_handler))
 }
-
-

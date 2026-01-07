@@ -1,10 +1,10 @@
 pub mod auth;
 pub mod content;
 pub mod comment;
-pub mod upload;
 pub mod memo;
+// pub mod knowledge_base;
 pub mod export;
-pub mod knowledge_base;
+pub mod upload;
 pub mod tags;
 pub mod vocabulary;
 pub mod dictionary;

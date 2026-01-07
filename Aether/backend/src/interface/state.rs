@@ -1,8 +1,8 @@
 use std::sync::Arc;
 use axum::extract::FromRef;
 use crate::domain::ports::{
-    AuthService, CommentRepository, ContentRepository, ExportService,
-    KnowledgeBaseRepository, MemoRepository, TagRepository, UserRepository,
+    AuthService, CommentRepository, ArticleRepository, ExportService,
+    MemoRepository, UserRepository, VocabularyRepository, NodeRepository
 };
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 
@@ -25,9 +25,9 @@ impl FromRef<AppState> for Arc<dyn UserRepository> {
     }
 }
 
-impl FromRef<AppState> for Arc<dyn ContentRepository> {
+impl FromRef<AppState> for Arc<dyn ArticleRepository> {
     fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn ContentRepository>
+        state.repo.clone() as Arc<dyn ArticleRepository>
     }
 }
 
@@ -43,15 +43,15 @@ impl FromRef<AppState> for Arc<dyn MemoRepository> {
     }
 }
 
-impl FromRef<AppState> for Arc<dyn KnowledgeBaseRepository> {
+impl FromRef<AppState> for Arc<dyn VocabularyRepository> {
     fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn KnowledgeBaseRepository>
+        state.repo.clone() as Arc<dyn VocabularyRepository>
     }
 }
 
-impl FromRef<AppState> for Arc<dyn TagRepository> {
+impl FromRef<AppState> for Arc<dyn NodeRepository> {
     fn from_ref(state: &AppState) -> Self {
-        state.repo.clone() as Arc<dyn TagRepository>
+        state.repo.clone() as Arc<dyn NodeRepository>
     }
 }
 
