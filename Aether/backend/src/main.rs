@@ -182,10 +182,14 @@ async fn main() {
         repo.clone() as Arc<dyn CommentRepository>,
     ));
 
+    use crate::infrastructure::dictionary::loader::DictionaryLoader;
+    let dictionary = DictionaryLoader::new("data/dictionary");
+
     let state = AppState {
         repo,
         auth_service,
         export_service,
+        dictionary,
     };
 
     // --- 4. Build Router with Trace Middleware ---

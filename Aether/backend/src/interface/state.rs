@@ -5,12 +5,14 @@ use crate::domain::ports::{
     MemoRepository, UserRepository, VocabularyRepository, NodeRepository
 };
 use crate::infrastructure::persistence::postgres::PostgresRepository;
+use crate::infrastructure::dictionary::loader::DictionaryLoader;
 
 #[derive(Clone)]
 pub struct AppState {
     pub repo: Arc<PostgresRepository>,
     pub auth_service: Arc<dyn AuthService>,
     pub export_service: Arc<dyn ExportService>,
+    pub dictionary: DictionaryLoader,
 }
 
 impl FromRef<AppState> for Arc<dyn AuthService> {
