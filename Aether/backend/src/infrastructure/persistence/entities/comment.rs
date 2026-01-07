@@ -6,8 +6,7 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    pub target_type: String,
-    pub target_id: String,
+    pub target_id: Uuid, 
     pub user_id: Uuid,
     pub parent_id: Option<Uuid>,
     #[sea_orm(column_type = "Text")]
@@ -25,17 +24,6 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     User,
-    // Content relation removed because target_id is polymorphic
-    // We cannot express a hard foreign key in SeaORM for polymorphic ID easily without complex traits
-    // Logic will enforce validity.
-    #[sea_orm(
-        belongs_to = "Entity",
-        from = "Column::ParentId",
-        to = "Column::Id",
-        on_update = "NoAction",
-        on_delete = "Cascade"
-    )]
-    Parent,
 }
 
 impl Related<super::user::Entity> for Entity {
@@ -45,4 +33,3 @@ impl Related<super::user::Entity> for Entity {
 }
 
 impl ActiveModelBehavior for ActiveModel {}
-

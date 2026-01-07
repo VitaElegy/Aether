@@ -8,29 +8,25 @@ pub struct Model {
     pub id: Uuid,
     #[sea_orm(unique)]
     pub username: String,
-    #[sea_orm(unique)]
     pub email: String,
-    #[sea_orm(nullable)]
     pub display_name: Option<String>,
-    #[sea_orm(nullable)]
     pub bio: Option<String>,
-    #[sea_orm(nullable)]
     pub avatar_url: Option<String>,
     pub password_hash: String,
-    pub permissions: i64,
+    pub permissions: i64, 
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
-    #[sea_orm(has_many = "super::content::Entity")]
-    Content,
+    #[sea_orm(has_many = "super::node::Entity")]
+    Node,
 }
 
-impl Related<super::content::Entity> for Entity {
+impl Related<super::node::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::Content.def()
+        Relation::Node.def()
     }
 }
 
 impl ActiveModelBehavior for ActiveModel {}
-
