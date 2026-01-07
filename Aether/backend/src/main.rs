@@ -23,7 +23,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, knowledge_base, tags, vocabulary
+    auth, content, comment, memo, export, upload, knowledge_base, tags, vocabulary, dictionary
 };
 
 
@@ -57,7 +57,6 @@ async fn main() {
             category TEXT,
             created_at TIMESTAMPTZ NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
-            body JSONB NOT NULL,
             body JSONB NOT NULL,
             tags TEXT NOT NULL
         );
@@ -225,6 +224,7 @@ async fn main() {
         .merge(upload::router())
         .merge(tags::router())
         .merge(vocabulary::router())
+        .merge(dictionary::router())
         .with_state(state);
 
     let app = Router::new()
