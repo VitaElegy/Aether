@@ -1,7 +1,7 @@
 use axum::{
     Router,
     routing::get,
-    extract::Query,
+    extract::{Query, State},
     Json,
     response::IntoResponse,
     http::StatusCode,
@@ -39,14 +39,45 @@ pub struct Definition {
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/dictionary/lookup", get(lookup_word))
+        .route("/api/dictionary/fuzzy", get(fuzzy_search))
+}
+
+async fn fuzzy_search(
+    State(state): State<AppState>,
+    Query(params): Query<LookupRequest>,
+) -> impl IntoResponse {
+    let matches = state.dictionary.fuzzy_search(&params.word);
+    Json(matches)
 }
 
 async fn lookup_word(
+    State(state): State<AppState>,
     Query(params): Query<LookupRequest>,
 ) -> impl IntoResponse {
     let word = params.word;
     
-    // We will query multiple sources and aggregate them.
+    // 0. Local StarDict
+    let mut local_entry: Option<DictionaryEntry> = None;
+    if let Some(def_str) = state.dictionary.lookup(&word) {
+        // StarDict returns raw text, usually formatted or just text.
+        // We'll treat it as a generic definition.
+        // TODO: Better parsing of StarDict content (which might be HTML or XDXF).
+        // For now, simple text wrapping.
+        local_entry = Some(DictionaryEntry {
+            word: word.clone(),
+            phonetic: None,
+            meanings: vec![Meaning {
+                part_of_speech: "dictionary".to_string(),
+                definitions: vec![Definition {
+                    definition: def_str,
+                    example: None,
+                }],
+            }],
+            translation: None,
+            source: "Local StarDict".to_string(),
+        });
+    }
+
     // 1. FreeDictionaryAPI (Primary - Definitions)
     // 2. Datamuse (Secondary - Definitions/Phonetics)
     // 3. MyMemory (Translation)
@@ -82,23 +113,42 @@ async fn lookup_word(
     let translation = fetch_translation(&word).await;
 
     // Aggregation Logic
-    let mut final_entry = match (primary_entry, datamuse_entry) {
-        (Some(mut p), Some(d)) => {
-            p.source = format!("{}, Datamuse", p.source);
-            for m in d.meanings {
-                 p.meanings.push(m);
-            }
-            p
-        },
-        (Some(p), None) => p,
-        (None, Some(d)) => d,
-        (None, None) => DictionaryEntry {
-            word: word.clone(),
-            phonetic: None,
-            meanings: vec![],
-            translation: None,
-            source: "None".to_string(),
-        },
+    // If we have local entry, we might prioritize it or merge it.
+    // Spec says: "Base: StarDict... Extension: User adds...".
+    // We'll treat Local as highly trusted.
+    
+    let mut final_entry = if let Some(mut local) = local_entry {
+        // If we also found online data, we can merge phonetics or extra definitions
+        if let Some(p) = primary_entry {
+             if local.phonetic.is_none() { local.phonetic = p.phonetic; }
+             // Merge definitions? Maybe append online ones.
+             local.source = format!("{}, {}", local.source, p.source);
+             local.meanings.extend(p.meanings);
+        } else if let Some(d) = datamuse_entry {
+              if local.phonetic.is_none() { local.phonetic = d.phonetic; }
+               local.source = format!("{}, {}", local.source, d.source);
+               local.meanings.extend(d.meanings);
+        }
+        local
+    } else {
+        match (primary_entry, datamuse_entry) {
+            (Some(mut p), Some(d)) => {
+                p.source = format!("{}, Datamuse", p.source);
+                for m in d.meanings {
+                     p.meanings.push(m);
+                }
+                p
+            },
+            (Some(p), None) => p,
+            (None, Some(d)) => d,
+            (None, None) => DictionaryEntry {
+                word: word.clone(),
+                phonetic: None,
+                meanings: vec![],
+                translation: None,
+                source: "None".to_string(),
+            },
+        }
     };
 
     if let Some(t) = translation {
