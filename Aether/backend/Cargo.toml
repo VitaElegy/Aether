@@ -42,6 +42,10 @@ similar = "2.7.0"
 axum-extra = { version = "0.9", features = ["multipart"] }
 reqwest = { version = "0.11", features = ["json"] }
 
+# Dictionary & Search
+stardict = "=0.2.0"
+fuzzy-matcher = "0.3"
+
 [workspace]
 members = ["."]
 
