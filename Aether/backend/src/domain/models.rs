@@ -202,7 +202,11 @@ pub struct Vocabulary {
     pub user_id: UserId,
     pub word: String,
     pub definition: String,
+    pub translation: Option<String>,
+    pub phonetic: Option<String>,
     pub context_sentence: Option<String>,
+    pub image_url: Option<String>,
+    pub language: String, // e.g. "en"
     pub status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
