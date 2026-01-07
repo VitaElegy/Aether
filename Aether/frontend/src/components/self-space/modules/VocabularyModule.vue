@@ -24,6 +24,8 @@ interface DictionaryEntry {
         partOfSpeech: string;
         definitions: { definition: string; example?: string }[];
     }[];
+    translation?: string;
+    source?: string;
 }
 
 // State
@@ -93,7 +95,8 @@ const selectSuggestion = async (word: string) => {
             meanings: [{
                 partOfSpeech: 'saved',
                 definitions: [{ definition: existing.definition }]
-            }]
+            }],
+            translation: existing.translation
         };
         previewImage.value = existing.image_url || '';
         createForm.translation = existing.translation || '';
@@ -105,14 +108,20 @@ const selectSuggestion = async (word: string) => {
 const fetchDefinitionInfo = async (word: string) => {
     isSearchingDef.value = true;
     try {
-        const res = await axios.get(`https://api.dictionaryapi.dev/api/v2/entries/en/${word}`);
-        if (res.data && res.data.length > 0) {
-            const entry: DictionaryEntry = res.data[0];
+        const token = localStorage.getItem('aether_token');
+        // Call our new backend service instead of external API directly
+        const res = await axios.get(`/api/dictionary/lookup?word=${word}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        if (res.data) {
+            // Backend now returns normalized DictionaryEntry
+            const entry: DictionaryEntry = res.data;
             previewEntry.value = entry;
             createForm.phonetic = entry.phonetic || '';
             const defs = entry.meanings.map(m => `(${m.partOfSpeech}) ${m.definitions[0].definition}`).slice(0, 2).join('\n');
             createForm.definition = defs;
-            createForm.translation = ""; // User input
+            createForm.translation = entry.translation || "";
         }
     } catch (e) {
         previewEntry.value = {
@@ -361,9 +370,12 @@ onMounted(() => {
                             <!-- Details Scroll -->
                             <div class="flex-1 overflow-y-auto p-8 space-y-8 custom-scrollbar">
                                 <div class="space-y-6">
-                                    <div v-for="(m, idx) in previewEntry.meanings.slice(0, 2)" :key="idx" class="pl-4 border-l-2 border-accent/20">
+                                    <div v-for="(m, idx) in previewEntry.meanings.slice(0, 5)" :key="idx" class="pl-4 border-l-2 border-accent/20">
                                         <span class="text-xs font-bold uppercase text-ink/40 mb-1 block">{{ m.partOfSpeech }}</span>
                                         <p class="text-lg leading-relaxed text-ink/80">{{ m.definitions[0].definition }}</p>
+                                    </div>
+                                    <div v-if="previewEntry.source" class="text-xs text-ink/30 italic text-right mt-2">
+                                        Source: {{ previewEntry.source }}
                                     </div>
                                 </div>
 

@@ -49,26 +49,32 @@ const buildTree = (flatComments: any[]) => {
 };
 
 const handlePostComment = async () => {
+    const token = localStorage.getItem('aether_token');
+    const config = { headers: { Authorization: `Bearer ${token}` } };
+
     if (!newCommentText.value.trim()) return;
 
     try {
         await axios.post(`/api/comments/content/${props.contentId}`, {
             text: newCommentText.value
-        });
+        }, config);
         newCommentText.value = '';
         await fetchComments();
-    } catch (e) {
+    } catch (e: any) {
         console.error("Failed to post comment", e);
-        alert("Failed to post comment. You probably need to log in.");
+        const msg = e.response?.data ? JSON.stringify(e.response.data) : e.message;
+        alert(`Failed to post comment: ${msg}`);
     }
 };
 
 const handleReply = async (payload: { text: string; parentId: string }) => {
+    const token = localStorage.getItem('aether_token');
+    const config = { headers: { Authorization: `Bearer ${token}` } };
     try {
          await axios.post(`/api/comments/content/${props.contentId}`, {
             text: payload.text,
             parent_id: payload.parentId
-        });
+        }, config);
         await fetchComments();
     } catch (e) {
         console.error("Failed to post reply", e);
