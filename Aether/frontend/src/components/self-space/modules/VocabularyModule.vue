@@ -57,12 +57,16 @@ const inputRef = ref<HTMLInputElement | null>(null);
 
 // Methods
 const debouncedSearch = useDebounceFn(async (val: string) => {
-    // 2. Remote Suggestions (Datamuse)
+    // 2. Local Fuzzy Search via Backend
     try {
-        const res = await axios.get(`https://api.datamuse.com/sugg?s=${val}&max=5`);
-        const remoteWords = res.data.map((item: any) => item.word);
+        const token = localStorage.getItem('aether_token');
+        const res = await axios.get(`/api/dictionary/fuzzy?word=${val}`, {
+            headers: { Authorization: `Bearer ${token}` }
+        });
+        // Backend returns Vec<String> directly
+        const remoteWords = res.data;
         
-        // Combine with local matches
+        // Combine with local matches (from saved vocabulary)
         const localMatches = vocabularyList.value
             .filter(v => v.word.toLowerCase().includes(val.toLowerCase()))
             .map(v => v.word);
@@ -70,7 +74,11 @@ const debouncedSearch = useDebounceFn(async (val: string) => {
         const combined = new Set([...localMatches, ...remoteWords]);
         searchSuggestions.value = Array.from(combined).slice(0, 8);
     } catch (e) {
-        searchSuggestions.value = [];
+        // Fallback or just show local matches if backend fails
+        const localMatches = vocabularyList.value
+            .filter(v => v.word.toLowerCase().includes(val.toLowerCase()))
+            .map(v => v.word);
+         searchSuggestions.value = localMatches.slice(0, 8);
     }
 }, 300);
 

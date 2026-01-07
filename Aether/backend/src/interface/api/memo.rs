@@ -51,7 +51,7 @@ pub async fn create_memo_handler(
     };
 
     match state.repo.save(memo).await {
-        Ok(id) => (StatusCode::CREATED, Json(id)).into_response(),
+        Ok(id) => (StatusCode::CREATED, Json::<Uuid>(id)).into_response(),
         Err(e) => {
             tracing::error!("Failed to create memo: {:?}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create memo").into_response()
@@ -64,7 +64,7 @@ pub async fn get_memo_handler(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     match state.repo.find_by_id(&id).await {
-        Ok(Some(memo)) => Json(memo).into_response(),
+        Ok(Some(memo)) => Json::<Memo>(memo).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, "Memo not found").into_response(),
         Err(e) => {
             tracing::error!("Failed to fetch memo: {:?}", e);
@@ -84,11 +84,11 @@ pub async fn list_memos_handler(
     let target_author_id = author_id.or(viewer_id.clone());
 
     if target_author_id.is_none() {
-         return Json(Vec::<Memo>::new()).into_response();
+         return Json::<Vec<Memo>>(Vec::new()).into_response();
     }
 
     match state.repo.list(viewer_id, target_author_id).await {
-         Ok(memos) => Json(memos).into_response(),
+         Ok(memos) => Json::<Vec<Memo>>(memos).into_response(),
          Err(e) => {
              tracing::error!("Failed to list memos: {:?}", e);
              (StatusCode::INTERNAL_SERVER_ERROR, "Failed to list memos").into_response()

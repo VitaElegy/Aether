@@ -38,7 +38,7 @@ pub async fn create_comment_handler(
     };
 
     match state.repo.add_comment(comment).await {
-        Ok(id) => (StatusCode::CREATED, Json(id)).into_response(),
+        Ok(id) => (StatusCode::CREATED, Json::<CommentId>(id)).into_response(),
         Err(e) => {
             tracing::error!("Failed to create comment: {:?}", e);
             (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
@@ -51,7 +51,7 @@ pub async fn get_comments_handler(
     Path((_target_type, target_id)): Path<(String, Uuid)>, 
 ) -> impl IntoResponse {
     match state.repo.get_comments(&target_id).await {
-        Ok(comments) => Json(comments).into_response(),
+        Ok(comments) => Json::<Vec<Comment>>(comments).into_response(),
         Err(e) => {
              tracing::error!("Failed to fetch comments: {:?}", e);
              (StatusCode::INTERNAL_SERVER_ERROR, "Failed to fetch comments").into_response()
