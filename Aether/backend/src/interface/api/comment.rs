@@ -60,7 +60,7 @@ pub async fn create_comment_handler(
         Ok(id) => (StatusCode::CREATED, Json(id)).into_response(),
         Err(e) => {
             tracing::error!("Failed to create comment: {:?}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to create comment").into_response()
+            (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response()
         }
     }
 }

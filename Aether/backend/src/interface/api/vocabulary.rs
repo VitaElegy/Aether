@@ -1,13 +1,12 @@
 use axum::{
     Router,
-    routing::{get, post, delete},
+    routing::{post, delete},
     extract::{State, Query, Path},
     Json,
     response::IntoResponse,
     http::StatusCode,
 };
-use serde::{Deserialize, Serialize};
-use std::sync::Arc;
+use serde::Deserialize;
 use crate::{
     domain::{
         models::{Vocabulary, VocabularyId, UserId},
@@ -29,6 +28,7 @@ pub struct CreateVocabularyRequest {
     pub language: Option<String>,
 }
 
+#[derive(Deserialize)]
 pub struct ListVocabularyRequest {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
@@ -109,7 +109,7 @@ async fn list_vocabulary(
 }
 
 async fn delete_vocabulary(
-    auth: AuthenticatedUser,
+    _auth: AuthenticatedUser,
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {

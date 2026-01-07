@@ -58,4 +58,6 @@ build/
 # Rust specific
 Cargo.lock
 debug/
-release/
+
+# AI Agent Documentation
+AI/
