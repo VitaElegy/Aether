@@ -4,19 +4,16 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "memos")]
 pub struct Model {
-    #[sea_orm(primary_key, column_type = "Text")]
-    pub id: String,
-    #[sea_orm(column_type = "Text")]
-    pub author_id: String,
-    #[sea_orm(column_type = "Text")]
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
+    pub author_id: Uuid,
     pub title: String,
     #[sea_orm(column_type = "Text")]
     pub content: String,
-    #[sea_orm(column_type = "Text")]
-    pub tags: String, // Serialized JSON
-    pub created_at: String,
-    pub updated_at: String,
-    #[sea_orm(column_type = "Text")]
+    #[sea_orm(column_type = "JsonBinary")]
+    pub tags: serde_json::Value, // Serialized JSON
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
     pub visibility: String,
 }
 

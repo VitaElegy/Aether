@@ -69,7 +69,7 @@ impl UserRepository for PostgresRepository {
 
         if let Some(m) = model {
             Ok(Some(User {
-                id: UserId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                id: UserId(m.id),
                 username: m.username,
                 email: m.email,
                 display_name: m.display_name,
@@ -84,14 +84,14 @@ impl UserRepository for PostgresRepository {
     }
 
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, RepositoryError> {
-        let model = user::Entity::find_by_id(id.0.to_string())
+        let model = user::Entity::find_by_id(id.0)
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         if let Some(m) = model {
             Ok(Some(User {
-                id: UserId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                id: UserId(m.id),
                 username: m.username,
                 email: m.email,
                 display_name: m.display_name,
@@ -107,7 +107,7 @@ impl UserRepository for PostgresRepository {
 
     async fn save(&self, u: User) -> Result<UserId, RepositoryError> {
         let model = user::ActiveModel {
-            id: Set(u.id.0.to_string()),
+            id: Set(u.id.0),
             username: Set(u.username),
             email: Set(u.email),
             display_name: Set(u.display_name),
@@ -142,15 +142,15 @@ impl UserRepository for PostgresRepository {
 #[async_trait]
 impl ContentRepository for PostgresRepository {
     async fn save(&self, content: ContentAggregate, editor_id: UserId, should_create_snapshot: bool) -> Result<ContentId, RepositoryError> {
-        let serialized_body = serde_json::to_string(&content.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
-        let serialized_tags = serde_json::to_string(&content.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
+        let body_value = serde_json::to_value(&content.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
+        let serialized_tags = serde_json::to_value(&content.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
 
         // Calculate Hash (SHA256)
         // Combine only versioned fields (Title + Body) to detect content changes.
         // Status/Visibility/Tags are currently not versioned in 'content_versions', so changing them shouldn't trigger a snapshot.
         let hash_input = format!("{}{}",
             content.title,
-            serialized_body
+            serde_json::to_string(&content.body).unwrap_or_default()
         );
         let hash_digest = ring::digest::digest(&ring::digest::SHA256, hash_input.as_bytes());
         let current_hash = hash_digest.as_ref().iter().map(|b| format!("{:02x}", b)).collect::<String>();
@@ -176,19 +176,19 @@ impl ContentRepository for PostgresRepository {
         };
 
         let model = content::ActiveModel {
-            id: Set(content.id.0.to_string()),
-            author_id: Set(content.author_id.to_string()),
+            id: Set(content.id.0),
+            author_id: Set(content.author_id),
             title: Set(content.title.clone()),
             slug: Set(content.slug),
             status: Set(status_str.to_string()),
             visibility: Set(visibility_str.to_string()),
             category: Set(content.category),
-            created_at: Set(content.created_at.to_rfc3339()),
-            updated_at: Set(Utc::now().to_rfc3339()),
-            body: Set(serialized_body.clone()),
-            tags: Set(serialized_tags), // Use Vec<String> directly
-            knowledge_base_id: Set(content.knowledge_base_id.map(|id| id.to_string())),
-            parent_id: Set(content.parent_id.map(|id| id.to_string())),
+            created_at: Set(content.created_at.into()),
+            updated_at: Set(Utc::now().into()),
+            body: Set(body_value.clone()),
+            tags: Set(serialized_tags), 
+            knowledge_base_id: Set(content.knowledge_base_id),
+            parent_id: Set(content.parent_id),
             content_type: Set(match content.content_type {
                 ContentType::Article => "Article".to_string(),
                 ContentType::Directory => "Directory".to_string(),
@@ -260,15 +260,15 @@ impl ContentRepository for PostgresRepository {
                  let next_version = last_version.as_ref().map(|v| v.version + 1).unwrap_or(1);
 
                  let version_model = content_version::ActiveModel {
-                    id: Set(uuid::Uuid::new_v4().to_string()),
-                    content_id: Set(content.id.0.to_string()),
+                    id: Set(uuid::Uuid::new_v4()),
+                    content_id: Set(content.id.0),
                     version: Set(next_version),
                     title: Set(content.title.clone()),
-                    body: Set(serialized_body), // Back to String
+                    body: Set(body_value), // Use body_value (Value)
                     change_reason: Set(content.version_message.clone()),
                     content_hash: Set(current_hash),
-                    editor_id: Set(editor_id.0.to_string()), // Back to String
-                    created_at: Set(Utc::now().to_rfc3339()),
+                    editor_id: Set(editor_id.0),
+                    created_at: Set(Utc::now().into()),
                 };
                 content_version::Entity::insert(version_model)
                     .exec(&txn) // Use transaction
@@ -286,7 +286,7 @@ impl ContentRepository for PostgresRepository {
     }
 
     async fn find_by_id(&self, id: &ContentId) -> Result<Option<ContentAggregate>, RepositoryError> {
-        let result = content::Entity::find_by_id(id.0.to_string())
+        let result = content::Entity::find_by_id(id.0)
             .find_also_related(user::Entity)
             .one(&self.db)
             .await
@@ -294,8 +294,8 @@ impl ContentRepository for PostgresRepository {
 
         if let Some((m, author)) = result {
             Ok(Some(ContentAggregate {
-                id: ContentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                id: ContentId(m.id),
+                author_id: m.author_id,
                 author_name: author.map(|u| u.display_name.or(Some(u.username)).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
@@ -310,13 +310,13 @@ impl ContentRepository for PostgresRepository {
                     _ => Visibility::Public,
                 },
                 category: m.category,
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
-                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
+                body: serde_json::from_value(m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                tags: serde_json::from_value(m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 version_message: None,
-                knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
-                parent_id: m.parent_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                knowledge_base_id: m.knowledge_base_id,
+                parent_id: m.parent_id,
                 content_type: match m.content_type.as_str() {
                     "Directory" => ContentType::Directory,
                     _ => ContentType::Article,
@@ -347,14 +347,14 @@ impl ContentRepository for PostgresRepository {
 
             if is_own_content {
                 // 查看自己的资料：看到所有内容（无状态/可见性限制）
-                Condition::all().add(content::Column::AuthorId.eq(aid_str))
+                Condition::all().add(content::Column::AuthorId.eq(aid.0))
             } else {
                 // 查看别人的资料：必须同时满足作者ID和可见性规则
                 // 对于 Guest: author_id = X AND (visibility = 'Public' AND status = 'Published')
                 // 对于登录用户: author_id = X AND ((visibility = 'Public' AND status = 'Published') OR (visibility = 'Internal' AND status = 'Published'))
                 let visibility_cond = self.build_visibility_condition(viewer_id.as_ref(), false);
                 Condition::all()
-                    .add(content::Column::AuthorId.eq(aid_str))
+                    .add(content::Column::AuthorId.eq(aid.0))
                     .add(visibility_cond)
             }
         } else {
@@ -382,9 +382,9 @@ impl ContentRepository for PostgresRepository {
 
         let mut aggregates = Vec::new();
         for (m, author) in results {
-             aggregates.push(ContentAggregate {
-                id: ContentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+            aggregates.push(ContentAggregate {
+                id: ContentId(m.id),
+                author_id: m.author_id,
                 author_name: author.map(|u| u.display_name.or(Some(u.username)).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
@@ -399,13 +399,13 @@ impl ContentRepository for PostgresRepository {
                     _ => Visibility::Public,
                 },
                 category: m.category,
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
-                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
+                body: serde_json::from_value(m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                tags: serde_json::from_value(m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 version_message: None,
-                knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
-                parent_id: m.parent_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                knowledge_base_id: m.knowledge_base_id,
+                parent_id: m.parent_id,
                 content_type: match m.content_type.as_str() {
                     "Directory" => ContentType::Directory,
                     _ => ContentType::Article,
@@ -417,18 +417,21 @@ impl ContentRepository for PostgresRepository {
 
     async fn search(&self, query: &str) -> Result<Vec<ContentAggregate>, RepositoryError> {
         // 1. Find Content IDs referenced by matching comments
-        let comment_matches: Vec<String> = comment::Entity::find()
+        let comment_matches: Vec<uuid::Uuid> = comment::Entity::find()
             .filter(comment::Column::Text.contains(query))
             .filter(comment::Column::TargetType.eq("Content")) // Only match comments on Content
             .select_only()
             .column(comment::Column::TargetId)
-            .into_tuple()
+            .into_tuple::<String>() // TargetId is still String in Comment entity!
             .all(&self.db)
             .await
-            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?
+            .into_iter()
+            .filter_map(|s| uuid::Uuid::parse_str(&s).ok())
+            .collect();
 
         // 2. Find Author IDs matching name/display name
-        let author_matches: Vec<String> = user::Entity::find()
+        let author_matches: Vec<uuid::Uuid> = user::Entity::find()
             .filter(
                 Condition::any()
                     .add(user::Column::Username.contains(query))
@@ -492,8 +495,8 @@ impl ContentRepository for PostgresRepository {
         for (m, author) in results {
              // ... existing mapping ...
              aggregates.push(ContentAggregate {
-                id: ContentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                id: ContentId(m.id),
+                author_id: m.author_id, // Direct Uuid usage
                 author_name: author.as_ref().map(|u| u.display_name.clone().or(Some(u.username.clone())).unwrap_or_default()),
                 title: m.title,
                 slug: m.slug,
@@ -508,13 +511,13 @@ impl ContentRepository for PostgresRepository {
                     _ => Visibility::Public,
                 },
                 category: m.category,
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                body: serde_json::from_str(&m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
-                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
+                body: serde_json::from_value(m.body).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                tags: serde_json::from_value(m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 version_message: None,
-                knowledge_base_id: m.knowledge_base_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
-                parent_id: m.parent_id.map(|id| uuid::Uuid::parse_str(&id).unwrap_or_default()),
+                knowledge_base_id: m.knowledge_base_id,
+                parent_id: m.parent_id,
                 content_type: match m.content_type.as_str() {
                     "Directory" => ContentType::Directory,
                     _ => ContentType::Article,
@@ -536,7 +539,7 @@ impl ContentRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         // 2. Delete content
-        content::Entity::delete_by_id(id.0.to_string())
+        content::Entity::delete_by_id(id.0)
             .exec(&txn)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
@@ -554,7 +557,7 @@ impl ContentRepository for PostgresRepository {
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        Ok(model.map(|m| (m.title, m.body)))
+        Ok(model.map(|m| (m.title, m.body.to_string())))
     }
 
     async fn get_history(&self, id: &ContentId) -> Result<Vec<ContentVersionSnapshot>, RepositoryError> {
@@ -566,14 +569,12 @@ impl ContentRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         let snapshots = versions.into_iter().map(|v| ContentVersionSnapshot {
-            id: v.id,
+            id: v.id.to_string(),
             version: format!("0.0.{}", v.version),
             title: v.title,
-            created_at: chrono::DateTime::parse_from_rfc3339(&v.created_at)
-                .unwrap_or_else(|_| Utc::now().into())
-                .with_timezone(&Utc),
+            created_at: v.created_at.with_timezone(&Utc),
             reason: v.change_reason,
-            editor_id: uuid::Uuid::parse_str(&v.editor_id).unwrap_or_default(),
+            editor_id: v.editor_id,
         }).collect();
 
         Ok(snapshots)
@@ -589,16 +590,13 @@ impl CommentRepository for PostgresRepository {
         };
 
         let model = comment::ActiveModel {
-            id: Set(c.id.0.to_string()),
+            id: Set(c.id.0),
             target_type: Set(target_type.to_string()),
             target_id: Set(target_id.clone()),
-            // Legacy Backfill: content_id is NOT NULL in old schema.
-            // We set it to target_id (if valid UUID) or nil UUID if not, to satisfy constraint.
-            content_id: Set(Some(target_id)), 
-            user_id: Set(c.user_id.0.to_string()),
-            parent_id: Set(c.parent_id.map(|id| id.0.to_string())),
+            user_id: Set(c.user_id.0),
+            parent_id: Set(c.parent_id.map(|id| id.0)),
             text: Set(c.text),
-            created_at: Set(c.created_at.to_rfc3339()),
+            created_at: Set(c.created_at.into()),
         };
 
         comment::Entity::insert(model)
@@ -628,7 +626,7 @@ impl CommentRepository for PostgresRepository {
 
         for (m, author) in results {
              let c = Comment {
-                id: CommentId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                id: CommentId(m.id),
                 target: CommentableId {
                     target_type: match m.target_type.as_str() {
                         "Content" => CommentableType::Content,
@@ -637,12 +635,12 @@ impl CommentRepository for PostgresRepository {
                     },
                     target_id: uuid::Uuid::parse_str(&m.target_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
                 },
-                user_id: UserId(uuid::Uuid::parse_str(&m.user_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
+                user_id: UserId(m.user_id),
                 user_name: author.as_ref().map(|u| u.display_name.clone().or(Some(u.username.clone())).unwrap_or_default()),
                 user_avatar: author.as_ref().and_then(|u| u.avatar_url.clone()),
-                parent_id: m.parent_id.map(|pid| CommentId(uuid::Uuid::parse_str(&pid).unwrap_or_default())),
+                parent_id: m.parent_id.map(|pid| CommentId(pid)),
                 text: m.text,
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                created_at: m.created_at.with_timezone(&Utc),
                 replies: Vec::new(),
             };
             flat_list.push(c);
@@ -665,16 +663,16 @@ impl CommentRepository for PostgresRepository {
 #[async_trait]
 impl MemoRepository for PostgresRepository {
     async fn save(&self, memo: Memo) -> Result<MemoId, RepositoryError> {
-        let serialized_tags = serde_json::to_string(&memo.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
+        let tags_value = serde_json::to_value(&memo.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?;
 
         let model = memo::ActiveModel {
-            id: Set(memo.id.0.to_string()),
-            author_id: Set(memo.author_id.to_string()),
+            id: Set(memo.id.0),
+            author_id: Set(memo.author_id),
             title: Set(memo.title),
             content: Set(memo.content),
-            tags: Set(serialized_tags),
-            created_at: Set(memo.created_at.to_rfc3339()),
-            updated_at: Set(memo.updated_at.to_rfc3339()),
+            tags: Set(tags_value),
+            created_at: Set(memo.created_at.into()),
+            updated_at: Set(memo.updated_at.into()),
             visibility: Set(match memo.visibility {
                 Visibility::Public => "Public".to_string(),
                 Visibility::Private => "Private".to_string(),
@@ -702,20 +700,20 @@ impl MemoRepository for PostgresRepository {
     }
 
     async fn find_by_id(&self, id: &MemoId) -> Result<Option<Memo>, RepositoryError> {
-        let result = memo::Entity::find_by_id(id.0.to_string())
+        let result = memo::Entity::find_by_id(id.0)
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         if let Some(m) = result {
              Ok(Some(Memo {
-                id: MemoId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                id: MemoId(m.id),
+                author_id: m.author_id,
                 title: m.title,
                 content: m.content,
-                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                tags: serde_json::from_value(m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
                 visibility: match m.visibility.to_lowercase().as_str() {
                     "private" => Visibility::Private,
                     "internal" => Visibility::Internal,
@@ -731,7 +729,7 @@ impl MemoRepository for PostgresRepository {
          let mut condition = Condition::all();
 
          if let Some(aid) = author_id {
-             condition = condition.add(memo::Column::AuthorId.eq(aid.0.to_string()));
+             condition = condition.add(memo::Column::AuthorId.eq(aid.0));
          }
 
          // Visibility Logic (Simplified for Memo compared to Content)
@@ -760,13 +758,13 @@ impl MemoRepository for PostgresRepository {
          let mut memos = Vec::new();
          for m in results {
              memos.push(Memo {
-                id: MemoId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                id: MemoId(m.id),
+                author_id: m.author_id,
                 title: m.title,
                 content: m.content,
-                tags: serde_json::from_str(&m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                tags: serde_json::from_value(m.tags).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
                 visibility: match m.visibility.to_lowercase().as_str() {
                     "private" => Visibility::Private,
                     "internal" => Visibility::Internal,
@@ -778,7 +776,7 @@ impl MemoRepository for PostgresRepository {
     }
 
     async fn delete(&self, id: &MemoId) -> Result<(), RepositoryError> {
-        memo::Entity::delete_by_id(id.0.to_string())
+        memo::Entity::delete_by_id(id.0)
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
@@ -790,19 +788,19 @@ impl MemoRepository for PostgresRepository {
 impl KnowledgeBaseRepository for PostgresRepository {
     async fn save(&self, kb: KnowledgeBase) -> Result<KnowledgeBaseId, RepositoryError> {
         let model = knowledge_base::ActiveModel {
-            id: Set(kb.id.0.to_string()),
-            author_id: Set(kb.author_id.to_string()),
+            id: Set(kb.id.0),
+            author_id: Set(kb.author_id),
             title: Set(kb.title),
             description: Set(kb.description),
-            tags: Set(serde_json::to_string(&kb.tags).unwrap_or_else(|_| "[]".to_string())),
+            tags: Set(serde_json::to_value(&kb.tags).unwrap_or(serde_json::json!([]))),
             cover_image: Set(kb.cover_image),
             visibility: Set(match kb.visibility {
                 Visibility::Public => "Public".to_string(),
                 Visibility::Internal => "Internal".to_string(),
                 Visibility::Private => "Private".to_string(),
             }),
-            created_at: Set(kb.created_at.to_rfc3339()),
-            updated_at: Set(kb.updated_at.to_rfc3339()),
+            created_at: Set(kb.created_at.into()),
+            updated_at: Set(kb.updated_at.into()),
         };
 
         knowledge_base::Entity::insert(model)
@@ -826,26 +824,26 @@ impl KnowledgeBaseRepository for PostgresRepository {
     }
 
     async fn find_by_id(&self, id: &KnowledgeBaseId) -> Result<Option<KnowledgeBase>, RepositoryError> {
-        let model = knowledge_base::Entity::find_by_id(id.0.to_string())
+        let model = knowledge_base::Entity::find_by_id(id.0)
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         if let Some(m) = model {
             Ok(Some(KnowledgeBase {
-                id: KnowledgeBaseId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                id: KnowledgeBaseId(m.id),
+                author_id: m.author_id,
                 title: m.title,
                 description: m.description,
-                tags: serde_json::from_str(&m.tags).unwrap_or_default(),
+                tags: serde_json::from_value(m.tags).unwrap_or_default(),
                 cover_image: m.cover_image,
                 visibility: match m.visibility.as_str() {
                     "Public" => Visibility::Public,
                     "Internal" => Visibility::Internal,
                     _ => Visibility::Private,
                 },
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
             }))
         } else {
             Ok(None)
@@ -856,7 +854,7 @@ impl KnowledgeBaseRepository for PostgresRepository {
         let model = knowledge_base::Entity::find()
              .filter(
                 Condition::all()
-                    .add(knowledge_base::Column::AuthorId.eq(author_id.0.to_string()))
+                    .add(knowledge_base::Column::AuthorId.eq(author_id.0))
                     .add(Expr::expr(Func::lower(Expr::col(knowledge_base::Column::Title))).eq(title.to_lowercase()))
             )
             .one(&self.db)
@@ -865,19 +863,19 @@ impl KnowledgeBaseRepository for PostgresRepository {
 
         if let Some(m) = model {
             Ok(Some(KnowledgeBase {
-                id: KnowledgeBaseId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                id: KnowledgeBaseId(m.id),
+                author_id: m.author_id,
                 title: m.title,
                 description: m.description,
-                tags: serde_json::from_str(&m.tags).unwrap_or_default(),
+                tags: serde_json::from_value(m.tags).unwrap_or_default(),
                 cover_image: m.cover_image,
                 visibility: match m.visibility.as_str() {
                     "Public" => Visibility::Public,
                     "Internal" => Visibility::Internal,
                     _ => Visibility::Private,
                 },
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
             }))
         } else {
             Ok(None)
@@ -888,7 +886,7 @@ impl KnowledgeBaseRepository for PostgresRepository {
         let mut condition = Condition::all();
 
         if let Some(aid) = author_id {
-            condition = condition.add(knowledge_base::Column::AuthorId.eq(aid.0.to_string()));
+            condition = condition.add(knowledge_base::Column::AuthorId.eq(aid.0));
         }
 
         // Visibility Logic
@@ -899,7 +897,9 @@ impl KnowledgeBaseRepository for PostgresRepository {
 
         if let Some(vid) = vid_str {
             vis_cond = vis_cond.add(knowledge_base::Column::Visibility.eq("Internal"));
-            vis_cond = vis_cond.add(knowledge_base::Column::AuthorId.eq(vid)); // Always see own
+             if let Some(v_uuid) = viewer_id {
+                 vis_cond = vis_cond.add(knowledge_base::Column::AuthorId.eq(v_uuid.0));
+            }
         }
 
         condition = condition.add(vis_cond);
@@ -913,19 +913,19 @@ impl KnowledgeBaseRepository for PostgresRepository {
 
         let kbs = results.into_iter().map(|m| {
             Ok(KnowledgeBase {
-                id: KnowledgeBaseId(uuid::Uuid::parse_str(&m.id).map_err(|e| RepositoryError::Unknown(e.to_string()))?),
-                author_id: uuid::Uuid::parse_str(&m.author_id).map_err(|e| RepositoryError::Unknown(e.to_string()))?,
+                id: KnowledgeBaseId(m.id),
+                author_id: m.author_id,
                 title: m.title,
                 description: m.description,
-                tags: serde_json::from_str(&m.tags).unwrap_or_default(),
+                tags: serde_json::from_value(m.tags).unwrap_or_default(),
                 cover_image: m.cover_image,
                 visibility: match m.visibility.as_str() {
                     "Public" => Visibility::Public,
                     "Internal" => Visibility::Internal,
                     _ => Visibility::Private,
                 },
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).map_err(|e| RepositoryError::Unknown(e.to_string()))?.with_timezone(&Utc),
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
             })
         }).collect::<Result<Vec<_>, RepositoryError>>()?;
 
@@ -933,7 +933,7 @@ impl KnowledgeBaseRepository for PostgresRepository {
     }
 
     async fn delete(&self, id: &KnowledgeBaseId) -> Result<(), RepositoryError> {
-        knowledge_base::Entity::delete_by_id(id.0.to_string())
+        knowledge_base::Entity::delete_by_id(id.0)
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
@@ -947,7 +947,7 @@ impl crate::domain::ports::TagRepository for PostgresRepository {
         use std::collections::HashSet;
         let mut all_tags = HashSet::new();
 
-        // 1. Fetch tags from Knowledge Bases (JSON String)
+        // 1. Fetch tags from Knowledge Bases (JSON Value)
         let kb_models = knowledge_base::Entity::find()
             .select_only()
             .column(knowledge_base::Column::Tags)
@@ -957,14 +957,14 @@ impl crate::domain::ports::TagRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         for kb in kb_models {
-            if let Ok(tags) = serde_json::from_str::<Vec<String>>(&kb.tags) {
+            if let Ok(tags) = serde_json::from_value::<Vec<String>>(kb.tags) {
                 for tag in tags {
                     all_tags.insert(tag);
                 }
             }
         }
 
-        // 2. Fetch tags from Memos (JSON String)
+        // 2. Fetch tags from Memos (JSON Value)
         let memo_models = memo::Entity::find()
             .select_only()
             .column(memo::Column::Tags)
@@ -974,14 +974,14 @@ impl crate::domain::ports::TagRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
          for m in memo_models {
-            if let Ok(tags) = serde_json::from_str::<Vec<String>>(&m.tags) {
+            if let Ok(tags) = serde_json::from_value::<Vec<String>>(m.tags) {
                  for tag in tags {
                     all_tags.insert(tag);
                 }
             }
         }
 
-        // 3. Fetch tags from Contents (Postgres Array)
+        // 3. Fetch tags from Contents (JSON Value)
         let content_models = content::Entity::find()
             .select_only()
             .column(content::Column::Tags)
@@ -991,8 +991,8 @@ impl crate::domain::ports::TagRepository for PostgresRepository {
              .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
          for c in content_models {
-             // Parse JSON string similar to KnowledgeBase and Memo
-             if let Ok(tags) = serde_json::from_str::<Vec<String>>(&c.tags) {
+             // Parse JSON value
+             if let Ok(tags) = serde_json::from_value::<Vec<String>>(c.tags) {
                  for tag in tags {
                      all_tags.insert(tag);
                  }
@@ -1007,16 +1007,12 @@ impl crate::domain::ports::TagRepository for PostgresRepository {
     }
 }
 
-
-
-
-
 #[async_trait]
 impl VocabularyRepository for PostgresRepository {
     async fn save(&self, vocab: Vocabulary) -> Result<VocabularyId, RepositoryError> {
         let model = vocabulary::ActiveModel {
-            id: Set(vocab.id.0.to_string()),
-            user_id: Set(vocab.user_id.0.to_string()),
+            id: Set(vocab.id.0),
+            user_id: Set(vocab.user_id.0),
             word: Set(vocab.word),
             definition: Set(vocab.definition),
             translation: Set(vocab.translation),
@@ -1025,8 +1021,8 @@ impl VocabularyRepository for PostgresRepository {
             image_url: Set(vocab.image_url),
             language: Set(vocab.language),
             status: Set(vocab.status),
-            created_at: Set(vocab.created_at.to_rfc3339()),
-            updated_at: Set(Utc::now().to_rfc3339()),
+            created_at: Set(vocab.created_at.into()),
+            updated_at: Set(Utc::now().into()),
         };
 
         vocabulary::Entity::insert(model)
@@ -1056,7 +1052,7 @@ impl VocabularyRepository for PostgresRepository {
         let model = vocabulary::Entity::find()
             .filter(
                 Condition::all()
-                    .add(vocabulary::Column::UserId.eq(user_id.0.to_string()))
+                    .add(vocabulary::Column::UserId.eq(user_id.0))
                     .add(Expr::expr(Func::lower(Expr::col(vocabulary::Column::Word))).eq(word_lower))
             )
             .one(&self.db)
@@ -1065,8 +1061,8 @@ impl VocabularyRepository for PostgresRepository {
 
         if let Some(m) = model {
              Ok(Some(Vocabulary {
-                id: VocabularyId(uuid::Uuid::parse_str(&m.id).unwrap_or_default()),
-                user_id: UserId(uuid::Uuid::parse_str(&m.user_id).unwrap_or_default()),
+                id: VocabularyId(m.id),
+                user_id: UserId(m.user_id),
                 word: m.word,
                 definition: m.definition,
                 translation: m.translation,
@@ -1075,8 +1071,8 @@ impl VocabularyRepository for PostgresRepository {
                 image_url: m.image_url,
                 language: m.language,
                 status: m.status,
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).unwrap_or_default().with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).unwrap_or_default().with_timezone(&Utc),
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
             }))
         } else {
             Ok(None)
@@ -1085,7 +1081,7 @@ impl VocabularyRepository for PostgresRepository {
 
     async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>) -> Result<Vec<Vocabulary>, RepositoryError> {
         let mut condition = Condition::all()
-            .add(vocabulary::Column::UserId.eq(user_id.0.to_string()));
+            .add(vocabulary::Column::UserId.eq(user_id.0));
 
         if let Some(q) = query {
              if !q.trim().is_empty() {
@@ -1104,8 +1100,8 @@ impl VocabularyRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         Ok(models.into_iter().map(|m| Vocabulary {
-                id: VocabularyId(uuid::Uuid::parse_str(&m.id).unwrap_or_default()),
-                user_id: UserId(uuid::Uuid::parse_str(&m.user_id).unwrap_or_default()),
+                id: VocabularyId(m.id),
+                user_id: UserId(m.user_id),
                 word: m.word,
                 definition: m.definition,
                 translation: m.translation,
@@ -1114,13 +1110,13 @@ impl VocabularyRepository for PostgresRepository {
                 image_url: m.image_url,
                 language: m.language,
                 status: m.status,
-                created_at: chrono::DateTime::parse_from_rfc3339(&m.created_at).unwrap_or_default().with_timezone(&Utc),
-                updated_at: chrono::DateTime::parse_from_rfc3339(&m.updated_at).unwrap_or_default().with_timezone(&Utc),
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
         }).collect())
     }
 
     async fn delete(&self, id: &VocabularyId) -> Result<(), RepositoryError> {
-        vocabulary::Entity::delete_by_id(id.0.to_string())
+        vocabulary::Entity::delete_by_id(id.0)
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;

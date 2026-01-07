@@ -4,21 +4,15 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "comments")]
 pub struct Model {
-    #[sea_orm(primary_key, column_type = "Text")]
-    pub id: String,
-    #[sea_orm(column_type = "Text")] // Default "Content"
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
     pub target_type: String,
-    #[sea_orm(column_type = "Text")]
     pub target_id: String,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub content_id: Option<String>, // Legacy support
-    #[sea_orm(column_type = "Text")]
-    pub user_id: String,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub parent_id: Option<String>,
+    pub user_id: Uuid,
+    pub parent_id: Option<Uuid>,
     #[sea_orm(column_type = "Text")]
     pub text: String,
-    pub created_at: String,
+    pub created_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

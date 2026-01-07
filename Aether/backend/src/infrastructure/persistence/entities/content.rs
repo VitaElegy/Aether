@@ -4,27 +4,24 @@ use serde::{Deserialize, Serialize};
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
 #[sea_orm(table_name = "contents")]
 pub struct Model {
-    #[sea_orm(primary_key, column_type = "Text")]
-    pub id: String,
-    #[sea_orm(column_type = "Text")]
-    pub author_id: String,
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
+    pub author_id: Uuid,
     pub title: String,
     #[sea_orm(unique)]
     pub slug: String,
     pub status: String,
-    pub visibility: String, // Added
-    pub category: Option<String>, // Added
-    #[sea_orm(column_type = "Text", nullable)]
-    pub knowledge_base_id: Option<String>,
-    #[sea_orm(column_type = "Text", nullable)]
-    pub parent_id: Option<String>,
-    #[sea_orm(column_type = "Text")]
+    pub visibility: String, 
+    pub category: Option<String>, 
+    pub knowledge_base_id: Option<Uuid>,
+    pub parent_id: Option<Uuid>,
     pub content_type: String,
-    pub created_at: String,
-    pub updated_at: String,
-    #[sea_orm(column_type = "Text")]
-    pub body: String,
-    pub tags: String,
+    pub created_at: DateTimeWithTimeZone,
+    pub updated_at: DateTimeWithTimeZone,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub body: serde_json::Value,
+    #[sea_orm(column_type = "JsonBinary")]
+    pub tags: serde_json::Value,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
