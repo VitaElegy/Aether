@@ -4,7 +4,7 @@ use uuid::Uuid;
 use thiserror::Error; // Added back
 use crate::domain::models::{
     Article, Vocabulary, Memo, User, UserId, AuthClaims, Comment, CommentId,
-    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, Visibility
+    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, ContentItem, Visibility
 };
 
 #[derive(Debug, Clone, Serialize, Error)] // Added Error
@@ -60,10 +60,10 @@ pub trait NodeRepository: Send + Sync {
 #[async_trait]
 pub trait ArticleRepository: Send + Sync {
     async fn save(&self, article: Article, user_id: UserId) -> Result<Uuid, RepositoryError>;
-    async fn find_by_id(&self, id: &Uuid) -> Result<Option<Article>, RepositoryError>;
+    async fn find_by_id(&self, id: &Uuid) -> Result<Option<ContentItem>, RepositoryError>;
     async fn find_by_title(&self, title: &str) -> Result<Option<Article>, RepositoryError>;
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Article>, RepositoryError>;
-    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<Article>, RepositoryError>;
+    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError>;
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
     async fn get_version(&self, id: &Uuid, version: &str) -> Result<Option<ContentVersionSnapshot>, RepositoryError>;
     async fn get_history(&self, id: &Uuid) -> Result<Vec<ContentVersionSnapshot>, RepositoryError>;

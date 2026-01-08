@@ -12,6 +12,13 @@ pub enum NodeType {
     Folder,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ContentItem {
+    Article(Article),
+    Node(Node),
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum PermissionMode {
     Public,
