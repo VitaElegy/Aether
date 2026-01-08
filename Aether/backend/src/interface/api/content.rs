@@ -25,6 +25,8 @@ pub struct CreateContentRequest {
     parent_id: Option<Uuid>,
     knowledge_base_id: Option<Uuid>,
     slug: Option<String>,
+    #[serde(rename = "type")]
+    content_type: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -67,37 +69,76 @@ pub async fn create_content_handler(
     }
 
     let id = Uuid::new_v4();
-    let slug = payload.slug.unwrap_or_else(|| {
-        format!("{}-{}", payload.title.to_lowercase().replace(" ", "-"), &id.to_string()[..8])
-    });
+    
+    // Check Content Type
+    let content_type = payload.content_type.as_deref().unwrap_or("Article");
+    
+    if content_type == "Folder" || content_type == "Directory" {
+        use crate::domain::ports::NodeRepository; // Import trait locally
 
-    let article = Article {
-        node: Node {
+        let node = Node {
             id,
             parent_id: payload.parent_id,
             author_id: user.id,
             knowledge_base_id: payload.knowledge_base_id,
-            r#type: NodeType::Article,
+            r#type: NodeType::Folder,
             title: payload.title,
             permission_mode,
             created_at: Utc::now(),
             updated_at: Utc::now(),
-        },
-        slug,
-        status,
-        category: payload.category,
-        body: ContentBody::Markdown(payload.body),
-        tags: payload.tags,
-        author_name: None,
-        author_avatar: None,
-    };
+        };
 
-    match state.repo.save(article, UserId(user.id)).await {
-        Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response(),
-        Err(e) => {
-            tracing::error!("Failed to create content: {:?}", e);
-            (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
-        },
+        match NodeRepository::save(&*state.repo, node, UserId(user.id)).await { // Explicit NodeRepository call
+            Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response(),
+            Err(e) => {
+                tracing::error!("Failed to create folder: {:?}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
+            }
+        }
+    } else {
+        // Article Creation Logic
+        let slug = payload.slug.unwrap_or_else(|| {
+            format!("{}-{}", payload.title.to_lowercase().replace(" ", "-"), &id.to_string()[..8])
+        });
+
+        let article = Article {
+            node: Node {
+                id,
+                parent_id: payload.parent_id,
+                author_id: user.id,
+                knowledge_base_id: payload.knowledge_base_id,
+                r#type: NodeType::Article,
+                title: payload.title,
+                permission_mode,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            },
+            slug,
+            status,
+            category: payload.category,
+            body: ContentBody::Markdown(payload.body),
+            tags: payload.tags,
+            author_name: None,
+            author_avatar: None,
+        };
+
+        match ArticleRepository::save(&*state.repo, article, UserId(user.id)).await { // Explicit ArticleRepository call
+            Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response(),
+            Err(e) => {
+                tracing::error!("Failed to create content: {:?}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
+            },
+        }
+    }
+}
+
+// Helper to get node from ContentItem
+impl crate::domain::models::ContentItem {
+    fn node(&self) -> &Node {
+        match self {
+            crate::domain::models::ContentItem::Article(a) => &a.node,
+            crate::domain::models::ContentItem::Node(n) => n,
+        }
     }
 }
 
@@ -107,74 +148,87 @@ pub async fn update_content_handler(
     Path(id): Path<Uuid>,
     Json(payload): Json<CreateContentRequest>, 
 ) -> impl IntoResponse {
-    let existing = match state.repo.find_by_id(&id).await {
+    let existing_item = match state.repo.find_by_id(&id).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     };
 
-    if existing.node.author_id != user.id {
+    let existing_node = existing_item.node();
+
+    if existing_node.author_id != user.id {
         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
     }
 
-    let permission_mode = match payload.visibility.as_str() {
-        "Private" => PermissionMode::Private,
-        "Internal" => PermissionMode::Internal,
-        _ => PermissionMode::Public,
-    };
-    
-    let status = match payload.status.as_deref().unwrap_or("Published") {
-        "Draft" => ContentStatus::Draft,
-        "Archived" => ContentStatus::Archived,
-        _ => ContentStatus::Published,
-    };
-
-    let updated_article = Article {
-        node: Node {
-            id,
-            parent_id: payload.parent_id.or(existing.node.parent_id),
-            author_id: user.id,
-            knowledge_base_id: payload.knowledge_base_id.or(existing.node.knowledge_base_id),
-            r#type: NodeType::Article,
-            title: payload.title.clone(),
-            permission_mode,
-            created_at: existing.node.created_at,
-            updated_at: Utc::now(),
+    // If it's a Node (Folder), only support partial updates or reject for now.
+    // For MVP, support renaming Folders.
+    match existing_item {
+        crate::domain::models::ContentItem::Node(mut n) => {
+            if payload.content_type.as_deref() == Some("Article") {
+                 return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Cannot change type to Article" }))).into_response();
+            }
+             // Update Node fields
+             n.title = payload.title;
+             n.updated_at = Utc::now();
+             // n.parent_id = ... logic?
+             
+             use crate::domain::ports::NodeRepository;
+             match NodeRepository::save(&*state.repo, n, UserId(user.id)).await {
+                Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "id": id }))).into_response(),
+                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+            }
         },
-        slug: existing.slug.clone(),
-        status,
-        category: payload.category,
-        body: ContentBody::Markdown(payload.body),
-        tags: payload.tags,
-        author_name: None,
-        author_avatar: None,
-    };
+        crate::domain::models::ContentItem::Article(existing) => {
+             // Article Update Logic (Same as before)
+             let permission_mode = match payload.visibility.as_str() {
+                "Private" => PermissionMode::Private,
+                "Internal" => PermissionMode::Internal,
+                _ => PermissionMode::Public,
+            };
+            
+            let status = match payload.status.as_deref().unwrap_or("Published") {
+                "Draft" => ContentStatus::Draft,
+                "Archived" => ContentStatus::Archived,
+                _ => ContentStatus::Published,
+            };
 
-    // Duplicate Check (Title exists and ID is different)
-    if let Ok(Some(conflict)) = state.repo.find_by_title(&payload.title).await {
-        if conflict.node.id != existing.node.id {
-             return (StatusCode::CONFLICT, Json(serde_json::json!({ "error": "Article with this title already exists" }))).into_response();
+            let updated_article = Article {
+                node: Node {
+                    id,
+                    parent_id: payload.parent_id.or(existing.node.parent_id),
+                    author_id: user.id,
+                    knowledge_base_id: payload.knowledge_base_id.or(existing.node.knowledge_base_id),
+                    r#type: NodeType::Article,
+                    title: payload.title.clone(),
+                    permission_mode,
+                    created_at: existing.node.created_at,
+                    updated_at: Utc::now(),
+                },
+                slug: existing.slug.clone(),
+                status,
+                category: payload.category,
+                body: ContentBody::Markdown(payload.body),
+                tags: payload.tags,
+                author_name: None,
+                author_avatar: None,
+            };
+
+            // Duplicate Check (Title exists and ID is different)
+            if let Ok(Some(conflict)) = state.repo.find_by_title(&payload.title).await {
+                if conflict.node.id != existing.node.id {
+                     return (StatusCode::CONFLICT, Json(serde_json::json!({ "error": "Article with this title already exists" }))).into_response();
+                }
+            }
+
+            match ArticleRepository::save(&*state.repo, updated_article, UserId(user.id)).await {
+                Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "id": id }))).into_response(),
+                Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+            }
         }
-    }
-
-    // No-Op Check
-    if existing.node.title == updated_article.node.title 
-       && existing.body == updated_article.body
-       && existing.category == updated_article.category
-       && existing.tags == updated_article.tags 
-       && existing.node.permission_mode == updated_article.node.permission_mode
-       && existing.status == updated_article.status
-    {
-         // Everything identical, no-op
-         return (StatusCode::OK, Json(serde_json::json!({ "id": id, "status": "no-op" }))).into_response();
-    }
-
-    match state.repo.save(updated_article, UserId(user.id)).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "id": id }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
 
+// ... ListContentHandler
 #[derive(serde::Deserialize)]
 pub struct ListParams {
     pub offset: Option<u64>,
@@ -208,19 +262,25 @@ pub async fn get_content_handler(
     let user = user.0;
 
     match state.repo.find_by_id(&id).await {
-        Ok(Some(article)) => {
-            let is_author = user.as_ref().map(|u| u.id == article.node.author_id).unwrap_or(false);
-             if article.status == ContentStatus::Draft && !is_author {
-                 return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+        Ok(Some(item)) => {
+            let node = item.node();
+            let is_author = user.as_ref().map(|u| u.id == node.author_id).unwrap_or(false);
+            
+            // Draft check only applies to Articles really, but safe to check if item is article
+            if let crate::domain::models::ContentItem::Article(ref a) = item {
+                if a.status == ContentStatus::Draft && !is_author {
+                     return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+                }
             }
-            let can_view = match article.node.permission_mode {
+
+            let can_view = match node.permission_mode {
                 PermissionMode::Public => true,
                 PermissionMode::Internal => user.is_some(),
                 PermissionMode::Private => is_author,
             };
 
             if can_view {
-                (StatusCode::OK, Json(article)).into_response()
+                (StatusCode::OK, Json(item)).into_response()
             } else {
                 (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response()
             }
@@ -235,13 +295,15 @@ pub async fn delete_content_handler(
     user: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    let existing = match state.repo.find_by_id(&id).await {
+    let existing_item = match state.repo.find_by_id(&id).await {
         Ok(Some(c)) => c,
         Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     };
+    
+    let node = existing_item.node();
 
-    if existing.node.author_id != user.id && !user.has_permission(0x0100) {
+    if node.author_id != user.id && !user.has_permission(0x0100) {
         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
     }
 
@@ -256,16 +318,12 @@ pub async fn get_content_history_handler(
     user: MaybeAuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
-    // Optional: Check permissions (read access required)
-    // For now, let's assume public/internal logic similar to get_content or just allow if they can view the article.
-    // Ideally we should check if they can view the article first.
-    
-    // Quick check: fetch article to verify permissions
     match state.repo.find_by_id(&id).await {
-        Ok(Some(article)) => {
+        Ok(Some(item)) => {
+             let node = item.node();
              let user = user.0;
-             let is_author = user.as_ref().map(|u| u.id == article.node.author_id).unwrap_or(false);
-             let can_view = match article.node.permission_mode {
+             let is_author = user.as_ref().map(|u| u.id == node.author_id).unwrap_or(false);
+             let can_view = match node.permission_mode {
                 PermissionMode::Public => true,
                 PermissionMode::Internal => user.is_some(),
                 PermissionMode::Private => is_author,
@@ -283,6 +341,8 @@ pub async fn get_content_history_handler(
     }
 }
 
+// ... get_content_version_handler similar update ...
+
 pub fn router() -> axum::Router<crate::interface::state::AppState> {
     use axum::routing::{get, post};
     axum::Router::new()
@@ -298,12 +358,12 @@ pub async fn get_content_version_handler(
     user: MaybeAuthenticatedUser,
     Path((id, version)): Path<(Uuid, String)>,
 ) -> impl IntoResponse {
-    // Permission check similar to get_content_handler
      match state.repo.find_by_id(&id).await {
-        Ok(Some(article)) => {
+        Ok(Some(item)) => {
+             let node = item.node();
              let user = user.0;
-             let is_author = user.as_ref().map(|u| u.id == article.node.author_id).unwrap_or(false);
-             let can_view = match article.node.permission_mode {
+             let is_author = user.as_ref().map(|u| u.id == node.author_id).unwrap_or(false);
+             let can_view = match node.permission_mode {
                 PermissionMode::Public => true,
                 PermissionMode::Internal => user.is_some(),
                 PermissionMode::Private => is_author,
