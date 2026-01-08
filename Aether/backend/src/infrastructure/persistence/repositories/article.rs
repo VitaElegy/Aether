@@ -19,7 +19,8 @@ impl ArticleRepository for PostgresRepository {
             id: Set(article.node.id),
             parent_id: Set(article.node.parent_id),
             author_id: Set(article.node.author_id),
-            r#type: Set("Article".to_string()),
+            knowledge_base_id: Set(article.node.knowledge_base_id),
+            r#type: Set("Article".to_owned()),
             title: Set(article.node.title.clone()),
             permission_mode: Set(match article.node.permission_mode {
                 PermissionMode::Public => "Public".to_string(),
@@ -147,9 +148,15 @@ impl ArticleRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, _viewer_id: Option<UserId>, _author_id: Option<UserId>, limit: u64, offset: u64) -> Result<Vec<Article>, RepositoryError> {
-        let results = node::Entity::find()
-            .filter(node::Column::Type.eq("Article"))
+    async fn list(&self, _viewer_id: Option<UserId>, _author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<Article>, RepositoryError> {
+        let mut query = node::Entity::find()
+            .filter(node::Column::Type.eq("Article"));
+
+        if let Some(kb_id) = knowledge_base_id {
+            query = query.filter(node::Column::KnowledgeBaseId.eq(kb_id));
+        }
+
+        let results = query
             .find_also_related(article_detail::Entity)
             .limit(limit)
             .offset(offset)
@@ -230,6 +237,7 @@ fn map_article(n: node::Model, d: article_detail::Model, match_user: Option<crat
             id: n.id,
             parent_id: n.parent_id,
             author_id: n.author_id,
+            knowledge_base_id: n.knowledge_base_id,
             r#type: NodeType::Article,
             title: n.title,
             permission_mode: match n.permission_mode.as_str() {

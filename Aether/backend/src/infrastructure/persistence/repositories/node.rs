@@ -20,6 +20,7 @@ impl NodeRepository for PostgresRepository {
                 id: n.id,
                 parent_id: n.parent_id,
                 author_id: n.author_id,
+                knowledge_base_id: n.knowledge_base_id,
                 r#type: match n.r#type.as_str() {
                     "article" => NodeType::Article,
                     "vocabulary" => NodeType::Vocabulary,
@@ -46,11 +47,12 @@ impl NodeRepository for PostgresRepository {
             id: Set(node.id),
             parent_id: Set(node.parent_id),
             author_id: Set(node.author_id),
+            knowledge_base_id: Set(node.knowledge_base_id),
             r#type: Set(match node.r#type {
-                NodeType::Article => "article".to_string(),
-                NodeType::Vocabulary => "vocabulary".to_string(),
-                NodeType::Memo => "memo".to_string(),
-                NodeType::Folder => "folder".to_string(),
+                NodeType::Article => "Article".to_string(),
+                NodeType::Vocabulary => "Vocabulary".to_string(),
+                NodeType::Memo => "Memo".to_string(),
+                NodeType::Folder => "Folder".to_string(),
             }),
             title: Set(node.title),
             permission_mode: Set(match node.permission_mode {
@@ -107,7 +109,8 @@ impl NodeRepository for PostgresRepository {
             id: n.id,
             parent_id: n.parent_id,
             author_id: n.author_id,
-             r#type: match n.r#type.as_str() {
+            knowledge_base_id: n.knowledge_base_id,
+            r#type: match n.r#type.as_str() {
                 "article" => NodeType::Article,
                 "vocabulary" => NodeType::Vocabulary,
                 "memo" => NodeType::Memo,

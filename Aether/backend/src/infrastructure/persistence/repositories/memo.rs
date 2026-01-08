@@ -18,7 +18,8 @@ impl MemoRepository for PostgresRepository {
             id: Set(memo.node.id),
             parent_id: Set(memo.node.parent_id),
             author_id: Set(memo.node.author_id),
-            r#type: Set("Memo".to_string()),
+            knowledge_base_id: Set(memo.node.knowledge_base_id),
+            r#type: Set("memo".to_string()),
             title: Set(memo.node.title.clone()), 
             permission_mode: Set(match memo.node.permission_mode {
                 PermissionMode::Public => "Public".to_string(),
@@ -100,6 +101,7 @@ fn map_memo(n: node::Model, d: memo_detail::Model) -> Memo {
              id: n.id,
             parent_id: n.parent_id,
             author_id: n.author_id,
+            knowledge_base_id: n.knowledge_base_id,
             r#type: NodeType::Memo,
             title: n.title,
             permission_mode: match n.permission_mode.as_str() {

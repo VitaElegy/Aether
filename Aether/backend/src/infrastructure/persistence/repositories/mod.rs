@@ -5,3 +5,4 @@ pub mod memo;
 pub mod user;
 pub mod comment;
 pub mod tag;
+pub mod knowledge_base;

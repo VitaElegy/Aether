@@ -18,7 +18,8 @@ impl VocabularyRepository for PostgresRepository {
             id: Set(vocab.node.id),
             parent_id: Set(vocab.node.parent_id),
             author_id: Set(vocab.node.author_id),
-            r#type: Set("Vocabulary".to_string()),
+            knowledge_base_id: Set(vocab.node.knowledge_base_id),
+            r#type: Set("vocabulary".to_string()),
             title: Set(vocab.node.title.clone()), // Usually "Word"
             permission_mode: Set(match vocab.node.permission_mode {
                 PermissionMode::Public => "Public".to_string(),
@@ -122,6 +123,7 @@ fn map_vocab(n: node::Model, d: vocab_detail::Model) -> Vocabulary {
              id: n.id,
             parent_id: n.parent_id,
             author_id: n.author_id,
+            knowledge_base_id: n.knowledge_base_id,
             r#type: NodeType::Vocabulary,
             title: n.title,
             permission_mode: match n.permission_mode.as_str() {
