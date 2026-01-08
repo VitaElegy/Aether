@@ -10,9 +10,11 @@ import { Markdown } from 'tiptap-markdown';
 import { useDebounceFn, useStorage } from '@vueuse/core';
 import TopNavBar from '@/components/TopNavBar.vue';
 import { usePreferencesStore } from '@/stores/preferences';
+import { knowledgeApi, type KnowledgeBase } from '@/api/knowledge';
 
 const router = useRouter();
 const route = useRoute();
+const knowledgeBases = ref<KnowledgeBase[]>([]);
 
 // State
 const isLiveMode = ref(true);
@@ -30,6 +32,7 @@ const commitMessage = ref('');
 // Local Storage Cache
 const localCache = useStorage('aether_editor_current', {
   id: null as string | null, // Added ID validation
+  knowledge_base_id: null as string | null,
   title: '',
   body: '',
   category: '',
@@ -41,6 +44,7 @@ const localCache = useStorage('aether_editor_current', {
 
 const form = reactive({
   title: '',
+  knowledge_base_id: null as string | null,
   body: '',
   category: '',
   tags: [] as string[],
@@ -145,6 +149,7 @@ onMounted(async () => {
          form.category = data.category;
          form.visibility = data.visibility;
          form.status = data.status;
+         form.knowledge_base_id = data.node?.knowledge_base_id || null;
       }
     } catch (err) {
       console.error('Failed to fetch draft', err);
@@ -166,6 +171,13 @@ onMounted(async () => {
   if (editor.value && form.body) {
     editor.value.commands.setContent(form.body);
   }
+
+  // Fetch KBs
+  try {
+      knowledgeBases.value = await knowledgeApi.list();
+  } catch (e) {
+      console.error("Failed to fetch KBs", e);
+  }
 });
 
 
@@ -181,7 +193,9 @@ const saveDraft = async () => {
       tags: form.tags,
       category: form.category || null,
       visibility: form.visibility,
+      visibility: form.visibility,
       status: 'Draft',
+      knowledge_base_id: form.knowledge_base_id || null, // Sanitize empty string to null
       snapshot: false // Do not create version snapshot for auto-save
     };
 
@@ -282,6 +296,7 @@ const executePublish = async () => {
       visibility: form.visibility,
       status: 'Published',
       reason: commitMessage.value,
+      knowledge_base_id: form.knowledge_base_id || null, // Sanitize empty string to null
       snapshot: true // Explicitly create version snapshot
     };
 
@@ -467,6 +482,14 @@ onBeforeUnmount(() => {
              <option>Public</option>
              <option>Internal</option>
              <option>Private</option>
+           </select>
+         </div>
+
+         <div>
+           <label class="block text-[10px] font-bold uppercase tracking-widest mb-2 text-neutral-400">Knowledge Base</label>
+           <select v-model="form.knowledge_base_id" class="w-full bg-transparent border-b border-neutral-200 py-2 text-xs font-medium focus:outline-none focus:border-ink cursor-pointer">
+             <option :value="null">None</option>
+             <option v-for="kb in knowledgeBases" :key="kb.id" :value="kb.id">{{ kb.title }}</option>
            </select>
          </div>
 

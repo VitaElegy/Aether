@@ -136,10 +136,12 @@ const refreshContent = async () => {
     if (!currentKb.value) return;
     isLoading.value = true;
     try {
-        const allContent = await contentApi.list({ limit: 100 });
+        const allContent = await contentApi.list({ 
+            limit: 100,
+            knowledge_base_id: currentKb.value.id
+        });
 
         contents.value = allContent.filter(c => {
-            if (c.knowledge_base_id !== currentKb.value?.id) return false;
             // Match parent
             if (currentParentId.value) {
                 return c.parent_id === currentParentId.value;

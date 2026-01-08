@@ -41,7 +41,12 @@ impl ExportService for DataExportService {
         _requester: Option<UserId>
     ) -> Result<Vec<u8>, RepositoryError> {
         // 1. Try to find in Article Repo
-        if let Ok(Some(article)) = self.article_repo.find_by_id(node_id).await {
+        let article_opt = match self.article_repo.find_by_id(node_id).await {
+            Ok(Some(crate::domain::models::ContentItem::Article(a))) => Some(a),
+            _ => None, 
+        };
+
+        if let Some(article) = article_opt {
             let comments = self.comment_repo.get_comments(node_id).await.unwrap_or_default();
             let comment_texts: Vec<String> = comments.into_iter().map(|c| format!("{}: {}", c.user_name.unwrap_or("Anon".into()), c.text)).collect();
             
