@@ -41,19 +41,19 @@ async fn main() {
     // ... DB Init & Seeding (Same as before) ...
     // --- DROPPING TABLES FOR SCHEMA RESET (Phase 1 Refactor) ---
     // User approved "Fresh Start". We destroy old tables to rebuild the "Linux Kernel" architecture.
-    let _ = db.execute_unprepared("
-        DROP TABLE IF EXISTS comments;
-        DROP TABLE IF EXISTS content_versions;
-        DROP TABLE IF EXISTS knowledge_bases;
-        DROP TABLE IF EXISTS contents;      -- Old Articles
-        DROP TABLE IF EXISTS vocabularies;  -- Old Vocab
-        DROP TABLE IF EXISTS memos;         -- Old Memos
-        DROP TABLE IF EXISTS article_details;
-        DROP TABLE IF EXISTS vocab_details;
-        DROP TABLE IF EXISTS memo_details;
-        DROP TABLE IF EXISTS nodes;
-        DROP TABLE IF EXISTS users;
-    ").await;
+    // let _ = db.execute_unprepared("
+    //     DROP TABLE IF EXISTS comments;
+    //     DROP TABLE IF EXISTS content_versions;
+    //     DROP TABLE IF EXISTS knowledge_bases;
+    //     DROP TABLE IF EXISTS contents;      -- Old Articles
+    //     DROP TABLE IF EXISTS vocabularies;  -- Old Vocab
+    //     DROP TABLE IF EXISTS memos;         -- Old Memos
+    //     DROP TABLE IF EXISTS article_details;
+    //     DROP TABLE IF EXISTS vocab_details;
+    //     DROP TABLE IF EXISTS memo_details;
+    //     DROP TABLE IF EXISTS nodes;
+    //     DROP TABLE IF EXISTS users;
+    // ").await;
 
     // --- RECREATING SCHEMA ---
     let _ = db.execute_unprepared("
