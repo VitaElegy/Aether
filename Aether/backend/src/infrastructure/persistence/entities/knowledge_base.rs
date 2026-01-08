@@ -27,9 +27,8 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     User,
-    #[sea_orm(has_many = "super::content::Entity")]
-    Contents,
 }
+
 
 impl Related<super::user::Entity> for Entity {
     fn to() -> RelationDef {
@@ -37,10 +36,6 @@ impl Related<super::user::Entity> for Entity {
     }
 }
 
-impl Related<super::content::Entity> for Entity {
-    fn to() -> RelationDef {
-        Relation::Contents.def()
-    }
-}
+
 
 impl ActiveModelBehavior for ActiveModel {}

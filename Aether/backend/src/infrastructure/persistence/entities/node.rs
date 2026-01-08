@@ -9,6 +9,7 @@ pub struct Model {
     pub id: Uuid,
     pub parent_id: Option<Uuid>,
     pub author_id: Uuid,
+    pub knowledge_base_id: Option<Uuid>,
     pub r#type: String, // 'article', 'vocabulary', 'memo', 'folder'
     pub title: String,
     pub permission_mode: String, // 'Public', 'Private', 'Internal'
@@ -27,6 +28,14 @@ pub enum Relation {
         on_delete = "NoAction"
     )]
     User,
+    #[sea_orm(
+        belongs_to = "super::knowledge_base::Entity",
+        from = "Column::KnowledgeBaseId",
+        to = "super::knowledge_base::Column::Id",
+        on_update = "NoAction",
+        on_delete = "SetNull"
+    )]
+    KnowledgeBase,
     #[sea_orm(has_one = "super::article_detail::Entity")]
     ArticleDetail,
     #[sea_orm(has_one = "super::vocab_detail::Entity")]
@@ -38,6 +47,12 @@ pub enum Relation {
 impl Related<super::user::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::User.def()
+    }
+}
+
+impl Related<super::knowledge_base::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::KnowledgeBase.def()
     }
 }
 
