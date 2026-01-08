@@ -86,6 +86,8 @@ pub async fn create_content_handler(
         category: payload.category,
         body: ContentBody::Markdown(payload.body),
         tags: payload.tags,
+        author_name: None,
+        author_avatar: None,
     };
 
     match state.repo.save(article, UserId(user.id)).await {
@@ -136,11 +138,13 @@ pub async fn update_content_handler(
             created_at: existing.node.created_at,
             updated_at: Utc::now(),
         },
-        slug: existing.slug, 
+        slug: existing.slug.clone(),
         status,
         category: payload.category,
         body: ContentBody::Markdown(payload.body),
         tags: payload.tags,
+        author_name: None,
+        author_avatar: None,
     };
 
     // Duplicate Check (Title exists and ID is different)
@@ -242,10 +246,73 @@ pub async fn delete_content_handler(
     }
 }
 
+pub async fn get_content_history_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: MaybeAuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    // Optional: Check permissions (read access required)
+    // For now, let's assume public/internal logic similar to get_content or just allow if they can view the article.
+    // Ideally we should check if they can view the article first.
+    
+    // Quick check: fetch article to verify permissions
+    match state.repo.find_by_id(&id).await {
+        Ok(Some(article)) => {
+             let user = user.0;
+             let is_author = user.as_ref().map(|u| u.id == article.node.author_id).unwrap_or(false);
+             let can_view = match article.node.permission_mode {
+                PermissionMode::Public => true,
+                PermissionMode::Internal => user.is_some(),
+                PermissionMode::Private => is_author,
+            };
+            if !can_view {
+                 return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+            }
+        },
+        _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
+    }
+
+    match state.repo.get_history(&id).await {
+        Ok(history) => (StatusCode::OK, Json(history)).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
 pub fn router() -> axum::Router<crate::interface::state::AppState> {
     use axum::routing::{get, post};
     axum::Router::new()
         .route("/api/content", post(create_content_handler).get(list_content_handler))
         .route("/api/content/:id", get(get_content_handler).put(update_content_handler).delete(delete_content_handler))
+        .route("/api/content/:id/history", get(get_content_history_handler))
+        .route("/api/content/:id/history/:version", get(get_content_version_handler))
         .route("/api/search", get(search_content_handler))
+}
+
+pub async fn get_content_version_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: MaybeAuthenticatedUser,
+    Path((id, version)): Path<(Uuid, String)>,
+) -> impl IntoResponse {
+    // Permission check similar to get_content_handler
+     match state.repo.find_by_id(&id).await {
+        Ok(Some(article)) => {
+             let user = user.0;
+             let is_author = user.as_ref().map(|u| u.id == article.node.author_id).unwrap_or(false);
+             let can_view = match article.node.permission_mode {
+                PermissionMode::Public => true,
+                PermissionMode::Internal => user.is_some(),
+                PermissionMode::Private => is_author,
+            };
+            if !can_view {
+                 return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+            }
+        },
+        _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
+    }
+
+    match state.repo.get_version(&id, &version).await {
+        Ok(Some(v)) => (StatusCode::OK, Json(v)).into_response(),
+        Ok(None) => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Version not found" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
 }
