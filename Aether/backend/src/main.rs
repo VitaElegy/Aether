@@ -23,7 +23,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary
+    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base
 };
 
 
@@ -69,12 +69,22 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+    ").await.expect("Failed to initialize users table");
 
+    // Update schema with migration-like logic for Knowledge Base Link
+    // Safe to run repeatedly (ignore error if column exists)
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE nodes ADD COLUMN knowledge_base_id UUID REFERENCES knowledge_bases(id) ON DELETE SET NULL;"
+    )).await.map_err(|e| println!("Migration warning (likely exists): {}", e));
+
+    let _ = db.execute_unprepared("
         -- The Kernel (Base Node)
         CREATE TABLE IF NOT EXISTS nodes (
             id UUID PRIMARY KEY,
             parent_id UUID,
             author_id UUID NOT NULL,
+            knowledge_base_id UUID,
             type TEXT NOT NULL, -- 'article', 'vocabulary', 'memo', 'folder'
             title TEXT NOT NULL, -- Lifted title to generic node for consistent displaying
             permission_mode TEXT NOT NULL DEFAULT 'Public', -- Public/Private/Internal
@@ -140,6 +150,20 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL,
             FOREIGN KEY(target_id) REFERENCES nodes(id) ON DELETE CASCADE
         );
+
+        -- Knowledge Bases (Independent, but can contain Nodes)
+        CREATE TABLE IF NOT EXISTS knowledge_bases (
+            id UUID PRIMARY KEY,
+            author_id UUID NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            tags JSONB NOT NULL DEFAULT '[]',
+            cover_image TEXT,
+            visibility TEXT NOT NULL DEFAULT 'Private',
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE CASCADE
+        );
     ").await.expect("Failed to initialize Core Node schema");
 
 
@@ -197,7 +221,7 @@ async fn main() {
         .merge(content::router())
         .merge(comment::router())
         .merge(memo::router())
-        // .merge(knowledge_base::router()) // Disable broken router
+        .merge(knowledge_base::router())
         .merge(export::router())
         .merge(upload::router())
         .merge(tags::router())
