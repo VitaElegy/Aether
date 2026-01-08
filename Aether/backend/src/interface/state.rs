@@ -62,3 +62,9 @@ impl FromRef<AppState> for Arc<dyn ExportService> {
         state.export_service.clone()
     }
 }
+
+impl FromRef<AppState> for Arc<dyn crate::domain::ports::KnowledgeBaseRepository> {
+    fn from_ref(state: &AppState) -> Self {
+        state.repo.clone() as Arc<dyn crate::domain::ports::KnowledgeBaseRepository>
+    }
+}

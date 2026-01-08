@@ -23,6 +23,7 @@ pub struct CreateContentRequest {
     #[serde(rename = "snapshot")]
     _snapshot: Option<bool>, 
     parent_id: Option<Uuid>,
+    knowledge_base_id: Option<Uuid>,
     slug: Option<String>,
 }
 
@@ -75,6 +76,7 @@ pub async fn create_content_handler(
             id,
             parent_id: payload.parent_id,
             author_id: user.id,
+            knowledge_base_id: payload.knowledge_base_id,
             r#type: NodeType::Article,
             title: payload.title,
             permission_mode,
@@ -132,6 +134,7 @@ pub async fn update_content_handler(
             id,
             parent_id: payload.parent_id.or(existing.node.parent_id),
             author_id: user.id,
+            knowledge_base_id: payload.knowledge_base_id.or(existing.node.knowledge_base_id),
             r#type: NodeType::Article,
             title: payload.title.clone(),
             permission_mode,
@@ -177,6 +180,7 @@ pub struct ListParams {
     pub offset: Option<u64>,
     pub limit: Option<u64>,
     pub author_id: Option<Uuid>,
+    pub knowledge_base_id: Option<Uuid>,
 }
 
 pub async fn list_content_handler(
@@ -188,8 +192,9 @@ pub async fn list_content_handler(
     let limit = params.limit.unwrap_or(20).min(100);
     let offset = params.offset.unwrap_or(0);
     let author_id = params.author_id.map(UserId);
+    let knowledge_base_id = params.knowledge_base_id;
 
-    match state.repo.list(viewer_id, author_id, limit, offset).await {
+    match state.repo.list(viewer_id, author_id, knowledge_base_id, limit, offset).await {
         Ok(articles) => (StatusCode::OK, Json(articles)).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }

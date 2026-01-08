@@ -58,6 +58,7 @@ async fn save_vocabulary(
             id,
             parent_id: None,
             author_id: user_id.0,
+            knowledge_base_id: None,
             r#type: NodeType::Vocabulary,
             title: payload.word.clone(), 
             permission_mode: PermissionMode::Private, 

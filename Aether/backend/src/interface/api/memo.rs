@@ -35,6 +35,7 @@ pub async fn create_memo_handler(
             id,
             parent_id: None, 
             author_id: user.id,
+            knowledge_base_id: None,
             r#type: NodeType::Memo,
             title: payload.title,
             permission_mode: match payload.visibility.to_lowercase().as_str() {

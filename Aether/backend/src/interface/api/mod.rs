@@ -8,3 +8,4 @@ pub mod upload;
 pub mod tags;
 pub mod vocabulary;
 pub mod dictionary;
+pub mod knowledge_base;
