@@ -81,7 +81,8 @@ impl NodeRepository for PostgresRepository {
                         node::Column::Title, 
                         node::Column::ParentId, 
                         node::Column::PermissionMode, 
-                        node::Column::UpdatedAt
+                        node::Column::UpdatedAt,
+                        node::Column::KnowledgeBaseId
                     ])
                     .to_owned()
             )

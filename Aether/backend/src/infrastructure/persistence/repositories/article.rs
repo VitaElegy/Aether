@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sea_orm::*;
 use uuid::Uuid;
 use chrono::Utc;
-use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, NodeType, PermissionMode};
+use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, NodeType, PermissionMode, ContentItem};
 use crate::domain::models::UserId;
 use crate::domain::ports::{ArticleRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
@@ -34,7 +34,13 @@ impl ArticleRepository for PostgresRepository {
         node::Entity::insert(node_model)
             .on_conflict(
                 sea_orm::sea_query::OnConflict::column(node::Column::Id)
-                    .update_columns([node::Column::Title, node::Column::UpdatedAt, node::Column::PermissionMode])
+                    .update_columns([
+                        node::Column::Title, 
+                        node::Column::UpdatedAt, 
+                        node::Column::PermissionMode,
+                        node::Column::ParentId,
+                        node::Column::KnowledgeBaseId
+                    ])
                     .to_owned()
             )
             .exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
@@ -89,22 +95,47 @@ impl ArticleRepository for PostgresRepository {
         Ok(article.node.id)
     }
 
-    async fn find_by_id(&self, id: &Uuid) -> Result<Option<Article>, RepositoryError> {
-        let result = node::Entity::find_by_id(*id)
+    async fn find_by_id(&self, id: &Uuid) -> Result<Option<ContentItem>, RepositoryError> {
+        // Try to fetch as generic Node first
+        let node_model = node::Entity::find_by_id(*id)
             .find_also_related(article_detail::Entity)
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        match result {
-            Some((n, Some(d))) => {
+        match node_model {
+             Some((n, Some(d))) => {
                 let user = user::Entity::find_by_id(n.author_id)
                     .one(&self.db)
                     .await
                     .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-                Ok(Some(map_article(n, d, user)))
+                Ok(Some(ContentItem::Article(map_article(n, d, user))))
             },
-            _ => Ok(None)
+            Some((n, None)) => {
+                 // It's a node without details (Folder, etc.)
+                 Ok(Some(ContentItem::Node(Node {
+                    id: n.id,
+                    parent_id: n.parent_id,
+                    author_id: n.author_id,
+                    knowledge_base_id: n.knowledge_base_id,
+                    r#type: match n.r#type.as_str() {
+                        "Article" => NodeType::Article,
+                        "Folder" => NodeType::Folder,
+                        "Vocabulary" => NodeType::Vocabulary,
+                        "Memo" => NodeType::Memo,
+                        _ => NodeType::Article, 
+                    },
+                    title: n.title,
+                    permission_mode: match n.permission_mode.as_str() {
+                        "Private" => PermissionMode::Private,
+                        "Internal" => PermissionMode::Internal,
+                        _ => PermissionMode::Public,
+                    },
+                    created_at: n.created_at.into(),
+                    updated_at: n.updated_at.into(),
+                })))
+            },
+            None => Ok(None)
         }
     }
 
@@ -148,12 +179,15 @@ impl ArticleRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, _viewer_id: Option<UserId>, _author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<Article>, RepositoryError> {
-        let mut query = node::Entity::find()
-            .filter(node::Column::Type.eq("Article"));
+    async fn list(&self, _viewer_id: Option<UserId>, _author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError> {
+        let mut query = node::Entity::find();
 
         if let Some(kb_id) = knowledge_base_id {
+            // In KB view, show everything (Folders, Articles, etc.)
             query = query.filter(node::Column::KnowledgeBaseId.eq(kb_id));
+        } else {
+            // Global Feed: Show only Articles
+            query = query.filter(node::Column::Type.eq("Article"));
         }
 
         let results = query
@@ -174,14 +208,37 @@ impl ArticleRepository for PostgresRepository {
         
         let user_map: std::collections::HashMap<Uuid, user::Model> = users.into_iter().map(|u| (u.id, u)).collect();
 
-        let mut articles = Vec::new();
+        let mut content_items = Vec::new();
         for (n, d) in results {
+            let user = user_map.get(&n.author_id).cloned();
             if let Some(detail) = d {
-                let user = user_map.get(&n.author_id).cloned();
-                articles.push(map_article(n, detail, user));
+                content_items.push(ContentItem::Article(map_article(n, detail, user)));
+            } else {
+                // Generic Node (Folder or other)
+                content_items.push(ContentItem::Node(Node {
+                    id: n.id,
+                    parent_id: n.parent_id,
+                    author_id: n.author_id,
+                    knowledge_base_id: n.knowledge_base_id,
+                    r#type: match n.r#type.as_str() {
+                        "Article" => NodeType::Article,
+                        "Folder" => NodeType::Folder,
+                        "Vocabulary" => NodeType::Vocabulary,
+                        "Memo" => NodeType::Memo,
+                        _ => NodeType::Article, 
+                    },
+                    title: n.title,
+                    permission_mode: match n.permission_mode.as_str() {
+                        "Private" => PermissionMode::Private,
+                        "Internal" => PermissionMode::Internal,
+                        _ => PermissionMode::Public,
+                    },
+                    created_at: n.created_at.into(),
+                    updated_at: n.updated_at.into(),
+                }));
             }
         }
-        Ok(articles)
+        Ok(content_items)
     }
 
     async fn search(&self, _query: &str) -> Result<Vec<Article>, RepositoryError> {
