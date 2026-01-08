@@ -29,6 +29,7 @@ const commitMessage = ref('');
 
 // Local Storage Cache
 const localCache = useStorage('aether_editor_current', {
+  id: null as string | null, // Added ID validation
   title: '',
   body: '',
   category: '',
@@ -133,7 +134,8 @@ onMounted(async () => {
         updated: data.updated_at
       };
 
-      if (localCache.value?.body && localCache.value?.timestamp > new Date(data.updated_at).getTime()) {
+      // Only restore from cache if ID matches and cache is newer
+      if (localCache.value?.id === draftId.value && localCache.value?.body && localCache.value?.timestamp > new Date(data.updated_at).getTime()) {
          MessagePlugin.info('Restored unsaved progress from local cache.', 2000);
          Object.assign(form, localCache.value);
       } else {
@@ -146,7 +148,7 @@ onMounted(async () => {
       }
     } catch (err) {
       console.error('Failed to fetch draft', err);
-      if (localCache.value?.body) {
+      if (localCache.value?.id === draftId.value && localCache.value?.body) {
          Object.assign(form, localCache.value);
          MessagePlugin.warning('Server offline. Restored local cache.');
       }
@@ -154,7 +156,8 @@ onMounted(async () => {
   } else {
     // New Entry
     timestamps.value = { created: new Date().toISOString(), updated: new Date().toISOString() };
-    if (localCache.value?.body || localCache.value?.title) {
+    // Only restore if cache was for a new entry (null id)
+    if (localCache.value?.id === null && (localCache.value?.body || localCache.value?.title)) {
        Object.assign(form, localCache.value);
        if (form.body.length > 10) MessagePlugin.info('Restored unsaved draft.', 2000);
     }
@@ -164,6 +167,7 @@ onMounted(async () => {
     editor.value.commands.setContent(form.body);
   }
 });
+
 
 // Auto-Save
 const saveDraft = async () => {
@@ -218,7 +222,7 @@ const debouncedAutoSave = useDebounceFn(() => {
 }, 2000);
 
 watch(form, (newVal) => {
-  localCache.value = { ...newVal, timestamp: Date.now() };
+  localCache.value = { ...newVal, id: draftId.value, timestamp: Date.now() };
   debouncedAutoSave();
 }, { deep: true });
 
@@ -297,6 +301,7 @@ const executePublish = async () => {
 
     // Reset cache to initial empty state to prevent "stuck" drafts
     localCache.value = {
+      id: null,
       title: '',
       body: '',
       category: '',

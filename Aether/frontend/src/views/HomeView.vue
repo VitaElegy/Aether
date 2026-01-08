@@ -63,7 +63,7 @@ const goToProfile = (id: string) => router.push(`/profile/${id}`);
             <div class="flex items-center gap-6">
                 <SearchBar />
 
-                <button @click="router.push('/space')"
+                <button v-if="authStore.isAuthenticated" @click="router.push('/space')"
                     class="text-xs font-bold uppercase tracking-widest text-ink hover:text-accent transition-colors">Self
                     Space</button>
                 <div class="h-4 w-px bg-ash mx-2"></div>
