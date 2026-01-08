@@ -31,6 +31,7 @@ pub struct Node {
     pub id: Uuid,
     pub parent_id: Option<Uuid>,
     pub author_id: Uuid,
+    pub knowledge_base_id: Option<Uuid>,
     pub r#type: NodeType,
     pub title: String,
     pub permission_mode: PermissionMode,
@@ -152,3 +153,28 @@ pub struct Comment {
     pub replies: Vec<Comment>,
 }
 
+
+// --- Knowledge Base Domain ---
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct KnowledgeBaseId(pub Uuid);
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum Visibility {
+    Public,
+    Private,
+    Internal,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeBase {
+    pub id: KnowledgeBaseId,
+    pub author_id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub tags: Vec<String>,
+    pub cover_image: Option<String>,
+    pub visibility: Visibility,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}

@@ -4,7 +4,7 @@ use uuid::Uuid;
 use thiserror::Error; // Added back
 use crate::domain::models::{
     Article, Vocabulary, Memo, User, UserId, AuthClaims, Comment, CommentId,
-    ContentVersionSnapshot, Node
+    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, Visibility
 };
 
 #[derive(Debug, Clone, Serialize, Error)] // Added Error
@@ -63,7 +63,7 @@ pub trait ArticleRepository: Send + Sync {
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<Article>, RepositoryError>;
     async fn find_by_title(&self, title: &str) -> Result<Option<Article>, RepositoryError>;
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Article>, RepositoryError>;
-    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>, limit: u64, offset: u64) -> Result<Vec<Article>, RepositoryError>;
+    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<Article>, RepositoryError>;
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
     async fn get_version(&self, id: &Uuid, version: &str) -> Result<Option<ContentVersionSnapshot>, RepositoryError>;
     async fn get_history(&self, id: &Uuid) -> Result<Vec<ContentVersionSnapshot>, RepositoryError>;
@@ -97,6 +97,15 @@ pub trait CommentRepository: Send + Sync {
 #[async_trait]
 pub trait TagRepository: Send + Sync {
     async fn get_all_tags(&self) -> Result<Vec<String>, RepositoryError>;
+}
+
+#[async_trait]
+pub trait KnowledgeBaseRepository: Send + Sync {
+    async fn save(&self, kb: KnowledgeBase) -> Result<KnowledgeBaseId, RepositoryError>;
+    async fn find_by_id(&self, id: &KnowledgeBaseId) -> Result<Option<KnowledgeBase>, RepositoryError>;
+    async fn find_by_title(&self, author_id: &UserId, title: &str) -> Result<Option<KnowledgeBase>, RepositoryError>;
+    async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>) -> Result<Vec<KnowledgeBase>, RepositoryError>;
+    async fn delete(&self, id: &KnowledgeBaseId) -> Result<(), RepositoryError>;
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)] // Added Clone
