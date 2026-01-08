@@ -6,7 +6,7 @@ use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, 
 use crate::domain::models::UserId;
 use crate::domain::ports::{ArticleRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::infrastructure::persistence::entities::{node, article_detail, content_version};
+use crate::infrastructure::persistence::entities::{node, article_detail, content_version, user};
 
 #[async_trait]
 impl ArticleRepository for PostgresRepository {
@@ -96,13 +96,18 @@ impl ArticleRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         match result {
-            Some((n, Some(d))) => Ok(Some(map_article(n, d))),
-            _ => Ok(None) // Node exists but detail missing (integrity error or wrong type)? or Node missing.
+            Some((n, Some(d))) => {
+                let user = user::Entity::find_by_id(n.author_id)
+                    .one(&self.db)
+                    .await
+                    .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+                Ok(Some(map_article(n, d, user)))
+            },
+            _ => Ok(None)
         }
     }
 
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Article>, RepositoryError> {
-        // Reverse lookup: Find Detail -> Find Node
         let detail = article_detail::Entity::find()
             .filter(article_detail::Column::Slug.eq(slug))
             .find_also_related(node::Entity)
@@ -110,7 +115,13 @@ impl ArticleRepository for PostgresRepository {
             .await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         match detail {
-            Some((d, Some(n))) => Ok(Some(map_article(n, d))),
+            Some((d, Some(n))) => {
+                let user = user::Entity::find_by_id(n.author_id)
+                    .one(&self.db)
+                    .await
+                    .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+                Ok(Some(map_article(n, d, user)))
+            },
             _ => Ok(None)
         }
     }
@@ -125,13 +136,18 @@ impl ArticleRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         match result {
-            Some((n, Some(d))) => Ok(Some(map_article(n, d))),
-            _ => Ok(None)
+             Some((n, Some(d))) => {
+                let user = user::Entity::find_by_id(n.author_id)
+                    .one(&self.db)
+                    .await
+                    .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+                Ok(Some(map_article(n, d, user)))
+            },
+             _ => Ok(None)
         }
     }
 
     async fn list(&self, _viewer_id: Option<UserId>, _author_id: Option<UserId>, limit: u64, offset: u64) -> Result<Vec<Article>, RepositoryError> {
-        // Simple list for now
         let results = node::Entity::find()
             .filter(node::Column::Type.eq("Article"))
             .find_also_related(article_detail::Entity)
@@ -141,10 +157,21 @@ impl ArticleRepository for PostgresRepository {
             .all(&self.db)
             .await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
+        let author_ids: Vec<Uuid> = results.iter().map(|(n, _)| n.author_id).collect();
+        // Batch fetch users. Note: author_ids might have duplicates, sea-orm filter is fine.
+        let users = user::Entity::find()
+            .filter(user::Column::Id.is_in(author_ids))
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        
+        let user_map: std::collections::HashMap<Uuid, user::Model> = users.into_iter().map(|u| (u.id, u)).collect();
+
         let mut articles = Vec::new();
         for (n, d) in results {
             if let Some(detail) = d {
-                articles.push(map_article(n, detail));
+                let user = user_map.get(&n.author_id).cloned();
+                articles.push(map_article(n, detail, user));
             }
         }
         Ok(articles)
@@ -159,12 +186,45 @@ impl ArticleRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn get_version(&self, _id: &Uuid, _version: &str) -> Result<Option<ContentVersionSnapshot>, RepositoryError> {
- Ok(None) }
-    async fn get_history(&self, _id: &Uuid) -> Result<Vec<ContentVersionSnapshot>, RepositoryError> { Ok(vec![]) }
+    async fn get_version(&self, id: &Uuid, version: &str) -> Result<Option<ContentVersionSnapshot>, RepositoryError> {
+        let ver_int = version.parse::<i32>().map_err(|_| RepositoryError::ValidationError("Invalid version number".to_string()))?;
+        
+        let result = content_version::Entity::find()
+            .filter(content_version::Column::NodeId.eq(*id))
+            .filter(content_version::Column::Version.eq(ver_int))
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(result.map(|v| ContentVersionSnapshot {
+            id: v.id.to_string(),
+            version: v.version.to_string(),
+            title: v.title,
+            created_at: v.created_at.into(),
+            reason: v.change_reason,
+            editor_id: v.editor_id,
+        }))
+    }
+    async fn get_history(&self, id: &Uuid) -> Result<Vec<ContentVersionSnapshot>, RepositoryError> {
+        let versions = content_version::Entity::find()
+             .filter(content_version::Column::NodeId.eq(*id))
+             .order_by_desc(content_version::Column::Version)
+             .all(&self.db)
+             .await
+             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(versions.into_iter().map(|v| ContentVersionSnapshot {
+            id: v.id.to_string(),
+            version: v.version.to_string(),
+            title: v.title,
+            created_at: v.created_at.with_timezone(&Utc),
+            reason: v.change_reason,
+            editor_id: v.editor_id,
+        }).collect())
+    }
 }
 
-fn map_article(n: node::Model, d: article_detail::Model) -> Article {
+fn map_article(n: node::Model, d: article_detail::Model, match_user: Option<crate::infrastructure::persistence::entities::user::Model>) -> Article {
     Article {
         node: Node {
             id: n.id,
@@ -189,5 +249,7 @@ fn map_article(n: node::Model, d: article_detail::Model) -> Article {
         category: d.category,
         body: serde_json::from_value(d.body).unwrap_or(ContentBody::Markdown("".to_string())),
         tags: serde_json::from_str(&d.tags).unwrap_or_default(),
+        author_name: match_user.as_ref().map(|u| u.display_name.clone().unwrap_or(u.username.clone())),
+        author_avatar: match_user.as_ref().and_then(|u| u.avatar_url.clone()),
     }
 }

@@ -49,6 +49,8 @@ pub struct Article {
     pub category: Option<String>,
     pub body: ContentBody,
     pub tags: Vec<String>,
+    pub author_name: Option<String>,
+    pub author_avatar: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
