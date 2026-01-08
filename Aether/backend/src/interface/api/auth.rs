@@ -74,10 +74,19 @@ impl FromRequestParts<crate::interface::state::AppState> for AuthenticatedUser
         let auth_service: Arc<dyn AuthService> = FromRef::from_ref(state);
 
         match auth_service.verify_token(token) {
-            Ok(claims) => Ok(AuthenticatedUser {
-                id: Uuid::parse_str(&claims.sub).map_err(|_| (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid user ID in token" }))))?,
-                permissions: claims.perms,
-            }),
+            Ok(claims) => {
+                let id = Uuid::parse_str(&claims.sub).map_err(|_| (StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid user ID in token" }))))?;
+                
+                let user_repo: Arc<dyn UserRepository> = FromRef::from_ref(state);
+                match user_repo.find_by_id(&crate::domain::models::UserId(id)).await {
+                    Ok(Some(user)) => Ok(AuthenticatedUser {
+                        id: user.id.0,
+                        permissions: claims.perms, // Or refresh perms from DB if desired
+                    }),
+                    Ok(None) => Err((StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "User no longer exists" })))),
+                    Err(_) => Err((StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Database error checking user" })))),
+                }
+            },
             Err(_) => Err((StatusCode::UNAUTHORIZED, Json(serde_json::json!({ "error": "Invalid token" })))),
         }
     }
@@ -102,10 +111,17 @@ impl FromRequestParts<crate::interface::state::AppState> for MaybeAuthenticatedU
                  let token = &header_str[7..];
                  let auth_service: Arc<dyn AuthService> = FromRef::from_ref(state);
                  match auth_service.verify_token(token) {
-                    Ok(claims) => Ok(MaybeAuthenticatedUser(Some(AuthenticatedUser {
-                        id: Uuid::parse_str(&claims.sub).unwrap_or_default(),
-                        permissions: claims.perms,
-                    }))),
+                    Ok(claims) => {
+                        let id = Uuid::parse_str(&claims.sub).unwrap_or_default();
+                        let user_repo: Arc<dyn UserRepository> = FromRef::from_ref(state);
+                        match user_repo.find_by_id(&crate::domain::models::UserId(id)).await {
+                            Ok(Some(user)) => Ok(MaybeAuthenticatedUser(Some(AuthenticatedUser {
+                                id: user.id.0,
+                                permissions: claims.perms,
+                            }))),
+                            _ => Ok(MaybeAuthenticatedUser(None)), // User invalid or DB error -> verification failed
+                        }
+                    },
                     Err(_) => Ok(MaybeAuthenticatedUser(None)), 
                  }
             },
