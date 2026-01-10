@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sea_orm::*;
 use uuid::Uuid;
 use chrono::Utc;
-use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, NodeType, PermissionMode, ContentItem};
+use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, NodeType, PermissionMode, ContentItem, ContentDiff, DiffChange};
 use crate::domain::models::UserId;
 use crate::domain::ports::{ArticleRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
@@ -10,7 +10,21 @@ use crate::infrastructure::persistence::entities::{node, article_detail, content
 
 #[async_trait]
 impl ArticleRepository for PostgresRepository {
-    async fn save(&self, article: Article, editor_id: UserId) -> Result<Uuid, RepositoryError> {
+    async fn save(&self, article: Article, editor_id: UserId, change_reason: Option<String>) -> Result<Uuid, RepositoryError> {
+        // 0. Duplicate Title Check
+        // Check if another article exists with the same title but different ID
+        let duplicate = node::Entity::find()
+             .filter(node::Column::Type.eq("Article"))
+             .filter(node::Column::Title.eq(&article.node.title))
+             .filter(node::Column::Id.ne(article.node.id))
+             .one(&self.db)
+             .await
+             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        if duplicate.is_some() {
+            return Err(RepositoryError::DuplicateTitle(format!("Article with title '{}' already exists", article.node.title)));
+        }
+
          // Transactional Save: Node + ArticleDetail
          let txn = self.db.begin().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
@@ -74,22 +88,44 @@ impl ArticleRepository for PostgresRepository {
             )
             .exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        // 3. Versioning (Naive: Always create for now, optimization in future)
-        // TODO: Port hash check logic if needed
-        let current_hash = format!("{:x}", Uuid::new_v4().simple());
-        
-        let version_model = content_version::ActiveModel {
-             id: Set(Uuid::new_v4()),
-             node_id: Set(article.node.id),
-             version: Set(1), // TODO: Fetch max version + 1
-             title: Set(article.node.title),
-             body: Set(body_json),
-             change_reason: Set(None),
-             content_hash: Set(current_hash),
-             editor_id: Set(editor_id.0),
-             created_at: Set(Utc::now().into()),
+        // 3. Versioning Logic
+        // Calculate Content Hash
+        let current_hash = format!("{:x}", md5::compute(body_json.to_string()));
+
+        // Fetch max version
+        let max_ver_query = content_version::Entity::find()
+            .filter(content_version::Column::NodeId.eq(article.node.id))
+            .order_by_desc(content_version::Column::Version)
+            .one(&txn)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let (new_version, should_save_version) = match max_ver_query {
+            Some(latest) => {
+                 if latest.content_hash == current_hash && change_reason.is_none() {
+                     // No content change and no forced reason -> Skip versioning
+                     (latest.version, false)
+                 } else {
+                     (latest.version + 1, true)
+                 }
+            },
+            None => (1, true), // First version
         };
-        content_version::Entity::insert(version_model).exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        if should_save_version {
+            let version_model = content_version::ActiveModel {
+                 id: Set(Uuid::new_v4()),
+                 node_id: Set(article.node.id),
+                 version: Set(new_version),
+                 title: Set(article.node.title),
+                 body: Set(body_json),
+                 change_reason: Set(change_reason),
+                 content_hash: Set(current_hash),
+                 editor_id: Set(editor_id.0),
+                 created_at: Set(Utc::now().into()),
+            };
+            content_version::Entity::insert(version_model).exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        }
 
         txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(article.node.id)
@@ -112,6 +148,11 @@ impl ArticleRepository for PostgresRepository {
                 Ok(Some(ContentItem::Article(map_article(n, d, user))))
             },
             Some((n, None)) => {
+                 // Sync with list: Return NotFound for incomplete Articles
+                 if n.r#type == "Article" {
+                     return Ok(None);
+                 }
+
                  // It's a node without details (Folder, etc.)
                  Ok(Some(ContentItem::Node(Node {
                     id: n.id,
@@ -180,18 +221,21 @@ impl ArticleRepository for PostgresRepository {
     }
 
     async fn list(&self, _viewer_id: Option<UserId>, _author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError> {
-        let mut query = node::Entity::find();
+        let mut query = node::Entity::find()
+            .find_also_related(article_detail::Entity);
 
         if let Some(kb_id) = knowledge_base_id {
             // In KB view, show everything (Folders, Articles, etc.)
             query = query.filter(node::Column::KnowledgeBaseId.eq(kb_id));
         } else {
-            // Global Feed: Show only Articles
-            query = query.filter(node::Column::Type.eq("Article"));
+            // Global Feed: Show only Articles AND Published status
+            // Note: find_also_related does a Left Join. Adding a filter on the related table
+            // effectively enforces existence (like Inner Join) + condition.
+            query = query.filter(node::Column::Type.eq("Article"))
+                         .filter(article_detail::Column::Status.eq("Published"));
         }
 
         let results = query
-            .find_also_related(article_detail::Entity)
             .limit(limit)
             .offset(offset)
             .order_by_desc(node::Column::CreatedAt)
@@ -214,6 +258,11 @@ impl ArticleRepository for PostgresRepository {
             if let Some(detail) = d {
                 content_items.push(ContentItem::Article(map_article(n, detail, user)));
             } else {
+                // Skip "Ghost" Articles (Nodes with type='Article' but no details)
+                if n.r#type == "Article" {
+                    continue;
+                }
+
                 // Generic Node (Folder or other)
                 content_items.push(ContentItem::Node(Node {
                     id: n.id,
@@ -241,8 +290,52 @@ impl ArticleRepository for PostgresRepository {
         Ok(content_items)
     }
 
-    async fn search(&self, _query: &str) -> Result<Vec<Article>, RepositoryError> {
-        Ok(vec![]) // Todo
+    async fn search(&self, query: &str) -> Result<Vec<Article>, RepositoryError> {
+        let term = format!("%{}%", query);
+
+
+        // 1. Find matching IDs first (using explicit join for filtering)
+        let matching_nodes = node::Entity::find()
+            .filter(node::Column::Type.eq("Article"))
+            .join(sea_orm::JoinType::LeftJoin, node::Relation::ArticleDetail.def())
+            .filter(
+                sea_orm::Condition::any()
+                    .add(node::Column::Title.like(&term))
+                    .add(
+                        sea_orm::sea_query::Expr::col((article_detail::Entity, article_detail::Column::Body))
+                            .cast_as(sea_orm::sea_query::Alias::new("TEXT"))
+                            .like(&term)
+                    )
+            )
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let ids: Vec<Uuid> = matching_nodes.into_iter().map(|n| n.id).collect();
+
+        if ids.is_empty() {
+             return Ok(vec![]);
+        }
+
+        // 2. Fetch full entities
+        let results = node::Entity::find()
+            .filter(node::Column::Id.is_in(ids))
+            .find_also_related(article_detail::Entity)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let mut articles = Vec::new();
+        for (n, d) in results {
+            if let Some(detail) = d {
+                 let user = user::Entity::find_by_id(n.author_id)
+                    .one(&self.db)
+                    .await
+                    .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+                articles.push(map_article(n, detail, user));
+            }
+        }
+        Ok(articles)
     }
     
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError> {
@@ -267,6 +360,7 @@ impl ArticleRepository for PostgresRepository {
             created_at: v.created_at.into(),
             reason: v.change_reason,
             editor_id: v.editor_id,
+            body: Some(serde_json::from_value(v.body).unwrap_or(ContentBody::Markdown("Error parsing body".to_string()))),
         }))
     }
     async fn get_history(&self, id: &Uuid) -> Result<Vec<ContentVersionSnapshot>, RepositoryError> {
@@ -284,7 +378,50 @@ impl ArticleRepository for PostgresRepository {
             created_at: v.created_at.with_timezone(&Utc),
             reason: v.change_reason,
             editor_id: v.editor_id,
+            body: None,
         }).collect())
+    }
+
+    async fn get_diff(&self, id: &Uuid, v1: &str, v2: &str) -> Result<ContentDiff, RepositoryError> {
+        // Fetch both versions using existing method
+        let ver1 = self.get_version(id, v1).await?.ok_or(RepositoryError::NotFound(format!("Version {}", v1)))?;
+        let ver2 = self.get_version(id, v2).await?.ok_or(RepositoryError::NotFound(format!("Version {}", v2)))?;
+
+        // Extract body text
+        let extract_text = |b: Option<ContentBody>| -> String {
+             match b {
+                 Some(ContentBody::Markdown(t)) => t,
+                 Some(ContentBody::CodeSnippet { code, .. }) => code,
+                 Some(ContentBody::Custom(v)) => v.to_string(),
+                 Some(ContentBody::Video { url, .. }) => url,
+                 None => "".to_string(),
+             }
+        };
+
+        let t1 = extract_text(ver1.body);
+        let t2 = extract_text(ver2.body);
+
+        use similar::{ChangeTag, TextDiff};
+        let diff = TextDiff::from_lines(&t1, &t2);
+        let mut changes = Vec::new();
+
+        for change in diff.iter_all_changes() {
+            let tag = match change.tag() {
+                ChangeTag::Delete => "Delete",
+                ChangeTag::Insert => "Insert",
+                ChangeTag::Equal => "Equal",
+            };
+            changes.push(crate::domain::models::DiffChange {
+                tag: tag.to_string(),
+                value: change.to_string(),
+            });
+        }
+
+        Ok(ContentDiff {
+            old_version: v1.to_string(),
+            new_version: v2.to_string(),
+            changes,
+        })
     }
 }
 
