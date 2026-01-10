@@ -1,5 +1,6 @@
 pub mod models;
 pub mod ports;
+pub mod permission_service;
 pub mod diff_service;
 
 
