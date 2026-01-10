@@ -23,7 +23,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base
+    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, draft
 };
 
 
@@ -71,12 +71,7 @@ async fn main() {
         );
     ").await.expect("Failed to initialize users table");
 
-    // Update schema with migration-like logic for Knowledge Base Link
-    // Safe to run repeatedly (ignore error if column exists)
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE nodes ADD COLUMN knowledge_base_id UUID REFERENCES knowledge_bases(id) ON DELETE SET NULL;"
-    )).await.map_err(|e| println!("Migration warning (likely exists): {}", e));
+
 
     let _ = db.execute_unprepared("
         -- The Kernel (Base Node)
@@ -164,7 +159,27 @@ async fn main() {
             updated_at TIMESTAMPTZ NOT NULL,
             FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE CASCADE
         );
+
+        -- User Drafts (Server-Side Single Slot Cache)
+        CREATE TABLE IF NOT EXISTS user_drafts (
+            user_id UUID PRIMARY KEY,
+            target_article_id UUID,
+            title TEXT,
+            body TEXT,
+            tags TEXT,
+            category TEXT,
+            knowledge_base_id UUID,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
     ").await.expect("Failed to initialize Core Node schema");
+
+    // Update schema with migration-like logic for Knowledge Base Link
+    // Safe to run repeatedly (ignore error if column exists)
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE nodes ADD COLUMN knowledge_base_id UUID REFERENCES knowledge_bases(id) ON DELETE SET NULL;"
+    )).await.map_err(|e| println!("Migration warning (likely exists): {}", e));
 
 
 
@@ -227,6 +242,7 @@ async fn main() {
         .merge(tags::router())
         .merge(vocabulary::router())
         .merge(dictionary::router())
+        .merge(draft::router())
         .with_state(state);
 
     let app = Router::new()
