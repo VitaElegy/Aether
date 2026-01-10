@@ -16,14 +16,14 @@ mod domain;
 mod infrastructure;
 mod interface;
 
-use crate::domain::ports::{ArticleRepository, CommentRepository, MemoRepository, UserRepository};
+use crate::domain::ports::{ArticleRepository, CommentRepository, MemoRepository, UserRepository, PermissionRepository};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
 use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, draft
+    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, draft, permission
 };
 
 
@@ -69,6 +69,28 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
+
+        CREATE TABLE IF NOT EXISTS groups (
+            id UUID PRIMARY KEY,
+            name TEXT UNIQUE NOT NULL,
+            description TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS relationships (
+            id UUID PRIMARY KEY,
+            entity_type TEXT NOT NULL,
+            entity_id UUID NOT NULL,
+            relation TEXT NOT NULL,
+            subject_type TEXT NOT NULL,
+            subject_id UUID NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE (entity_type, entity_id, relation, subject_type, subject_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_rels_entity ON relationships(entity_type, entity_id, relation);
+        CREATE INDEX IF NOT EXISTS idx_rels_subject ON relationships(subject_type, subject_id, relation);
     ").await.expect("Failed to initialize users table");
 
 
@@ -190,8 +212,19 @@ async fn main() {
         env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string())
     ));
 
+    tracing::info!("Checking for admin user...");
+    // Use timeout to prevent startup hangs on DB locks
     let admin_name = "admin";
-    let existing_admin = repo.find_by_username(admin_name).await.unwrap();
+    let existing_admin = match tokio::time::timeout(std::time::Duration::from_secs(5), repo.find_by_username(admin_name)).await {
+        Ok(res) => res.unwrap_or_else(|e| {
+            tracing::error!("Failed to fetch admin user: {}", e);
+            None
+        }),
+        Err(_) => {
+            tracing::error!("Timeout fetching admin user - Database might be locked or slow.");
+            None
+        }
+    };
 
     // Always update admin if it exists to ensure new fields are populated, or create if missing
     if let Some(mut admin) = existing_admin {
@@ -224,10 +257,20 @@ async fn main() {
     use crate::infrastructure::dictionary::loader::DictionaryLoader;
     let dictionary = DictionaryLoader::new("data/dictionary");
 
+    let permission_service = crate::domain::permission_service::PermissionService::new(repo.clone());
+
+    // Initialize Public Group
+    let public_group_id = uuid::Uuid::nil(); 
+    match repo.create_group(public_group_id, "public".to_string()).await {
+        Ok(_) => tracing::info!("Public group initialized"),
+        Err(e) => tracing::warn!("Public group init: {}", e),
+    }
+    
     let state = AppState {
         repo,
         auth_service,
         export_service,
+        permission_service,
         dictionary,
     };
 
@@ -243,6 +286,7 @@ async fn main() {
         .merge(vocabulary::router())
         .merge(dictionary::router())
         .merge(draft::router())
+        .merge(permission::router())
         .with_state(state);
 
     let app = Router::new()

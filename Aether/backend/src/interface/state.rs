@@ -12,6 +12,7 @@ pub struct AppState {
     pub repo: Arc<PostgresRepository>,
     pub auth_service: Arc<dyn AuthService>,
     pub export_service: Arc<dyn ExportService>,
+    pub permission_service: crate::domain::permission_service::PermissionService<PostgresRepository>,
     pub dictionary: DictionaryLoader,
 }
 
@@ -66,5 +67,11 @@ impl FromRef<AppState> for Arc<dyn ExportService> {
 impl FromRef<AppState> for Arc<dyn crate::domain::ports::KnowledgeBaseRepository> {
     fn from_ref(state: &AppState) -> Self {
         state.repo.clone() as Arc<dyn crate::domain::ports::KnowledgeBaseRepository>
+    }
+}
+
+impl FromRef<AppState> for crate::domain::permission_service::PermissionService<PostgresRepository> {
+    fn from_ref(state: &AppState) -> Self {
+        state.permission_service.clone()
     }
 }
