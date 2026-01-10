@@ -9,3 +9,5 @@ pub mod draft;
  // Expecting comments to be updated later too, but keeping file for now
 // pub mod knowledge_base; // Removed
 pub mod content_version;
+pub mod group;
+pub mod relationship;
