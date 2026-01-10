@@ -85,6 +85,19 @@ pub struct Memo {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiffChange {
+    pub tag: String, // "Equal", "Insert", "Delete"
+    pub value: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContentDiff {
+    pub old_version: String,
+    pub new_version: String,
+    pub changes: Vec<DiffChange>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ContentVersionSnapshot {
     pub id: String,
     pub version: String,
@@ -92,6 +105,7 @@ pub struct ContentVersionSnapshot {
     pub created_at: DateTime<Utc>,
     pub reason: Option<String>,
     pub editor_id: Uuid,
+    pub body: Option<ContentBody>, 
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -183,5 +197,17 @@ pub struct KnowledgeBase {
     pub cover_image: Option<String>,
     pub visibility: Visibility,
     pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UserDraft {
+    pub user_id: UserId,
+    pub target_article_id: Option<Uuid>,
+    pub title: Option<String>,
+    pub body: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub category: Option<String>,
+    pub knowledge_base_id: Option<Uuid>,
     pub updated_at: DateTime<Utc>,
 }
