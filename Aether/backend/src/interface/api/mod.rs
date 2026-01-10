@@ -10,3 +10,4 @@ pub mod vocabulary;
 pub mod dictionary;
 pub mod knowledge_base;
 pub mod draft;
+pub mod permission;
