@@ -330,7 +330,7 @@ const executePublish = async () => {
       body: form.body,
       tags: form.tags,
       category: form.category || null,
-      visibility: form.visibility,
+      visibility: form.visibility || 'Public',
       status: 'Published',
       reason: commitMessage.value,
       knowledge_base_id: form.knowledge_base_id || null, // Sanitize empty string to null
