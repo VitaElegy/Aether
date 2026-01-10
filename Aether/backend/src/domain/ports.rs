@@ -4,7 +4,7 @@ use uuid::Uuid;
 use thiserror::Error; // Added back
 use crate::domain::models::{
     Article, Vocabulary, Memo, User, UserId, AuthClaims, Comment, CommentId,
-    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, ContentItem, Visibility
+    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, ContentItem, Visibility, ContentDiff
 };
 
 #[derive(Debug, Clone, Serialize, Error)] // Added Error
@@ -20,7 +20,9 @@ pub enum RepositoryError {
     #[error("Unauthorized: {0}")]
     Unauthorized(String),
     #[error("Unknown error: {0}")]
-    Unknown(String), // Added Unknown
+    Unknown(String),
+    #[error("Duplicate title: {0}")]
+    DuplicateTitle(String),
 }
 
 #[async_trait]
@@ -59,7 +61,7 @@ pub trait NodeRepository: Send + Sync {
 
 #[async_trait]
 pub trait ArticleRepository: Send + Sync {
-    async fn save(&self, article: Article, user_id: UserId) -> Result<Uuid, RepositoryError>;
+    async fn save(&self, article: Article, user_id: UserId, change_reason: Option<String>) -> Result<Uuid, RepositoryError>;
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<ContentItem>, RepositoryError>;
     async fn find_by_title(&self, title: &str) -> Result<Option<Article>, RepositoryError>;
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Article>, RepositoryError>;
@@ -67,6 +69,7 @@ pub trait ArticleRepository: Send + Sync {
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
     async fn get_version(&self, id: &Uuid, version: &str) -> Result<Option<ContentVersionSnapshot>, RepositoryError>;
     async fn get_history(&self, id: &Uuid) -> Result<Vec<ContentVersionSnapshot>, RepositoryError>;
+    async fn get_diff(&self, id: &Uuid, v1: &str, v2: &str) -> Result<ContentDiff, RepositoryError>;
     async fn search(&self, query: &str) -> Result<Vec<Article>, RepositoryError>;
 }
 
@@ -107,6 +110,14 @@ pub trait KnowledgeBaseRepository: Send + Sync {
     async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>) -> Result<Vec<KnowledgeBase>, RepositoryError>;
     async fn delete(&self, id: &KnowledgeBaseId) -> Result<(), RepositoryError>;
 }
+
+#[async_trait]
+pub trait DraftRepository: Send + Sync {
+    async fn save_draft(&self, draft: crate::domain::models::UserDraft) -> Result<(), RepositoryError>;
+    async fn get_draft(&self, user_id: &UserId) -> Result<Option<crate::domain::models::UserDraft>, RepositoryError>;
+    async fn delete_draft(&self, user_id: &UserId) -> Result<(), RepositoryError>;
+}
+
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)] // Added Clone
 pub enum ExportFormat {
