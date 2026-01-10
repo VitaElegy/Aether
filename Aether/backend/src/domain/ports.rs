@@ -118,6 +118,23 @@ pub trait DraftRepository: Send + Sync {
     async fn delete_draft(&self, user_id: &UserId) -> Result<(), RepositoryError>;
 }
 
+#[async_trait]
+pub trait PermissionRepository: Send + Sync {
+    // ReBAC Fundamentals: Tuple Operations
+    async fn add_relation(&self, entity_id: Uuid, entity_type: &str, relation: &str, subject_id: Uuid, subject_type: &str) -> Result<(), RepositoryError>;
+    async fn remove_relation(&self, entity_id: Uuid, entity_type: &str, relation: &str, subject_id: Uuid, subject_type: &str) -> Result<(), RepositoryError>;
+    
+    // Check Existence (Direct Lookup)
+    async fn has_relation(&self, entity_id: Uuid, entity_type: &str, relation: &str, subject_id: Uuid, subject_type: &str) -> Result<bool, RepositoryError>;
+    
+    // Discovery (Reverse Lookup for Graph Walk)
+    async fn get_subject_groups(&self, subject_id: Uuid) -> Result<Vec<Uuid>, RepositoryError>;
+    async fn get_parents(&self, entity_id: Uuid) -> Result<Vec<Uuid>, RepositoryError>;
+    
+    // Metadata Management
+    async fn create_group(&self, id: Uuid, name: String) -> Result<Uuid, RepositoryError>;
+}
+
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)] // Added Clone
 pub enum ExportFormat {
