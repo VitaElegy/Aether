@@ -27,7 +27,9 @@ The backend enforces a strict **Hexagonal Architecture (Ports & Adapters)**:
 *   **Database**: Postgres 15 + SeaORM (Async ORM).
 *   **Security**:
     *   **Auth**: Argon2 (Hashing) + Ed25519 (Signing).
-    *   **RBAC**: Bitmask-based permission system (u64).
+    *   **ReBAC**: Zanzibar-style Tuple Store (`relationships`).
+        *   **Model**: Relationship-Based Access Control (ReBAC).
+        *   **Logic**: Recursive Graph Walk (Subject -> Group -> Entity).
 *   **Observability**: `tracing` ecosystem (Structured JSON logs).
 *   **Extensibility**: Wasmtime (WASM Plugin Host) - allowing hot-swappable logic.
 
@@ -46,7 +48,16 @@ The backend enforces a strict **Hexagonal Architecture (Ports & Adapters)**:
 3.  **Session**: Stateless JWT signed with `HS256` (migrating to Ed25519).
 4.  **Guard**: Frontend `Router Guard` enforces access control at the edge.
 
-### 3.2 Dynamic Content Engine
+### 3.2 Authorization Engine (ReBAC)
+Aether implements a **Relationship-Based Access Control** (ReBAC) system, inspired by **Google Zanzibar**.
+*   **Philosophy**: "Access is a Walk on a Graph".
+*   **Storage**: Single `relationships` table storing Tuples: `(entity, relation, subject)`.
+*   **Resolution**:
+    1.  **Direct**: Is User U a `viewer` of Node N?
+    2.  **Computed**: Is User U a `member` of Group G, which is an `owner` of Node N?
+*   **Extensibility**: New logic (e.g., "Friend's content") requires NO schema changes, only new Tuple types.
+
+### 3.3 Dynamic Content Engine
 The frontend utilizes a **Strategy Pattern** for rendering:
 *   `DynamicRenderer.vue` acts as the context.
 *   Specific renderers (`Markdown`, `CodeSnippet`, `Video`) are lazy-loaded.
