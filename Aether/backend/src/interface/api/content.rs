@@ -2,7 +2,7 @@ use axum::{
     Json, extract::{State, Path, Query}, response::IntoResponse, http::StatusCode,
 };
 use crate::domain::{
-    ports::ArticleRepository, 
+    ports::{ArticleRepository, RepositoryError}, 
     models::{Article, Node, NodeType, PermissionMode, ContentBody, ContentStatus, UserId},
 };
 use uuid::Uuid; // Added
@@ -122,8 +122,10 @@ pub async fn create_content_handler(
             author_avatar: None,
         };
 
-        match ArticleRepository::save(&*state.repo, article, UserId(user.id)).await { // Explicit ArticleRepository call
+        match ArticleRepository::save(&*state.repo, article, UserId(user.id), payload._reason).await { // Explicit ArticleRepository call
             Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response(),
+            Err(RepositoryError::DuplicateTitle(msg)) => (StatusCode::CONFLICT, Json(serde_json::json!({ "error": msg }))).into_response(),
+            Err(RepositoryError::ValidationError(msg)) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": msg }))).into_response(),
             Err(e) => {
                 tracing::error!("Failed to create content: {:?}", e);
                 (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
@@ -220,8 +222,10 @@ pub async fn update_content_handler(
                 }
             }
 
-            match ArticleRepository::save(&*state.repo, updated_article, UserId(user.id)).await {
+            match ArticleRepository::save(&*state.repo, updated_article, UserId(user.id), payload._reason).await {
                 Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "id": id }))).into_response(),
+                Err(RepositoryError::DuplicateTitle(msg)) => (StatusCode::CONFLICT, Json(serde_json::json!({ "error": msg }))).into_response(),
+                Err(RepositoryError::ValidationError(msg)) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": msg }))).into_response(),
                 Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
             }
         }
@@ -350,6 +354,7 @@ pub fn router() -> axum::Router<crate::interface::state::AppState> {
         .route("/api/content/:id", get(get_content_handler).put(update_content_handler).delete(delete_content_handler))
         .route("/api/content/:id/history", get(get_content_history_handler))
         .route("/api/content/:id/history/:version", get(get_content_version_handler))
+        .route("/api/content/:id/diff/:v1/:v2", get(get_content_diff_handler))
         .route("/api/search", get(search_content_handler))
 }
 
@@ -378,6 +383,35 @@ pub async fn get_content_version_handler(
     match state.repo.get_version(&id, &version).await {
         Ok(Some(v)) => (StatusCode::OK, Json(v)).into_response(),
         Ok(None) => (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Version not found" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+pub async fn get_content_diff_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: MaybeAuthenticatedUser,
+    Path((id, v1, v2)): Path<(Uuid, String, String)>,
+) -> impl IntoResponse {
+    // Check permissions (reusing logic from get_version would be better, but copying for simplicity now)
+     match state.repo.find_by_id(&id).await {
+        Ok(Some(item)) => {
+             let node = item.node();
+             let user_id = user.0.as_ref().map(|u| u.id);
+             let is_author = user_id.map(|uid| uid == node.author_id).unwrap_or(false);
+             let can_view = match node.permission_mode {
+                PermissionMode::Public => true,
+                PermissionMode::Internal => user.0.is_some(),
+                PermissionMode::Private => is_author,
+            };
+            if !can_view {
+                 return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+            }
+        },
+        _ => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
+    }
+
+    match state.repo.get_diff(&id, &v1, &v2).await {
+        Ok(diff) => (StatusCode::OK, Json(diff)).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
