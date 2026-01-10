@@ -3,7 +3,7 @@ use sea_orm::*;
 use uuid::Uuid;
 use chrono::Utc;
 use crate::domain::models::{KnowledgeBase, KnowledgeBaseId, Visibility, UserId};
-use crate::domain::ports::{KnowledgeBaseRepository, RepositoryError};
+use crate::domain::ports::{KnowledgeBaseRepository, PermissionRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::persistence::entities::knowledge_base;
 
@@ -42,6 +42,14 @@ impl KnowledgeBaseRepository for PostgresRepository {
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // ReBAC Permissions
+        let _ = self.add_relation(kb.id.0, "node", "owner", kb.author_id, "user").await;
+        
+        if let Visibility::Public = kb.visibility {
+             let public_group_id = Uuid::nil();
+             let _ = self.add_relation(kb.id.0, "node", "viewer", public_group_id, "group").await;
+        }
 
         Ok(kb.id)
     }

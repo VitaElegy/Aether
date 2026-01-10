@@ -4,7 +4,7 @@ use uuid::Uuid;
 use chrono::Utc;
 use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, NodeType, PermissionMode, ContentItem, ContentDiff, DiffChange};
 use crate::domain::models::UserId;
-use crate::domain::ports::{ArticleRepository, RepositoryError};
+use crate::domain::ports::{ArticleRepository, PermissionRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::persistence::entities::{node, article_detail, content_version, user};
 
@@ -128,6 +128,19 @@ impl ArticleRepository for PostgresRepository {
         }
 
         txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // 4. ReBAC Permissions (Executed after commit to ensure Node visibility)
+        // Ignoring errors here to prevent failing the request if permission update lags
+        let _ = self.add_relation(article.node.id, "node", "owner", article.node.author_id, "user").await;
+        
+        if let PermissionMode::Public = article.node.permission_mode {
+             let public_group_id = Uuid::nil();
+             let _ = self.add_relation(article.node.id, "node", "viewer", public_group_id, "group").await;
+        }
+
+        if let Some(kb_id) = article.node.knowledge_base_id {
+            let _ = self.add_relation(article.node.id, "node", "parent", kb_id, "node").await;
+        }
         Ok(article.node.id)
     }
 
