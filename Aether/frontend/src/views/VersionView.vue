@@ -127,7 +127,7 @@ const loadData = async () => {
 
         // Load Diff if requested
         if (isDiffMode.value && currentV > 1) {
-             const prevV = formatSemVer(currentV - 1);
+             const prevV = (currentV - 1).toString();
              const diff = await contentApi.getDiff(originalId, prevV, versionId.value);
              diffContent.value = diff.changes;
         } else if (isDiffMode.value && currentV === 1) {
@@ -155,7 +155,7 @@ const toggleDiff = async () => {
 
          try {
              loading.value = true;
-             const prevV = formatSemVer(currentV - 1);
+             const prevV = (currentV - 1).toString();
              const diff = await contentApi.getDiff(originalId, prevV, versionId.value);
              diffContent.value = diff.changes;
          } catch (e) {

@@ -9,10 +9,15 @@ export interface ContentVersionSnapshot {
     editor_id: string;
 }
 
+export interface DiffChange {
+    tag: 'Equal' | 'Insert' | 'Delete';
+    value: string;
+}
+
 export interface ContentDiff {
     old_version: string;
     new_version: string;
-    changes: string; // Unified Diff format
+    changes: DiffChange[];
 }
 
 
@@ -79,7 +84,7 @@ export const contentApi = {
     },
 
     getVersion: async (id: string, version: string): Promise<any> => {
-        const res = await axios.get(`/api/content/${id}/version/${version}`);
+        const res = await axios.get(`/api/content/${id}/history/${version}`);
         return res.data;
     },
 

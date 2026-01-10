@@ -146,9 +146,13 @@ const loadData = async (articleId: string) => {
             created_at: new Date(data.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
             category: data.category,
             tags: data.tags,
-            type: data.body.type,
-            data: data.body.type === 'Markdown' ? { content: data.body.data } : data.body.data,
-            raw_body: data.body.type === 'Markdown' ? data.body.data : '',
+            type: typeof data.body === 'string' ? 'Markdown' : (data.body.type || 'Markdown'),
+            data: typeof data.body === 'string' 
+                ? { content: data.body } 
+                : (data.body.type === 'Markdown' ? { content: data.body.data } : data.body),
+            raw_body: typeof data.body === 'string' 
+                ? data.body 
+                : (data.body.data || ''),
             knowledge_base_id: data.knowledge_base_id,
             parent_id: data.parent_id
         };
@@ -249,8 +253,11 @@ const handleEdit = () => {
         </TopNavBar>
 
         <div v-if="loading" class="flex-1 flex items-center justify-center">
-            <div class="animate-pulse text-accent text-xs font-black uppercase tracking-[0.4em]">Establishing Uplink...
-            </div>
+            <div class="animate-pulse text-accent text-xs font-black uppercase tracking-[0.4em]">Establishing Uplink...</div>
+        </div>
+        
+        <div v-else-if="!post" class="flex-1 flex items-center justify-center">
+             <div class="text-ink/40 text-xs font-black uppercase tracking-[0.2em]">Signal Lost (404)</div>
         </div>
 
         <div v-else class="flex-1 flex overflow-hidden relative">

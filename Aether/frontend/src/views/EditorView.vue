@@ -24,21 +24,20 @@ const draftId = ref<string | null>(route.params.id as string || null);
 const isSaving = ref(false);
 const autoSaveEnabled = ref(true);
 const timestamps = ref<{ created: string | null; updated: string | null }>({ created: null, updated: null });
+const isRestoring = ref(true); // Flag to prevent auto-save during initialization
 
 const prefStore = usePreferencesStore();
 const showCommitModal = ref(false);
 const commitMessage = ref('');
 
-// Local Storage Cache
+// Local Storage Cache - Content ONLY (No status/lifecycle)
 const localCache = useStorage('aether_editor_current', {
-  id: null as string | null, // Added ID validation
+  id: null as string | null,
   knowledge_base_id: null as string | null,
   title: '',
   body: '',
   category: '',
   tags: [] as string[],
-  visibility: 'Public',
-  status: 'Draft',
   timestamp: 0
 });
 
@@ -49,7 +48,7 @@ const form = reactive({
   category: '',
   tags: [] as string[],
   visibility: 'Public',
-  status: 'Draft'
+  status: 'Draft' // Default status, server will override
 });
 
 const formatDate = (isoStr: string | null) => {
@@ -57,7 +56,7 @@ const formatDate = (isoStr: string | null) => {
   return new Date(isoStr).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 };
 
-// ... TOC updateToc ...
+// TOC Logic
 const updateToc = (editor: any) => {
   const headings: { id: string; text: string; level: number; parentId: string | null; pos: number }[] = [];
   let currentH3Id: string | null = null;
@@ -138,33 +137,58 @@ onMounted(async () => {
         updated: data.updated_at
       };
 
-      // Only restore from cache if ID matches and cache is newer
-      if (localCache.value?.id === draftId.value && localCache.value?.body && localCache.value?.timestamp > new Date(data.updated_at).getTime()) {
-         MessagePlugin.info('Restored unsaved progress from local cache.', 2000);
-         Object.assign(form, localCache.value);
-      } else {
-         form.title = data.title;
-         form.body = data.body.data;
-         form.tags = data.tags;
-         form.category = data.category;
-         form.visibility = data.visibility;
-         form.status = data.status;
-         form.knowledge_base_id = data.node?.knowledge_base_id || null;
+      // Always load Server Data first
+      form.title = data.title;
+      form.tags = data.tags;
+      form.category = data.category;
+      form.visibility = data.visibility;
+      form.status = data.status; // Server is truth for status
+      form.knowledge_base_id = data.node?.knowledge_base_id || null;
+      // Initialize body from server
+      form.body = data.body.data;
+
+      // Check Cache for *Unsaved Content*
+      // Condition: Same ID AND Cache is NEWER than Server Update
+      if (
+          localCache.value?.id === draftId.value && 
+          localCache.value?.body && 
+          localCache.value.timestamp > new Date(data.updated_at).getTime()
+      ) {
+         MessagePlugin.info('Restored unsaved content changes from local cache.', 3000);
+         // Restore ONLY content fields
+         form.title = localCache.value.title || form.title;
+         form.body = localCache.value.body || form.body;
+         // Optional: tags/category if we consider them content
+         form.tags = localCache.value.tags?.length ? localCache.value.tags : form.tags;
+         form.category = localCache.value.category || form.category;
+         // DO NOT restore status or visibility
       }
     } catch (err) {
       console.error('Failed to fetch draft', err);
+      // Offline fallback: Restore cache if ID matches
       if (localCache.value?.id === draftId.value && localCache.value?.body) {
-         Object.assign(form, localCache.value);
-         MessagePlugin.warning('Server offline. Restored local cache.');
+         form.title = localCache.value.title;
+         form.body = localCache.value.body;
+         form.tags = localCache.value.tags;
+         form.category = localCache.value.category;
+         // Keep default status 'Draft' or user must manually set it, we don't know server status.
+         MessagePlugin.warning('Server offline. Restored local content cache.');
       }
     }
   } else {
     // New Entry
     timestamps.value = { created: new Date().toISOString(), updated: new Date().toISOString() };
+    
     // Only restore if cache was for a new entry (null id)
     if (localCache.value?.id === null && (localCache.value?.body || localCache.value?.title)) {
-       Object.assign(form, localCache.value);
-       if (form.body.length > 10) MessagePlugin.info('Restored unsaved draft.', 2000);
+       // Check if cache actually has content
+       if (localCache.value.body.length > 5 || localCache.value.title.length > 0) {
+           form.title = localCache.value.title;
+           form.body = localCache.value.body;
+           form.tags = localCache.value.tags;
+           form.category = localCache.value.category;
+           MessagePlugin.info('Restored unsaved new draft.', 2000);
+       }
     }
   }
 
@@ -172,11 +196,20 @@ onMounted(async () => {
     editor.value.commands.setContent(form.body);
   }
 
+  // Fetch KBs ...
+
+
+
   // Fetch KBs
   try {
       knowledgeBases.value = await knowledgeApi.list();
   } catch (e) {
       console.error("Failed to fetch KBs", e);
+  } finally {
+      // Allow reactivity to settle before enabling auto-save
+      setTimeout(() => {
+          isRestoring.value = false;
+      }, 500);
   }
 });
 
@@ -193,8 +226,7 @@ const saveDraft = async () => {
       tags: form.tags,
       category: form.category || null,
       visibility: form.visibility,
-      visibility: form.visibility,
-      status: 'Draft',
+      status: form.status, // Respect current status (e.g. keep Published if editing live)
       knowledge_base_id: form.knowledge_base_id || null, // Sanitize empty string to null
       snapshot: false // Do not create version snapshot for auto-save
     };
@@ -217,12 +249,9 @@ const saveDraft = async () => {
     timestamps.value.updated = new Date().toISOString();
   } catch (err: any) {
     if (err.response && err.response.status === 409) {
-        const existingId = err.response.data.id;
-        if (existingId && existingId !== draftId.value) {
-            draftId.value = existingId;
-            router.replace({ name: 'editor', params: { id: existingId } });
-            MessagePlugin.warning('Title matches existing entry. Switched to editing mode.', 3000);
-        }
+        // Do NOT redirect. Pause auto-save to prevent infinite loop.
+        autoSaveEnabled.value = false;
+        MessagePlugin.error('Title exists. Auto-save PAUSED. Change title and re-enable.', 5000);
     } else {
         console.error('Auto-save failed', err);
     }
@@ -235,9 +264,17 @@ const debouncedAutoSave = useDebounceFn(() => {
   if (autoSaveEnabled.value) saveDraft();
 }, 2000);
 
+// Decoupled Watchers
+// 1. Local Cache Recovery: Always persist to browser storage
 watch(form, (newVal) => {
   localCache.value = { ...newVal, id: draftId.value, timestamp: Date.now() };
-  debouncedAutoSave();
+}, { deep: true });
+
+// 2. Server Auto-Save: Only trigger if NOT restoring and enabled
+watch(form, () => {
+  if (!isRestoring.value && autoSaveEnabled.value) {
+     debouncedAutoSave();
+  }
 }, { deep: true });
 
 // Toggle Mode
@@ -329,15 +366,8 @@ const executePublish = async () => {
     await router.push('/');
   } catch (err: any) {
     if (err.response && err.response.status === 409) {
-        MessagePlugin.warning('Article with this title already exists. Redirecting to edit mode...', 2000);
-        const existingId = err.response.data.id;
-        if (existingId) {
-             // Delay slightly to let toast show
-             setTimeout(() => {
-                draftId.value = existingId;
-                router.push(`/editor/${existingId}`);
-             }, 1000);
-        }
+        MessagePlugin.warning('Article with this title already exists. Please choose a unique title.', 3000);
+        // Do not redirect, as it loses current context/edits.
     } else {
         console.error(err);
         MessagePlugin.error('Failed to publish.');
@@ -347,8 +377,28 @@ const executePublish = async () => {
   }
 };
 
+// Navigation
+const goBack = () => {
+  // Check if there is a history entry to go back to within the router's state
+  if (window.history.state && window.history.state.back) {
+    router.back();
+  } else {
+    // Fallback to home if no history (e.g. direct link or fresh tab)
+    router.push('/');
+  }
+};
+
 onBeforeUnmount(() => {
-  editor.value?.destroy();
+  try {
+    if (debouncedAutoSave && typeof debouncedAutoSave.cancel === 'function') {
+      debouncedAutoSave.cancel();
+    }
+    if (editor.value) {
+      editor.value.destroy();
+    }
+  } catch (e) {
+    console.warn('Cleanup error during unmount (ignored to allow navigation):', e);
+  }
 });
 </script>
 
@@ -358,7 +408,7 @@ onBeforeUnmount(() => {
     <TopNavBar>
        <template #left>
           <div class="flex items-center gap-6">
-             <button @click="router.back()" class="text-neutral-400 hover:text-ink transition-colors flex items-center gap-2" title="Go Back">
+             <button @click="goBack" class="text-neutral-400 hover:text-ink transition-colors flex items-center gap-2" title="Go Back">
                 <i class="ri-arrow-left-line text-xl"></i>
              </button>
 
@@ -374,10 +424,12 @@ onBeforeUnmount(() => {
        <template #center>
           <div class="flex items-center gap-3">
              <span class="text-xs font-mono uppercase tracking-widest text-neutral-400 block">
-               Editor / {{ draftId ? 'Editing Draft' : 'New Entry' }}
+               Editor / {{ form.status === 'Published' ? 'Editing Published' : (draftId ? 'Editing Draft' : 'New Entry') }}
              </span>
              <span v-if="isSaving" class="text-[10px] text-neutral-300 animate-pulse uppercase tracking-widest">Saving...</span>
-             <span v-else-if="draftId" class="text-[10px] text-neutral-300 uppercase tracking-widest">Saved</span>
+             <span v-else-if="draftId" class="text-[10px] text-neutral-300 uppercase tracking-widest">
+                {{ form.status === 'Published' ? 'Published' : 'Draft Saved' }}
+             </span>
           </div>
        </template>
 
