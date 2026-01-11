@@ -909,6 +909,125 @@ search_content_handler()
 
 ---
 
+## 目录结构
+
+### 项目整体结构
+
+```
+Aether/
+├── AI/                          # AI相关文档和错误日志
+│   ├── error/                   # 错误记录文档
+│   ├── AGENT_PROMPT.md          # AI代理提示词
+│   ├── ERROR_LOG.md             # 错误日志
+│   ├── project_spec.md          # 项目规范
+│   └── roadmap.md               # 路线图
+├── ARCHITECTURE.md              # 架构文档（根目录快速参考）
+├── backend/                     # Rust后端
+│   ├── src/                     # 源代码
+│   │   ├── bin/                 # 二进制工具
+│   │   ├── domain/              # 领域层（业务逻辑）
+│   │   │   ├── models.rs        # 领域模型
+│   │   │   ├── ports.rs         # 端口定义（Traits）
+│   │   │   ├── diff_service.rs  # 差异计算服务
+│   │   │   └── permission_service.rs # 权限服务
+│   │   ├── infrastructure/      # 基础设施层
+│   │   │   ├── auth/            # 认证实现
+│   │   │   ├── persistence/     # 持久化实现
+│   │   │   │   ├── entities/    # ORM实体
+│   │   │   │   └── repositories/ # Repository实现
+│   │   │   ├── dictionary/      # 词典加载器
+│   │   │   └── services/        # 服务实现
+│   │   ├── interface/           # 接口层（API）
+│   │   │   ├── api/             # API处理器
+│   │   │   └── state.rs         # 应用状态
+│   │   └── main.rs              # 入口点
+│   ├── scripts/                 # 脚本目录
+│   │   ├── debug/               # 调试脚本
+│   │   │   ├── debug_rebac.sh  # ReBAC测试
+│   │   │   ├── debug_publish.sh # 发布测试
+│   │   │   └── README.md        # 脚本说明
+│   │   └── test/                # 测试脚本和数据
+│   │       └── test_input.txt   # 测试输入文件
+│   ├── tests/                   # Rust测试（Cargo标准）
+│   │   └── integration/         # 集成测试
+│   ├── logs/                    # 日志目录（.gitignore）
+│   │   └── .gitkeep
+│   ├── data/                    # 数据文件
+│   │   └── dictionary/          # 词典数据
+│   ├── uploads/                 # 用户上传文件（.gitignore）
+│   │   └── avatars/             # 用户头像
+│   ├── target/                  # Rust编译输出（.gitignore）
+│   ├── Cargo.toml               # Rust依赖配置
+│   ├── start_backend.sh         # 启动脚本
+│   └── start_backend.bat        # Windows启动脚本
+├── frontend/                    # Vue 3前端
+│   ├── src/                     # 源代码
+│   │   ├── api/                 # API客户端
+│   │   ├── components/           # Vue组件
+│   │   ├── views/               # 页面视图
+│   │   ├── stores/              # Pinia状态管理
+│   │   ├── router/              # 路由配置
+│   │   └── plugins/             # 插件
+│   ├── logs/                    # 日志目录（.gitignore）
+│   │   └── .gitkeep
+│   ├── node_modules/            # Node依赖（.gitignore）
+│   ├── package.json             # Node依赖配置
+│   ├── vite.config.ts           # Vite配置
+│   ├── tailwind.config.js       # Tailwind配置
+│   ├── start_frontend.sh       # 启动脚本
+│   └── start_frontend.bat      # Windows启动脚本
+├── scripts/                     # 项目级脚本
+│   ├── verify_api.sh            # API验证脚本
+│   └── README.md                # 脚本说明（可选）
+├── doc/                         # 文档目录
+│   ├── ARCHITECTURE.md          # 详细架构文档
+│   ├── TECHNICAL_REFERENCE.md   # 技术参考
+│   ├── api_spec.md              # API规范
+│   └── roadmap.md               # 路线图
+├── docker-compose.yml           # Docker编排配置
+├── .gitignore                   # Git忽略规则
+└── README.md                    # 项目说明
+```
+
+### 目录规范说明
+
+#### 1. **源代码目录**
+- `backend/src/` 和 `frontend/src/` 遵循各自语言的最佳实践
+- 后端采用六边形架构：`domain/` → `infrastructure/` → `interface/`
+- 前端采用功能模块化：按功能组织组件和视图
+
+#### 2. **脚本目录**
+- `backend/scripts/debug/` - 调试脚本，已整理统一管理
+- `backend/scripts/test/` - 测试脚本和数据文件
+- `scripts/` - 项目级脚本（如API验证）
+
+#### 3. **日志目录**
+- `backend/logs/` 和 `frontend/logs/` - 运行时日志
+- 所有 `*.log` 文件被 `.gitignore` 忽略
+- 使用 `.gitkeep` 保持目录结构
+
+#### 4. **数据文件**
+- `backend/data/` - 静态数据文件（如词典）
+- `backend/uploads/` - 用户上传文件（不应提交到版本控制）
+- `backend/aether.db` - 开发数据库（不应提交）
+
+#### 5. **文档目录**
+- `doc/` - 主要技术文档
+- `AI/` - AI相关文档和错误记录
+- 根目录的 `ARCHITECTURE.md` 作为快速参考
+
+#### 6. **版本控制规则**
+以下文件/目录不应提交到版本控制：
+- `*.log` - 所有日志文件
+- `*.db`, `*.sqlite` - 数据库文件
+- `uploads/` - 用户上传文件
+- `target/` - Rust编译输出
+- `node_modules/` - Node依赖
+- `verification_*.txt` - 临时验证文件
+- `.env` - 环境变量文件
+
+---
+
 ## 总结
 
 Aether采用**六边形架构**，严格分离了领域逻辑和基础设施实现。核心特性包括：

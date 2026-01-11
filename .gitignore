@@ -17,3 +17,31 @@ dist/
 
 # Temporary directories
 Tmp/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+**/aether.db
+
+# Log files
+*.log
+**/logs/
+backend/*.log
+frontend/*.log
+**/backend_*.log
+**/frontend_*.log
+
+# User uploads (should not be in version control)
+uploads/
+**/uploads/avatars/
+**/uploads/**/*
+
+# Temporary verification/test output files
+verification_*.txt
+test_output.txt
+*.tmp
+
+# Build artifacts
+*.tsbuildinfo
+vite.config.d.ts

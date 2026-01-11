@@ -23,7 +23,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, draft, permission
+    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, draft, permission, user
 };
 
 
@@ -287,6 +287,7 @@ async fn main() {
         .merge(dictionary::router())
         .merge(draft::router())
         .merge(permission::router())
+        .merge(user::router())
         .with_state(state);
 
     let app = Router::new()

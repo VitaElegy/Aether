@@ -49,6 +49,7 @@ pub trait UserRepository: Send + Sync {
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, RepositoryError>;
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, RepositoryError>;
     async fn save(&self, user: User) -> Result<UserId, RepositoryError>;
+    async fn search_users(&self, query: &str) -> Result<Vec<User>, RepositoryError>;
 }
 
 #[async_trait]
@@ -133,6 +134,9 @@ pub trait PermissionRepository: Send + Sync {
     
     // Metadata Management
     async fn create_group(&self, id: Uuid, name: String) -> Result<Uuid, RepositoryError>;
+    
+    // Querying
+    async fn get_collaborators(&self, entity_id: Uuid, entity_type: &str, relation: &str) -> Result<Vec<Uuid>, RepositoryError>;
 }
 
 

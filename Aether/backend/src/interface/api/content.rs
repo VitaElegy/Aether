@@ -158,7 +158,16 @@ pub async fn update_content_handler(
 
     let existing_node = existing_item.node();
 
-    if existing_node.author_id != user.id {
+    // Check Author or Editor permission
+    let is_author = existing_node.author_id == user.id;
+    let is_editor = if is_author {
+        true
+    } else {
+        use crate::domain::ports::PermissionRepository;
+        PermissionRepository::has_relation(&*state.repo, id, "node", "editor", user.id, "user").await.unwrap_or(false)
+    };
+
+    if !is_editor {
         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
     }
 
@@ -280,7 +289,20 @@ pub async fn get_content_handler(
             let can_view = match node.permission_mode {
                 PermissionMode::Public => true,
                 PermissionMode::Internal => user.is_some(),
-                PermissionMode::Private => is_author,
+                PermissionMode::Private => {
+                    if is_author { true }
+                    else if let Some(u) = &user {
+                        use crate::domain::ports::PermissionRepository;
+                         PermissionRepository::has_relation(
+                            &*state.repo, 
+                            node.id, 
+                            "node", 
+                            "editor", 
+                            u.id, 
+                            "user"
+                        ).await.unwrap_or(false)
+                    } else { false }
+                },
             };
 
             if can_view {
@@ -330,7 +352,20 @@ pub async fn get_content_history_handler(
              let can_view = match node.permission_mode {
                 PermissionMode::Public => true,
                 PermissionMode::Internal => user.is_some(),
-                PermissionMode::Private => is_author,
+                PermissionMode::Private => {
+                    if is_author { true }
+                    else if let Some(u) = &user {
+                        use crate::domain::ports::PermissionRepository;
+                         PermissionRepository::has_relation(
+                            &*state.repo, 
+                            node.id, 
+                            "node", 
+                            "editor", 
+                            u.id, 
+                            "user"
+                        ).await.unwrap_or(false)
+                    } else { false }
+                },
             };
             if !can_view {
                  return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
@@ -355,6 +390,8 @@ pub fn router() -> axum::Router<crate::interface::state::AppState> {
         .route("/api/content/:id/history", get(get_content_history_handler))
         .route("/api/content/:id/history/:version", get(get_content_version_handler))
         .route("/api/content/:id/diff/:v1/:v2", get(get_content_diff_handler))
+        .route("/api/content/:id/collaborators", get(list_collaborators_handler).post(add_collaborator_handler))
+        .route("/api/content/:id/collaborators/:uid", axum::routing::delete(remove_collaborator_handler))
         .route("/api/search", get(search_content_handler))
 }
 
@@ -371,7 +408,20 @@ pub async fn get_content_version_handler(
              let can_view = match node.permission_mode {
                 PermissionMode::Public => true,
                 PermissionMode::Internal => user.is_some(),
-                PermissionMode::Private => is_author,
+                PermissionMode::Private => {
+                    if is_author { true }
+                    else if let Some(u) = &user {
+                        use crate::domain::ports::PermissionRepository;
+                         PermissionRepository::has_relation(
+                            &*state.repo, 
+                            node.id, 
+                            "node", 
+                            "editor", 
+                            u.id, 
+                            "user"
+                        ).await.unwrap_or(false)
+                    } else { false }
+                },
             };
             if !can_view {
                  return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
@@ -401,7 +451,20 @@ pub async fn get_content_diff_handler(
              let can_view = match node.permission_mode {
                 PermissionMode::Public => true,
                 PermissionMode::Internal => user.0.is_some(),
-                PermissionMode::Private => is_author,
+                PermissionMode::Private => {
+                    if is_author { true }
+                    else if let Some(u) = &user.0 {
+                        use crate::domain::ports::PermissionRepository;
+                         PermissionRepository::has_relation(
+                            &*state.repo, 
+                            node.id, 
+                            "node", 
+                            "editor", 
+                            u.id, 
+                            "user"
+                        ).await.unwrap_or(false)
+                    } else { false }
+                },
             };
             if !can_view {
                  return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
@@ -415,3 +478,107 @@ pub async fn get_content_diff_handler(
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
+
+// Collaborator Management
+#[derive(serde::Deserialize)]
+pub struct AddCollaboratorRequest {
+    pub user_id: Uuid,
+}
+
+#[derive(serde::Serialize)]
+pub struct CollaboratorResponse {
+    pub user_id: Uuid,
+    pub username: String,
+    pub avatar_url: Option<String>,
+}
+
+pub async fn list_collaborators_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    // 1. Verify Requestor Permission (Owner only)
+    use crate::domain::ports::ArticleRepository;
+    let item = match ArticleRepository::find_by_id(&*state.repo, &id).await {
+        Ok(Some(i)) => i,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+    
+    if item.node().author_id != user.id {
+         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Only owner can list collaborators" }))).into_response();
+    }
+
+    // 2. Query Relations
+    use crate::domain::ports::PermissionRepository;
+    let collaborator_ids = match PermissionRepository::get_collaborators(&*state.repo, id, "node", "editor").await {
+        Ok(ids) => ids,
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    use crate::domain::ports::UserRepository;
+    let mut collaborators = Vec::new();
+    for uid in collaborator_ids {
+         // Explicitly call UserRepository to avoid ambiguity with ArticleRepository/NodeRepository
+         if let Ok(Some(u)) = UserRepository::find_by_id(&*state.repo, &crate::domain::models::UserId(uid)).await {
+             collaborators.push(CollaboratorResponse {
+                 user_id: u.id.0,
+                 username: u.username,
+                 avatar_url: u.avatar_url,
+             });
+         }
+    }
+
+    (StatusCode::OK, Json(collaborators)).into_response()
+}
+
+pub async fn add_collaborator_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<AddCollaboratorRequest>,
+) -> impl IntoResponse {
+    // 1. Verify Permission (Owner)
+     let item = match state.repo.find_by_id(&id).await {
+        Ok(Some(i)) => i,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    if item.node().author_id != user.id {
+         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Only owner can add collaborators" }))).into_response();
+    }
+
+    // 2. Add Relation: (Node, "editor", User)
+    // Note: We need a PermissionService/Repository access. `state.repo` implements PermissionRepository via PostgresRepository.
+    use crate::domain::ports::PermissionRepository;
+    match PermissionRepository::add_relation(&*state.repo, id, "node", "editor", payload.user_id, "user").await {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "added" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+pub async fn remove_collaborator_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: AuthenticatedUser,
+    Path((id, target_user_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+    // 1. Verify Permission (Owner)
+     let item = match state.repo.find_by_id(&id).await {
+        Ok(Some(i)) => i,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Content not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    if item.node().author_id != user.id {
+         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Only owner can remove collaborators" }))).into_response();
+    }
+
+    // 2. Remove Relation
+    use crate::domain::ports::PermissionRepository;
+    match PermissionRepository::remove_relation(&*state.repo, id, "node", "editor", target_user_id, "user").await {
+        Ok(_) => (StatusCode::NO_CONTENT, ()).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+

@@ -22,7 +22,14 @@ impl PermissionRepository for PostgresRepository {
         // Use Insert with OnConflict Do Nothing (to handle idempotency)
         match rel.insert(&self.db).await {
             Ok(_) => Ok(()),
-            Err(DbErr::Query(err)) if err.to_string().contains("unique constraint") => Ok(()), // Already exists
+            Err(DbErr::Exec(err)) | Err(DbErr::Query(err)) => { 
+                let msg = err.to_string();
+                if msg.contains("UNIQUE constraint failed") || msg.contains("duplicate key value") {
+                    Ok(()) // Already exists, return Ok (Idempotent)
+                } else {
+                    Err(RepositoryError::DatabaseError(msg))
+                }
+            },
             Err(e) => Err(RepositoryError::DatabaseError(e.to_string())),
         }
     }
@@ -92,5 +99,18 @@ impl PermissionRepository for PostgresRepository {
             Ok(m) => Ok(m.id),
             Err(e) => Err(RepositoryError::DatabaseError(e.to_string())),
         }
+    }
+
+    async fn get_collaborators(&self, entity_id: Uuid, entity_type: &str, relation: &str) -> Result<Vec<Uuid>, RepositoryError> {
+        let rels = relationship::Entity::find()
+            .filter(relationship::Column::EntityType.eq(entity_type))
+            .filter(relationship::Column::EntityId.eq(entity_id))
+            .filter(relationship::Column::Relation.eq(relation))
+            .filter(relationship::Column::SubjectType.eq("user"))
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+
+        Ok(rels.into_iter().map(|r| r.subject_id).collect())
     }
 }

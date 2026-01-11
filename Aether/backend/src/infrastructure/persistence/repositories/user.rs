@@ -69,4 +69,30 @@ impl UserRepository for PostgresRepository {
             .exec(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(u.id)
     }
+
+    async fn search_users(&self, query: &str) -> Result<Vec<User>, RepositoryError> {
+        let term = format!("%{}%", query);
+        let users = user::Entity::find()
+            .filter(
+                Condition::any()
+                    .add(user::Column::Username.like(&term))
+                    .add(user::Column::DisplayName.like(&term))
+                    .add(user::Column::Email.like(&term))
+            )
+            .limit(10)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(users.into_iter().map(|m| User {
+            id: UserId(m.id),
+            username: m.username,
+            email: m.email,
+            display_name: m.display_name,
+            bio: m.bio,
+            avatar_url: m.avatar_url,
+            password_hash: m.password_hash,
+            permissions: m.permissions as u64,
+        }).collect())
+    }
 }

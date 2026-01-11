@@ -9,6 +9,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from 'tiptap-markdown';
 import { useDebounceFn, useStorage } from '@vueuse/core';
 import TopNavBar from '@/components/TopNavBar.vue';
+import CollaboratorModal from './CollaboratorModal.vue';
 import { usePreferencesStore } from '@/stores/preferences';
 import { knowledgeApi, type KnowledgeBase } from '@/api/knowledge';
 
@@ -28,6 +29,7 @@ const isRestoring = ref(true); // Flag to prevent auto-save during initializatio
 
 const prefStore = usePreferencesStore();
 const showCommitModal = ref(false);
+const showCollaboratorModal = ref(false);
 const commitMessage = ref('');
 
 // Local Storage Cache - Content ONLY (No status/lifecycle)
@@ -441,6 +443,10 @@ onBeforeUnmount(() => {
              </div>
 
              <div class="flex items-center gap-3">
+                <button v-if="draftId" @click="showCollaboratorModal = true" class="text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-ink transition-colors mr-4">
+                  Collaborators
+                </button>
+
                 <span class="text-[10px] font-bold uppercase tracking-widest text-neutral-400 transition-colors" :class="{ 'text-ink': isLiveMode }">Live</span>
                 <button
                   @click="toggleMode"
@@ -623,6 +629,13 @@ onBeforeUnmount(() => {
         </div>
       </div>
     </Transition>
+
+    <CollaboratorModal 
+      v-if="draftId"
+      :visible="showCollaboratorModal" 
+      :article-id="draftId"
+      @close="showCollaboratorModal = false"
+    />
   </div>
 </template>
 

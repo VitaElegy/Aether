@@ -129,26 +129,56 @@ Aether/
 │   │   ├── domain/           # Business Logic & Ports (Hexagonal)
 │   │   │   ├── diff_service.rs # Diff Engine
 │   │   │   ├── models.rs     # Core Structs
-│   │   │   └── ports.rs      # Traits (Interfaces)
+│   │   │   ├── ports.rs      # Traits (Interfaces)
+│   │   │   └── permission_service.rs # Permission Service
 │   │   ├── infrastructure/   # Implementation Details
 │   │   │   ├── auth/         # JWT & Hashing
-│   │   │   └── persistence/  # Database (SeaORM)
-│   │   │       ├── entities/ # ORM Models
-│   │   │       └── postgres.rs # Repository Impl
+│   │   │   ├── persistence/  # Database (SeaORM)
+│   │   │   │   ├── entities/ # ORM Models
+│   │   │   │   └── repositories/ # Repository Implementations
+│   │   │   ├── dictionary/   # Dictionary Loader
+│   │   │   └── services/     # Service Implementations
 │   │   ├── interface/        # API Layer (Axum)
-│   │   │   ├── api/          # Route Handlers (auth, content, upload)
-│   │   │   └── mod.rs
+│   │   │   ├── api/          # Route Handlers (auth, content, upload, permission)
+│   │   │   └── state.rs      # Application State
 │   │   └── main.rs           # Entry & Migrations
+│   ├── scripts/              # Scripts Directory
+│   │   ├── debug/            # Debug Scripts (organized)
+│   │   │   ├── debug_rebac.sh
+│   │   │   ├── debug_publish.sh
+│   │   │   └── README.md
+│   │   └── test/             # Test Scripts & Data
+│   │       └── test_input.txt
+│   ├── tests/                # Rust Tests (Cargo Standard)
+│   │   └── integration/      # Integration Tests
+│   ├── logs/                 # Log Directory (.gitignore)
+│   ├── data/                 # Data Files
+│   │   └── dictionary/       # Dictionary Data
+│   ├── uploads/              # User Uploads (.gitignore)
+│   │   └── avatars/          # User Avatars
 │   ├── Cargo.toml
-│   └── uploads/              # User Uploads (Avatars)
+│   └── start_backend.sh      # Startup Script
 ├── frontend/                 # Vue 3 Frontend
 │   ├── src/
+│   │   ├── api/              # API Clients
 │   │   ├── components/       # UI Components
 │   │   ├── router/           # Navigation Logic
 │   │   ├── stores/           # Pinia State (Auth)
 │   │   └── views/            # Pages (Editor, Home, Login, Read, Settings, Profile)
-│   └── package.json
+│   ├── logs/                 # Log Directory (.gitignore)
+│   ├── package.json
+│   └── start_frontend.sh     # Startup Script
+├── scripts/                  # Project-Level Scripts
+│   └── verify_api.sh        # API Verification Script
 └── doc/                      # Documentation
     ├── ARCHITECTURE.md
     └── TECHNICAL_REFERENCE.md # This file
 ```
+
+### Directory Organization Rules
+
+1. **Scripts**: All debug scripts are organized in `backend/scripts/debug/`. Test scripts go to `backend/scripts/test/`. Project-level scripts go to `scripts/`.
+2. **Logs**: All log files (`*.log`) are stored in `logs/` directories and ignored by git.
+3. **Database**: Database files (`*.db`, `*.sqlite`) are ignored by git.
+4. **Uploads**: User uploads in `uploads/` are ignored by git.
+5. **Tests**: Rust tests follow Cargo standard in `tests/` directory.

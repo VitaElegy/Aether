@@ -35,7 +35,8 @@ onMounted(async () => {
             category: p.category || 'Uncategorized',
             type: p.body.type,
             data: p.body.type === 'Markdown' ? { content: p.body.data } : p.body.data,
-            tags: p.tags
+            tags: p.tags,
+            visibility: p.permission_mode // Mapped from flattened JSON
         }));
 
         console.log('Processed posts:', posts.value.length);
@@ -118,9 +119,18 @@ const goToProfile = (id: string) => router.push(`/profile/${id}`);
                             <span class="text-[10px] font-black uppercase tracking-[0.2em] text-ink/40">Timestamp</span>
                             <span class="text-xs font-mono text-ink/80">{{ post.date }}</span>
                         </div>
-                        <div>
+                        <div class="flex gap-2">
                             <span
                                 class="text-[10px] font-black uppercase tracking-[0.1em] border border-accent/30 text-accent px-3 py-1 rounded-sm bg-accent/5">{{ post.category }}</span>
+                            <!-- Visibility Badge -->
+                            <span v-if="post.visibility && post.visibility !== 'Public'"
+                                class="text-[10px] font-black uppercase tracking-[0.1em] border px-3 py-1 rounded-sm"
+                                :class="{
+                                    'border-red-500/30 text-red-500 bg-red-500/5': post.visibility === 'Private',
+                                    'border-blue-500/30 text-blue-500 bg-blue-500/5': post.visibility === 'Internal'
+                                }">
+                                {{ post.visibility }}
+                            </span>
                         </div>
                         <div class="mt-auto hidden md:block">
                             <button @click="router.push(`/article/${post.id}`)"

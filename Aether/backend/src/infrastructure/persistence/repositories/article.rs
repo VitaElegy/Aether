@@ -246,6 +246,21 @@ impl ArticleRepository for PostgresRepository {
             // effectively enforces existence (like Inner Join) + condition.
             query = query.filter(node::Column::Type.eq("Article"))
                          .filter(article_detail::Column::Status.eq("Published"));
+            
+            // SECURITY FIX: Filter by Visibility using the cached 'permission_mode' column
+            // 1. Base: Public is always visible
+            let mut viz_cond = sea_orm::Condition::any().add(node::Column::PermissionMode.eq("Public"));
+            
+            // 2. Authenticated: See Internal + Own Private
+            if let Some(uid) = _viewer_id {
+                viz_cond = viz_cond.add(node::Column::PermissionMode.eq("Internal"));
+                viz_cond = viz_cond.add(
+                    sea_orm::Condition::all()
+                        .add(node::Column::PermissionMode.eq("Private"))
+                        .add(node::Column::AuthorId.eq(uid.0))
+                );
+            }
+            query = query.filter(viz_cond);
         }
 
         let results = query
@@ -310,6 +325,8 @@ impl ArticleRepository for PostgresRepository {
         // 1. Find matching IDs first (using explicit join for filtering)
         let matching_nodes = node::Entity::find()
             .filter(node::Column::Type.eq("Article"))
+            // SECURITY HOTFIX: Search only returns Public articles for now to preventing leaking Private titles
+            .filter(node::Column::PermissionMode.eq("Public")) 
             .join(sea_orm::JoinType::LeftJoin, node::Relation::ArticleDetail.def())
             .filter(
                 sea_orm::Condition::any()
