@@ -64,6 +64,12 @@ const router = createRouter({
       component: () => import('../views/SelfSpaceView.vue'),
       meta: { transition: 'fade' }
     },
+    {
+      path: '/space/presentation',
+      name: 'space-presentation',
+      component: () => import('../components/self-space/presentation/PresentationContainer.vue'),
+      meta: { transition: 'fade' }
+    },
     // Wildcard redirect for safety
     {
       path: '/:pathMatch(.*)*',

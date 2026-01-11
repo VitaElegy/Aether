@@ -60,7 +60,14 @@ const goBack = () => {
             </template>
 
             <template #right>
-                <!-- 最小化显示：仅在需要时显示功能按钮 -->
+                <div class="flex items-center gap-2">
+                     <button @click="router.push('/space/presentation')"
+                        class="text-ink/60 hover:text-accent transition-colors flex items-center gap-2 px-3 py-1 rounded-md hover:bg-ink/5"
+                        title="Presentation Mode">
+                        <i class="ri-slideshow-line text-lg"></i>
+                        <span class="text-xs font-medium uppercase tracking-wider">Present</span>
+                    </button>
+                </div>
             </template>
         </TopNavBar>
 
