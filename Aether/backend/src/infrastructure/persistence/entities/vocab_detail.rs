@@ -13,6 +13,7 @@ pub struct Model {
     pub phonetic: Option<String>,
     pub language: String,
     pub status: String,
+    pub root_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -25,11 +26,35 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Node,
+
+    #[sea_orm(
+        belongs_to = "super::vocab_root::Entity",
+        from = "Column::RootId",
+        to = "super::vocab_root::Column::Id",
+        on_update = "NoAction",
+        on_delete = "SetNull"
+    )]
+    Root,
+    
+    #[sea_orm(has_many = "super::vocab_example::Entity")]
+    Examples,
 }
 
 impl Related<super::node::Entity> for Entity {
     fn to() -> RelationDef {
         Relation::Node.def()
+    }
+}
+
+impl Related<super::vocab_root::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Root.def()
+    }
+}
+
+impl Related<super::vocab_example::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Examples.def()
     }
 }
 

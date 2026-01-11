@@ -11,3 +11,5 @@ pub mod draft;
 pub mod content_version;
 pub mod group;
 pub mod relationship;
+pub mod vocab_root;
+pub mod vocab_example;
