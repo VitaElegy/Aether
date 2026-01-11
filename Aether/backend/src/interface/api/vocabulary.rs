@@ -18,14 +18,29 @@ use chrono::Utc;
 use uuid::Uuid;
 
 #[derive(Deserialize)]
+pub struct ExampleRequest {
+    pub sentence: String,
+    pub translation: Option<String>,
+    pub note: Option<String>,
+    pub image_url: Option<String>,
+}
+
+#[derive(Deserialize)]
 pub struct CreateVocabularyRequest {
     pub word: String,
     pub definition: String,
     pub translation: Option<String>,
     pub phonetic: Option<String>,
+    
+    // Deprecated but kept optional
     pub context_sentence: Option<String>,
     pub image_url: Option<String>,
+    
     pub language: Option<String>,
+    
+    // New
+    pub root: Option<String>,
+    pub examples: Option<Vec<ExampleRequest>>,
 }
 
 #[derive(Deserialize)]
@@ -48,11 +63,28 @@ async fn save_vocabulary(
 ) -> impl IntoResponse {
     let user_id = UserId(auth.id);
     
-    if let Ok(Some(existing)) = state.repo.find_by_word(&user_id, &payload.word).await {
-         return (StatusCode::CONFLICT, Json(serde_json::json!({ "error": "Word already exists", "id": existing.node.id }))).into_response();
-    }
+    let user_id = UserId(auth.id);
+    
+    // Check for existing word to Determine Upsert vs Create
+    let (id, is_update) = if let Ok(Some(existing)) = state.repo.find_by_word(&user_id, &payload.word).await {
+         (existing.node.id, true)
+    } else {
+         (Uuid::new_v4(), false)
+    };
+    
+    // Map Examples
+    let examples = payload.examples.unwrap_or_default().into_iter().map(|e| {
+        use crate::domain::models::VocabularyExample;
+        VocabularyExample {
+            id: Uuid::new_v4(),
+            sentence: e.sentence,
+            translation: e.translation,
+            note: e.note,
+            image_url: e.image_url,
+            created_at: Utc::now(),
+        }
+    }).collect();
 
-    let id = Uuid::new_v4();
     let vocab = Vocabulary {
         node: Node {
             id,
@@ -73,6 +105,8 @@ async fn save_vocabulary(
         image_url: payload.image_url,
         language: payload.language.unwrap_or("en".to_string()),
         status: "New".to_string(),
+        root: payload.root,
+        examples,
     };
 
     match state.repo.save(vocab).await {

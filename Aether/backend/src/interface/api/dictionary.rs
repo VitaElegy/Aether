@@ -46,7 +46,7 @@ async fn fuzzy_search(
     State(state): State<AppState>,
     Query(params): Query<LookupRequest>,
 ) -> impl IntoResponse {
-    let matches = state.dictionary.fuzzy_search(&params.word);
+    let matches = state.dictionary.fuzzy_search(&params.word).await;
     Json(matches)
 }
 
@@ -55,39 +55,124 @@ async fn lookup_word(
     Query(params): Query<LookupRequest>,
 ) -> impl IntoResponse {
     let word = params.word;
+
+    // 1. Check Cache
+    if let Some(cached_json) = state.dictionary_cache.get(&word).await {
+        if let Ok(entry) = serde_json::from_str::<DictionaryEntry>(&cached_json) {
+            return (StatusCode::OK, Json(entry));
+        }
+    }
     
     // 0. Local StarDict
     let mut local_entry: Option<DictionaryEntry> = None;
-    if let Some(def_str) = state.dictionary.lookup(&word) {
-        // StarDict returns raw text, usually formatted or just text.
-        // We'll treat it as a generic definition.
-        // TODO: Better parsing of StarDict content (which might be HTML or XDXF).
-        // For now, simple text wrapping.
+    if let Some(raw_definitions) = state.dictionary.lookup(&word) {
+        let mut meanings = Vec::new();
+        let mut phonetic = None;
+        let mut current_source = "Local StarDict".to_string();
+
+        for raw_text in raw_definitions {
+            // Check if this is likely Oxford by looking for specific patterns or just general parsing
+            // Heuristic Parsing for complex formats like Oxford:
+            // 1. Extract Phonetic: /.../
+            if let Some(start) = raw_text.find('/') {
+                if let Some(end) = raw_text[start+1..].find('/') {
+                    let p = &raw_text[start..=start+1+end];
+                    // Basic validation to ensure it's not just a slash in text
+                    if p.len() < 50 { 
+                         phonetic = Some(p.to_string());
+                    }
+                }
+            }
+
+            // 2. Identify common POS markers to split main blocks
+            // Oxford often doesn't use newlines, just spaces. e.g. "word... n 1 [C]..."
+            // We need a Regex or smart split. Regex is cleaner but requires dependency.
+            // Let's use a manual state machine for stability without adding generic regex dep if possible,
+            // or just add `regex` crate which is standard. Using regex is safer for this complexity.
+            
+            // For now, let's try to split by known POS tags if they are surrounded by spaces/start
+            // Tags: " n ", " v ", " adj ", " adv ", " prep ", " conj "
+            // Also numbered lists: " 1 ", " 2 "
+            
+            // SIMPLIFIED STRATEGY: 
+            // 1. Split by numbers " 1 ", " 2 " to get main definitions.
+            // 2. Inside each, look for (a), (b).
+            
+            // Let's treat the whole text as one block if we can't easily split POS, 
+            // but we can try to improve the display by inserting newlines for the frontend parser.
+            
+            // ACTUALLY, the user wants "Clear Separation".
+            // Let's clean the text: 
+            // Replace " * " with "\n* " (New bullet point)
+            // Replace " 1 " with "\n1. "
+            // Replace " 2 " with "\n2. "
+            // Replace "(a)" with "\n(a)"
+            
+            let mut cleaned = raw_text.clone();
+            cleaned = cleaned.replace(" * ", "\n* ");
+            
+            // Insert breaks before numbers 1-9
+            for i in 1..10 {
+                cleaned = cleaned.replace(&format!(" {} ", i), &format!("\n{}. ", i));
+            }
+            
+            // Insert breaks for (a), (b)...
+            for c in 'a'..'z' {
+                 cleaned = cleaned.replace(&format!(" ({}) ", c), &format!("\n({}) ", c));
+            }
+
+            // Try to set source name if possible (heuristic)
+            if cleaned.contains("Oxford") {
+                current_source = "Oxford Dictionary".to_string();
+            }
+
+            // Create a generic meaning block with this formatted text
+            // The frontend will rendering newlines as separate blocks
+            meanings.push(Meaning {
+                part_of_speech: "Definition".to_string(), 
+                definitions: vec![Definition {
+                    definition: cleaned,
+                    example: None
+                }],
+            });
+        }
+
         local_entry = Some(DictionaryEntry {
             word: word.clone(),
-            phonetic: None,
-            meanings: vec![Meaning {
-                part_of_speech: "dictionary".to_string(),
-                definitions: vec![Definition {
-                    definition: def_str,
-                    example: None,
-                }],
-            }],
+            phonetic, 
+            meanings, 
             translation: None,
-            source: "Local StarDict".to_string(),
+            source: current_source,
         });
     }
 
-    // 1. FreeDictionaryAPI (Primary - Definitions)
-    // 2. Datamuse (Secondary - Definitions/Phonetics)
-    // 3. MyMemory (Translation)
-
+    // 1. FreeDictionaryAPI, 2. Datamuse, 3. MyMemory
     let mut primary_entry: Option<DictionaryEntry> = None;
     let mut datamuse_entry: Option<DictionaryEntry> = None;
 
-    // 1. FreeDictionaryAPI
     let fd_url = format!("https://api.dictionaryapi.dev/api/v2/entries/en/{}", word);
-    if let Ok(response) = reqwest::get(&fd_url).await {
+    let dm_url = format!("https://api.datamuse.com/words?sp={}&md=dr&max=1", word);
+
+    // Timeout: 1500ms. If external APIs are slow, we fallback to Local or None.
+    let external_task = async {
+        tokio::join!(
+            reqwest::get(&fd_url),
+            reqwest::get(&dm_url),
+            fetch_translation(&word)
+        )
+    };
+
+    // Timeout: 1500ms.
+    let (fd_opt, dm_opt, translation) = match tokio::time::timeout(std::time::Duration::from_millis(1500), external_task).await {
+        Ok((fd_res, dm_res, trans)) => (fd_res.ok(), dm_res.ok(), trans),
+        Err(_) => {
+            tracing::warn!("External dictionary API timed out for '{}'", word);
+            (None, None, None)
+        }
+    };
+
+    // 1. Process FreeDictionaryAPI
+    if let Some(response) = fd_opt {
         if response.status().is_success() {
             if let Ok(entries) = response.json::<Vec<serde_json::Value>>().await {
                 if let Some(first) = entries.first() {
@@ -97,9 +182,8 @@ async fn lookup_word(
         }
     }
 
-    // 2. Datamuse (for fallback or supplementary)
-    let dm_url = format!("https://api.datamuse.com/words?sp={}&md=dr&max=1", word);
-    if let Ok(response) = reqwest::get(&dm_url).await {
+    // 2. Process Datamuse
+    if let Some(response) = dm_opt {
          if response.status().is_success() {
             if let Ok(entries) = response.json::<Vec<serde_json::Value>>().await {
                 if let Some(first) = entries.first() {
@@ -109,19 +193,10 @@ async fn lookup_word(
          }
     }
 
-    // 3. Translation (MyMemory)
-    let translation = fetch_translation(&word).await;
-
     // Aggregation Logic
-    // If we have local entry, we might prioritize it or merge it.
-    // Spec says: "Base: StarDict... Extension: User adds...".
-    // We'll treat Local as highly trusted.
-    
     let mut final_entry = if let Some(mut local) = local_entry {
-        // If we also found online data, we can merge phonetics or extra definitions
         if let Some(p) = primary_entry {
              if local.phonetic.is_none() { local.phonetic = p.phonetic; }
-             // Merge definitions? Maybe append online ones.
              local.source = format!("{}, {}", local.source, p.source);
              local.meanings.extend(p.meanings);
         } else if let Some(d) = datamuse_entry {
@@ -163,6 +238,10 @@ async fn lookup_word(
     if final_entry.source == "None" {
         (StatusCode::NOT_FOUND, Json(final_entry))
     } else {
+        // Cache the result
+        if let Ok(json_str) = serde_json::to_string(&final_entry) {
+            state.dictionary_cache.insert(word, json_str).await;
+        }
         (StatusCode::OK, Json(final_entry))
     }
 }
