@@ -1,11 +1,11 @@
 use async_trait::async_trait;
 use sea_orm::*;
 use uuid::Uuid;
-use std::sync::Arc;
+
 use crate::domain::ports::{PermissionRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::persistence::entities::{relationship, group};
-use crate::domain::models::UserId;
+
 
 #[async_trait]
 impl PermissionRepository for PostgresRepository {

@@ -2,10 +2,9 @@ use axum::{
     Json, extract::{State, Query}, response::IntoResponse, http::StatusCode,
 };
 use crate::interface::state::AppState;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
-use crate::domain::models::UserId;
-use axum::extract::FromRef;
+
 
 #[derive(Deserialize)]
 pub struct CheckPermissionParams {
