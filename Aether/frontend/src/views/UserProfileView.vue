@@ -117,14 +117,9 @@ const loadKbs = async (uid: string) => {
     loadingKbs.value = true;
     try {
         // Updated API call supporting filtering
-        const res = await knowledgeApi.list(uid); // Ensure knowledgeApi supports passing author_id or we use axios directly if method generic
-        // Waiting to verify knowledgeApi.list signature?
-        // Let's assume standardized on passing params or just use axios for safety if wrapper doesn't support it yet.
-        // Actually knowledgeApi.list in frontend might default to own.
-        // Let's check knowledge.ts or just use axios to be safe for now, OR update knowledge.ts
         // Using axios directly for list to be safe with the new backend API query param
-        const res2 = await axios.get('/api/knowledge-bases', { params: { author_id: uid } });
-        kbs.value = res2.data;
+        const res = await axios.get('/api/knowledge-bases', { params: { author_id: uid } });
+        kbs.value = res.data;
     } catch (e) {
         console.error("Failed to load KBs", e);
     } finally {

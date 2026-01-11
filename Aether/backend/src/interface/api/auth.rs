@@ -227,43 +227,13 @@ pub async fn update_user_handler(
     }
 }
 
-#[derive(Deserialize)]
-pub struct SearchQuery {
-    q: String,
-}
 
-#[derive(serde::Serialize)]
-pub struct SearchUserResponse {
-    pub id: Uuid,
-    pub username: String,
-    pub display_name: Option<String>,
-    pub avatar_url: Option<String>,
-}
-
-pub async fn search_users_handler(
-    State(state): State<crate::interface::state::AppState>,
-    axum::extract::Query(params): axum::extract::Query<SearchQuery>,
-) -> impl IntoResponse {
-    let users = match state.repo.search_users(&params.q).await {
-        Ok(u) => u,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
-    };
-
-    let response: Vec<SearchUserResponse> = users.into_iter().map(|u| SearchUserResponse {
-        id: u.id.0,
-        username: u.username,
-        display_name: u.display_name,
-        avatar_url: u.avatar_url,
-    }).collect();
-
-    (StatusCode::OK, Json(serde_json::to_value(response).unwrap()))
-}
 
 pub fn router() -> axum::Router<crate::interface::state::AppState> {
     use axum::routing::{get, post};
     axum::Router::new()
         .route("/api/auth/login", post(login_handler))
         .route("/api/auth/register", post(register_handler))
-        .route("/api/users/search", get(search_users_handler)) // Specific route first
+
         .route("/api/users/:id", get(get_user_handler).put(update_user_handler))
 }

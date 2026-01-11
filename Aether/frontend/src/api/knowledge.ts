@@ -33,6 +33,13 @@ export interface UpdateKnowledgeBaseRequest {
     visibility?: 'Public' | 'Private' | 'Internal';
 }
 
+export interface Collaborator {
+    user_id: string;
+    username: string;
+    avatar_url?: string;
+    role: string;
+}
+
 export const knowledgeApi = {
     async list(): Promise<KnowledgeBase[]> {
         const response = await axios.get(`${API_BASE}/knowledge-bases`);
@@ -46,13 +53,6 @@ export const knowledgeApi = {
 
     async create(payload: CreateKnowledgeBaseRequest): Promise<KnowledgeBase> {
         const response = await axios.post(`${API_BASE}/knowledge-bases`, payload);
-        // The backend returns { id: string }, so we might need to fetch it or construct a partial object.
-        // Usually, for a list update, we'd want the full object.
-        // Checking backend: create handler returns { id: ... }.
-        // For UI responsiveness, we might want to fetch it immediately or return just ID.
-        // Let's return the ID response for now or chain a get.
-        // Ideally backend returns full object, but current impl returns {id}.
-        // Let's just return what the backend returns and let the UI handle fetching or optimistic update.
         return response.data;
     },
 
@@ -62,5 +62,30 @@ export const knowledgeApi = {
 
     async delete(id: string): Promise<void> {
         await axios.delete(`${API_BASE}/knowledge-bases/${id}`);
+    },
+
+    async listCollaborators(id: string): Promise<Collaborator[]> {
+        const response = await axios.get<Collaborator[]>(`${API_BASE}/knowledge-bases/${id}/collaborators`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+        return response.data;
+    },
+
+    async addCollaborator(id: string, userId: string, role: string): Promise<void> {
+        await axios.post(`${API_BASE}/knowledge-bases/${id}/collaborators`, { user_id: userId, role }, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
+    },
+
+    async removeCollaborator(id: string, userId: string): Promise<void> {
+        await axios.delete(`${API_BASE}/knowledge-bases/${id}/collaborators/${userId}`, {
+            headers: {
+                'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+        });
     }
 };

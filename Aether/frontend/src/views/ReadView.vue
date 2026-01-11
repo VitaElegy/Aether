@@ -12,22 +12,23 @@ import TopNavBar from '@/components/TopNavBar.vue';
 import SidebarContainer from '../components/reading/SidebarContainer.vue';
 import ArticleOutline from '../components/reading/ArticleOutline.vue';
 import DirectoryTree from '../components/reading/DirectoryTree.vue';
+import { useContent } from '@/composables/useContent';
 
 const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const prefStore = usePreferencesStore();
 
+const { article, loading, isAuthor, load } = useContent();
+
 const id = route.params.id as string;
-const post = ref<any>(null);
 const kbTitle = ref<string>('');
-const loading = ref(true);
 const toc = ref<{ id: string; text: string; level: number; }[]>([]);
 
 // -- Sidebar Configuration --
 // Using Preferences Store for persistence
 const isTreeEnabled = computed({
-    get: () => prefStore.readViewShowTree && !!post.value?.knowledge_base_id,
+    get: () => prefStore.readViewShowTree && !!article.value?.knowledge_base_id,
     set: (v) => prefStore.readViewShowTree = v
 });
 const isOutlineEnabled = computed({
@@ -96,8 +97,8 @@ const rightMode = ref<'docked' | 'floating'>('docked');
 
 // Actions
 const toggleTree = () => {
-    console.log("[ReadView] Toggle Tree Clicked. KB ID:", post.value?.knowledge_base_id);
-    if (!post.value?.knowledge_base_id) return;
+    console.log("[ReadView] Toggle Tree Clicked. KB ID:", article.value?.knowledge_base_id);
+    if (!article.value?.knowledge_base_id) return;
     prefStore.readViewShowTree = !prefStore.readViewShowTree;
     console.log("[ReadView] Tree Enabled State:", prefStore.readViewShowTree);
 };
@@ -131,35 +132,14 @@ const generateToc = (markdown: string) => {
 
 
 
-// Reusable data loader
-const loadData = async (articleId: string) => {
-    loading.value = true;
-    try {
-        const res = await axios.get(`/api/content/${articleId}`);
-        const data = res.data;
-        post.value = {
-            id: data.id,
-            title: data.title,
-            author_id: data.author_id,
-            author_name: data.author_name || 'Unknown',
-            author_avatar: data.author_avatar,
-            created_at: new Date(data.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }),
-            category: data.category,
-            tags: data.tags,
-            type: typeof data.body === 'string' ? 'Markdown' : (data.body.type || 'Markdown'),
-            data: typeof data.body === 'string' 
-                ? { content: data.body } 
-                : (data.body.type === 'Markdown' ? { content: data.body.data } : data.body),
-            raw_body: typeof data.body === 'string' 
-                ? data.body 
-                : (data.body.data || ''),
-            knowledge_base_id: data.knowledge_base_id,
-            parent_id: data.parent_id
-        };
-
-        if (post.value.knowledge_base_id) {
+// Data loading logic moved to composable, but we handle side effects (KB Title, TOC) here
+const loadDataWithSideEffects = async (articleId: string) => {
+    await load(articleId);
+    if (article.value) {
+        // KB Title
+        if (article.value.knowledge_base_id) {
             try {
-                const kb = await knowledgeApi.get(post.value.knowledge_base_id);
+                const kb = await knowledgeApi.get(article.value.knowledge_base_id);
                 kbTitle.value = kb.title;
             } catch (kbe) {
                 console.warn("Failed to fetch KB details", kbe);
@@ -169,32 +149,28 @@ const loadData = async (articleId: string) => {
             kbTitle.value = '';
         }
 
-        if (post.value.type === 'Markdown') {
-            toc.value = generateToc(post.value.raw_body);
+        // TOC
+        // Check if body is string (Markdown)
+        const bodyContent = typeof article.value.body === 'string' ? article.value.body : ''; 
+        if (bodyContent) {
+             toc.value = generateToc(bodyContent);
         }
-        console.log("[ReadView] Loaded Article. KB:", post.value.knowledge_base_id);
-    } catch (e) {
-        console.error("Failed to load article", e);
-    } finally {
-        loading.value = false;
     }
 };
 
 onMounted(() => {
-    loadData(id);
+    loadDataWithSideEffects(id);
 });
 
 // Reload when ID changes (navigation within same view)
 watch(() => route.params.id, (newId) => {
-    if (newId) loadData(newId as string);
-});
-
-const isAuthor = computed(() => {
-    return authStore.user && post.value && authStore.user.id === post.value.author_id;
+    if (newId) loadDataWithSideEffects(newId as string);
 });
 
 const handleEdit = () => {
-    router.push(`/editor/${post.value.id}`);
+    if (article.value) {
+         router.push(`/editor/${article.value.id}`);
+    }
 };
 </script>
 
@@ -213,7 +189,7 @@ const handleEdit = () => {
                 <div class="flex items-center gap-2">
                     <!-- Sidebar Controls (Centralized) -->
                     <div class="flex items-center bg-ash/10 rounded-lg p-1 gap-1">
-                        <button v-if="post?.knowledge_base_id" @click="toggleTree"
+                        <button v-if="article?.knowledge_base_id" @click="toggleTree"
                             class="px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded transition-all flex items-center gap-2"
                             :class="isTreeEnabled ? 'bg-paper shadow-sm text-accent' : 'text-ink/40 hover:text-ink'">
                             <i class="ri-node-tree"></i>
@@ -256,18 +232,18 @@ const handleEdit = () => {
             <div class="animate-pulse text-accent text-xs font-black uppercase tracking-[0.4em]">Establishing Uplink...</div>
         </div>
         
-        <div v-else-if="!post" class="flex-1 flex items-center justify-center">
+        <div v-else-if="!article" class="flex-1 flex items-center justify-center">
              <div class="text-ink/40 text-xs font-black uppercase tracking-[0.2em]">Signal Lost (404)</div>
         </div>
 
         <div v-else class="flex-1 flex overflow-hidden relative">
             <!-- Left Sidebar -->
             <SidebarContainer position="left" :mode="leftMode" :isOpen="!!leftContent"
-                :title="leftContent === 'tree' ? (kbTitle || 'Directory') : (post?.title || 'Outline')"
+                :title="leftContent === 'tree' ? (kbTitle || 'Directory') : (article?.title || 'Outline')"
                 @close="leftContent === 'tree' ? toggleTree() : toggleOutline()">
 
-                <DirectoryTree v-if="leftContent === 'tree' && post?.knowledge_base_id"
-                    :knowledgeBaseId="post.knowledge_base_id" :currentArticleId="post.id" />
+                <DirectoryTree v-if="leftContent === 'tree' && article?.knowledge_base_id"
+                    :knowledgeBaseId="article.knowledge_base_id" :currentArticleId="article.id" />
                 <ArticleOutline v-else-if="leftContent === 'outline'" :toc="toc" />
 
             </SidebarContainer>
@@ -279,30 +255,30 @@ const handleEdit = () => {
                     <!-- Meta Header -->
                     <div class="mb-20 border-b border-ash pb-16">
                         <div class="flex flex-wrap gap-4 mb-10">
-                            <span v-if="post.category"
-                                class="text-[10px] font-black uppercase tracking-[0.2em] bg-accent text-paper px-4 py-1.5 rounded-sm shadow-lg shadow-accent/20">{{ post.category }}</span>
-                            <span v-for="tag in post.tags" :key="tag"
+                            <span v-if="article.category"
+                                class="text-[10px] font-black uppercase tracking-[0.2em] bg-accent text-paper px-4 py-1.5 rounded-sm shadow-lg shadow-accent/20">{{ article.category }}</span>
+                            <span v-for="tag in article.tags" :key="tag"
                                 class="text-[10px] font-mono uppercase tracking-widest border border-ash text-ink/40 px-3 py-1.5 rounded-sm hover:border-accent hover:text-accent transition-all select-none">#{{
                                     tag }}</span>
                         </div>
 
                         <h1
                             class="text-5xl md:text-7xl font-black tracking-tighter mb-10 text-ink leading-[0.9] uppercase">
-                            {{ post.title }}
+                            {{ article.title }}
                         </h1>
 
                         <div class="flex items-center gap-5 cursor-pointer group"
-                            @click="router.push(`/profile/${post.author_id}`)">
+                            @click="router.push(`/profile/${article.author_id}`)">
                             <div
                                 class="w-12 h-12 bg-ash/50 rounded-full overflow-hidden border-2 border-accent/20 group-hover:border-accent transition-colors">
-                                <img :src="post.author_avatar || `https://api.dicebear.com/9.x/notionists/svg?seed=${post.author_name}`"
+                                <img :src="article.author_avatar || `https://api.dicebear.com/9.x/notionists/svg?seed=${article.author_name}`"
                                     class="w-full h-full object-cover dark:contrast-125" />
                             </div>
                             <div class="flex flex-col">
                                 <span
-                                    class="text-sm font-black text-ink uppercase tracking-widest group-hover:text-accent transition-colors">{{ post.author_name }}</span>
+                                    class="text-sm font-black text-ink uppercase tracking-widest group-hover:text-accent transition-colors">{{ article.author_name }}</span>
                                 <span
-                                    class="text-[10px] font-mono text-ink/50 uppercase tracking-[0.2em]">{{ post.created_at }}</span>
+                                    class="text-[10px] font-mono text-ink/50 uppercase tracking-[0.2em]">{{ new Date(article.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) }}</span>
                             </div>
                         </div>
                     </div>
@@ -310,22 +286,22 @@ const handleEdit = () => {
                     <!-- Body -->
                     <div
                         class="prose prose-xl max-w-none prose-p:text-ink/90 prose-headings:text-ink prose-headings:uppercase prose-headings:font-black prose-headings:tracking-tighter prose-strong:text-accent prose-code:text-accent prose-pre:bg-ash/20 prose-hr:border-ash/50 selection:bg-accent/20">
-                        <DynamicRenderer :type="post.type" :data="post.data" />
+                        <DynamicRenderer :type="'Markdown'" :data="{ content: (typeof article.body === 'string' ? article.body : '') }" />
                     </div>
 
                     <div class="mt-40 pt-20 border-t border-ash">
-                        <CommentSection v-if="post" :content-id="post.id" :author-id="post.author_id" />
+                        <CommentSection v-if="article" :content-id="article.id" :author-id="article.author_id" />
                     </div>
                 </div>
             </main>
 
             <!-- Right Sidebar -->
             <SidebarContainer position="right" :mode="rightMode" :isOpen="!!rightContent"
-                :title="rightContent === 'tree' ? (kbTitle || 'Directory') : (post?.title || 'Outline')"
+                :title="rightContent === 'tree' ? (kbTitle || 'Directory') : (article?.title || 'Outline')"
                 @close="rightContent === 'tree' ? toggleTree() : toggleOutline()">
 
-                <DirectoryTree v-if="rightContent === 'tree' && post?.knowledge_base_id"
-                    :knowledgeBaseId="post.knowledge_base_id" :currentArticleId="post.id" />
+                <DirectoryTree v-if="rightContent === 'tree' && article?.knowledge_base_id"
+                    :knowledgeBaseId="article.knowledge_base_id" :currentArticleId="article.id" />
                 <ArticleOutline v-else-if="rightContent === 'outline'" :toc="toc" />
 
             </SidebarContainer>

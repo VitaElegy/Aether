@@ -176,6 +176,7 @@ async fn main() {
             description TEXT,
             tags JSONB NOT NULL DEFAULT '[]',
             cover_image TEXT,
+            cover_offset_y INT NOT NULL DEFAULT 50,
             visibility TEXT NOT NULL DEFAULT 'Private',
             created_at TIMESTAMPTZ NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
@@ -196,17 +197,15 @@ async fn main() {
         );
     ").await.expect("Failed to initialize Core Node schema");
 
-    // Update schema with migration-like logic for Knowledge Base Link
-    // Safe to run repeatedly (ignore error if column exists)
     let _ = db.execute(sea_orm::Statement::from_string(
         db.get_database_backend(),
         "ALTER TABLE nodes ADD COLUMN knowledge_base_id UUID REFERENCES knowledge_bases(id) ON DELETE SET NULL;"
-    )).await.map_err(|e| println!("Migration warning (likely exists): {}", e));
+    )).await.map_err(|e| println!("Migration note (node.kb_id): {}", e));
 
     let _ = db.execute(sea_orm::Statement::from_string(
         db.get_database_backend(),
         "ALTER TABLE knowledge_bases ADD COLUMN cover_offset_y INT NOT NULL DEFAULT 50;"
-    )).await.map_err(|e| println!("Migration warning (likely exists): {}", e));
+    )).await.map_err(|e| println!("Migration note (kb.offset): {}", e));
 
 
 

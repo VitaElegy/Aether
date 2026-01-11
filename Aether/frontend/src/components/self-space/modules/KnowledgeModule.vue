@@ -5,6 +5,7 @@ import { knowledgeApi, type KnowledgeBase } from '../../../api/knowledge';
 import { contentApi, type Content } from '../../../api/content';
 import { uploadApi } from '../../../api/upload';
 import TagInput from '../../common/TagInput.vue';
+import UserSelect from '../../common/UserSelect.vue';
 
 // -- State --
 // -- State --
@@ -28,6 +29,9 @@ const settingsForm = ref({
     cover_offset_y: 50,
     visibility: 'Private' as 'Public' | 'Private' | 'Internal'
 });
+const collaborators = ref<any[]>([]); // { user_id, username, role, ... }
+const newCollaboratorRole = ref('Viewer');
+const newCollaboratorUser = ref<any>(null);
 
 const contentFormVisible = ref(false);
 const contentFormType = ref<'Folder' | 'Article'>('Article');
@@ -76,6 +80,39 @@ const openSettings = () => {
         visibility: currentKb.value.visibility || 'Private'
     };
     viewMode.value = 'settings';
+    fetchCollaborators();
+};
+
+const fetchCollaborators = async () => {
+    if (!currentKb.value) return;
+    try {
+        collaborators.value = await knowledgeApi.listCollaborators(currentKb.value.id);
+    } catch (e) {
+        console.error("Failed to list collaborators", e);
+    }
+};
+
+const addCollaborator = async () => {
+    if (!currentKb.value || !newCollaboratorUser.value) return;
+    try {
+        await knowledgeApi.addCollaborator(currentKb.value.id, newCollaboratorUser.value.id, newCollaboratorRole.value);
+        newCollaboratorUser.value = null; // Reset selection
+        await fetchCollaborators();
+    } catch (e) {
+        console.error("Failed to add collaborator", e);
+        alert("Failed to add collaborator");
+    }
+};
+
+const removeCollaborator = async (userId: string) => {
+     if (!currentKb.value) return;
+     if(!confirm("Remove this collaborator?")) return;
+     try {
+        await knowledgeApi.removeCollaborator(currentKb.value.id, userId);
+        await fetchCollaborators();
+     } catch (e) {
+        console.error("Failed to remove collaborator", e);
+     }
 };
 
 const updateKbSettings = async () => {

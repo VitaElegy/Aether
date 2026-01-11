@@ -9,7 +9,9 @@ use uuid::Uuid;
 use chrono::Utc;
 use crate::domain::models::{KnowledgeBase, KnowledgeBaseId, UserId, Visibility};
 use crate::domain::ports::KnowledgeBaseRepository;
+use crate::domain::ports::{PermissionRepository, UserRepository};
 use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
+use serde::{Deserialize, Serialize};
 
 #[derive(serde::Deserialize)]
 pub struct CreateKnowledgeBaseRequest {
@@ -202,8 +204,113 @@ pub async fn update_knowledge_base_handler(
 // TODO: Import/Export handlers (Need generic Service or specific implementation)
 
 pub fn router() -> axum::Router<crate::interface::state::AppState> {
-    use axum::routing::{get, post};
+    use axum::routing::{get, post, put, delete};
     axum::Router::new()
         .route("/api/knowledge-bases", post(create_knowledge_base_handler).get(list_knowledge_bases_handler))
         .route("/api/knowledge-bases/:id", get(get_knowledge_base_handler).put(update_knowledge_base_handler).delete(delete_knowledge_base_handler))
+        .route("/api/knowledge-bases/:id/collaborators", get(list_collaborators_handler).post(add_collaborator_handler))
+        .route("/api/knowledge-bases/:id/collaborators/:uid", delete(remove_collaborator_handler))
+}
+
+// --- Collaborators ---
+#[derive(Deserialize)]
+pub struct AddCollaboratorRequest {
+    pub user_id: Uuid,
+    pub role: String, // "viewer", "editor", "owner"
+}
+
+pub async fn add_collaborator_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<AddCollaboratorRequest>,
+) -> impl IntoResponse {
+    // 1. Check if requester is Owner (or has delete permission on KB)
+    // Note: 'delete' action typically implies full control/ownership
+    let is_owner = match state.permission_service.check_permission(user.id, id, "delete").await {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response(),
+    };
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, "Only owners can manage collaborators").into_response();
+    }
+
+    // 2. Validate Role
+    let role = payload.role.to_lowercase();
+    if !["viewer", "editor", "owner"].contains(&role.as_str()) {
+        return (StatusCode::BAD_REQUEST, "Invalid role").into_response();
+    }
+
+    // 3. Add Tuple (KB, role, User)
+    match state.repo.add_relation(id, "knowledge_base", &role, payload.user_id, "user").await {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "added"}))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+    }
+}
+
+pub async fn remove_collaborator_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: AuthenticatedUser,
+    Path((id, target_user_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+    // 1. Check if requester is Owner
+    let is_owner = match state.permission_service.check_permission(user.id, id, "delete").await {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response(),
+    };
+    if !is_owner {
+        return (StatusCode::FORBIDDEN, "Only owners can manage collaborators").into_response();
+    }
+
+    // 2. Remove all roles (iterate simplistically)
+    let roles = vec!["viewer", "editor", "owner"];
+    for role in roles {
+        let _ = state.repo.remove_relation(id, "knowledge_base", role, target_user_id, "user").await;
+    }
+    
+    (StatusCode::OK, Json(serde_json::json!({"status": "removed"}))).into_response()
+}
+
+#[derive(Serialize)]
+pub struct CollaboratorDto {
+    pub user_id: Uuid,
+    pub username: String,
+    pub avatar_url: Option<String>,
+    pub role: String,
+}
+
+pub async fn list_collaborators_handler(
+    State(state): State<crate::interface::state::AppState>,
+    user: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+   // 1. Check if requester can view KB
+   let can_view = match state.permission_service.check_permission(user.id, id, "read").await {
+        Ok(b) => b,
+        Err(_) => return (StatusCode::INTERNAL_SERVER_ERROR, "Permission check failed").into_response(),
+   };
+   if !can_view {
+       return (StatusCode::NOT_FOUND, "KB not found or access denied").into_response();
+   }
+
+   // 2. Fetch collaborators for each role
+   let mut collaborators = Vec::new();
+   let roles = vec!["owner", "editor", "viewer"];
+   
+   for role in roles {
+       if let Ok(user_ids) = state.repo.get_collaborators(id, "knowledge_base", role).await {
+           for uid in user_ids {
+               if let Ok(Some(u)) = UserRepository::find_by_id(state.repo.as_ref(), &crate::domain::models::UserId(uid)).await {
+                   collaborators.push(CollaboratorDto {
+                       user_id: u.id.0,
+                       username: u.username,
+                       avatar_url: u.avatar_url,
+                       role: role.to_string(),
+                   });
+               }
+           }
+       }
+   }
+   
+   (StatusCode::OK, Json(collaborators)).into_response()
 }
