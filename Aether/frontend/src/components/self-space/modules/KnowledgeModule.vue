@@ -17,7 +17,7 @@ const contents = ref<Content[]>([]); // Current folder contents
 const isLoading = ref(false);
 
 const kbFormVisible = ref(false);
-const kbForm = ref({ title: '', description: '', tags: '', cover_image: '' });
+const kbForm = ref({ title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50 });
 
 // Settings Form
 const settingsForm = ref({
@@ -25,11 +25,12 @@ const settingsForm = ref({
     description: '',
     tags: '',
     cover_image: '',
+    cover_offset_y: 50,
     visibility: 'Private' as 'Public' | 'Private' | 'Internal'
 });
 
 const contentFormVisible = ref(false);
-const contentFormType = ref<'Directory' | 'Article'>('Article');
+const contentFormType = ref<'Folder' | 'Article'>('Article');
 const contentForm = ref({ title: '' });
 
 
@@ -71,6 +72,7 @@ const openSettings = () => {
         description: currentKb.value.description || '',
         tags: currentKb.value.tags ? currentKb.value.tags.join(', ') : '',
         cover_image: currentKb.value.cover_image || '',
+        cover_offset_y: currentKb.value.cover_offset_y || 50,
         visibility: currentKb.value.visibility || 'Private'
     };
     viewMode.value = 'settings';
@@ -84,6 +86,7 @@ const updateKbSettings = async () => {
             description: settingsForm.value.description,
             tags: settingsForm.value.tags.split(',').map(t => t.trim()).filter(t => t),
             cover_image: settingsForm.value.cover_image,
+            cover_offset_y: settingsForm.value.cover_offset_y,
             visibility: settingsForm.value.visibility
         });
 
@@ -92,6 +95,7 @@ const updateKbSettings = async () => {
         currentKb.value.description = settingsForm.value.description;
         currentKb.value.tags = settingsForm.value.tags.split(',').map(t => t.trim()).filter(t => t);
         currentKb.value.cover_image = settingsForm.value.cover_image;
+        currentKb.value.cover_offset_y = settingsForm.value.cover_offset_y;
         currentKb.value.visibility = settingsForm.value.visibility;
 
         viewMode.value = 'detail';
@@ -113,9 +117,31 @@ const handleImageUpload = async (event: Event) => {
     try {
         const url = await uploadApi.uploadFile(file);
         settingsForm.value.cover_image = url;
-    } catch (e) {
-        console.error("Failed to upload image", e);
-        alert("Failed to upload image");
+    } catch (e: any) {
+        if (e.response && e.response.status === 413) {
+            alert("File is too large. Max size is 5MB.");
+        } else {
+             console.error("Failed to upload image", e);
+             alert("Failed to upload image");
+        }
+    }
+};
+
+const handleKbCreateImageUpload = async (event: Event) => {
+    const input = event.target as HTMLInputElement;
+    if (!input.files || input.files.length === 0) return;
+
+    const file = input.files[0];
+    try {
+        const url = await uploadApi.uploadFile(file);
+        kbForm.value.cover_image = url;
+    } catch (e: any) {
+         if (e.response && e.response.status === 413) {
+            alert("File is too large. Max size is 5MB.");
+        } else {
+            console.error("Failed to upload image", e);
+            alert("Failed to upload image");
+        }
     }
 };
 
@@ -158,7 +184,8 @@ const refreshContent = async () => {
 };
 
 const navigateInto = (folder: Content) => {
-    if (folder.content_type !== 'Directory') return;
+    // Backend returns 'type' field, checking strictly
+    if (folder.type !== 'Folder') return;
     currentPath.value.push(folder);
     refreshContent();
 };
@@ -195,10 +222,11 @@ const createKb = async () => {
             description: kbForm.value.description,
             tags: kbForm.value.tags.split(',').map(t => t.trim()).filter(t => t),
             cover_image: kbForm.value.cover_image,
+            cover_offset_y: kbForm.value.cover_offset_y,
             visibility: 'Private' // Default
         });
         kbFormVisible.value = false;
-        kbForm.value = { title: '', description: '', tags: '', cover_image: '' };
+        kbForm.value = { title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50 };
         fetchKBs();
     } catch (e: any) {
         if (e.response && e.response.status === 409) {
@@ -212,6 +240,12 @@ const createKb = async () => {
 const createContent = async () => {
     if (!contentForm.value.title) return;
     if (!currentKb.value) return;
+
+    // Only handle Directory creation here
+    if (contentFormType.value === 'Article') {
+         // Should not happen, but safeguard
+         return;
+    }
 
     try {
         // Determine Visibility Default
@@ -232,8 +266,8 @@ const createContent = async () => {
             visibility: visibility,
             knowledge_base_id: currentKb.value.id,
             parent_id: currentParentId.value,
-            type: contentFormType.value,
-            status: 'Published' // Default to Published so it shows up? Or Draft?
+            type: 'Folder',
+            status: 'Published' 
         });
         contentFormVisible.value = false;
         contentForm.value = { title: '' };
@@ -241,6 +275,19 @@ const createContent = async () => {
     } catch (e) {
         console.error(e);
     }
+};
+
+const navigateToNewArticle = () => {
+    if (!currentKb.value) return;
+    
+    const query: any = {
+        knowledge_base_id: currentKb.value.id
+    };
+    if (currentParentId.value) {
+        query.parent_id = currentParentId.value;
+    }
+    
+    router.push({ path: '/editor', query });
 };
 
 onMounted(() => {
@@ -282,11 +329,11 @@ onMounted(() => {
                     <i class="ri-add-line mr-1"></i> 新建知识库
                 </button>
                 <template v-else>
-                    <button @click="contentFormType = 'Directory'; contentFormVisible = true"
+                    <button @click="contentFormType = 'Folder'; contentFormVisible = true"
                         class="bg-paper border border-ink/10 text-ink px-3 py-1.5 text-xs font-medium rounded hover:border-accent hover:text-accent transition-colors">
                         <i class="ri-folder-add-line mr-1"></i> 文件夹
                     </button>
-                    <button @click="contentFormType = 'Article'; contentFormVisible = true"
+                    <button @click="navigateToNewArticle()"
                         class="bg-ink text-paper px-3 py-1.5 text-xs font-medium rounded hover:bg-accent transition-colors">
                         <i class="ri-file-add-line mr-1"></i> 文章
                     </button>
@@ -309,7 +356,8 @@ onMounted(() => {
                     <!-- Background Image or Placeholder -->
                     <div class="absolute inset-0 bg-ash/10">
                         <img v-if="kb.cover_image" :src="kb.cover_image"
-                            class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110" />
+                            class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            :style="{ objectPosition: `50% ${kb.cover_offset_y || 50}%` }" />
                         <div v-else
                             class="w-full h-full flex items-center justify-center bg-gradient-to-br from-ash/20 to-ash/5 text-ink/10">
                             <i class="ri-book-mark-fill text-6xl"></i>
@@ -402,7 +450,8 @@ onMounted(() => {
                                 class="relative group w-full h-48 rounded-lg overflow-hidden bg-ash/10 border border-ink/10">
                                 <!-- Preview -->
                                 <img v-if="settingsForm.cover_image" :src="settingsForm.cover_image"
-                                    class="w-full h-full object-cover" />
+                                    class="w-full h-full object-cover" 
+                                    :style="{ objectPosition: `50% ${settingsForm.cover_offset_y || 50}%` }" />
                                 <div v-else class="w-full h-full flex items-center justify-center text-ink/20">
                                     <i class="ri-image-add-line text-4xl"></i>
                                 </div>
@@ -417,6 +466,16 @@ onMounted(() => {
                                             @change="handleImageUpload" />
                                     </label>
                                 </div>
+                            </div>
+
+                             <!-- Position Slider -->
+                            <div v-if="settingsForm.cover_image" class="mt-4 bg-surface p-3 rounded border border-ink/5">
+                                <label class="block text-[10px] font-bold uppercase tracking-wider text-ink/40 mb-2 flex justify-between">
+                                    <span>Cover Position (Vertical)</span>
+                                    <span>{{ settingsForm.cover_offset_y }}%</span>
+                                </label>
+                                <input type="range" min="0" max="100" v-model.number="settingsForm.cover_offset_y" 
+                                    class="w-full h-1 bg-ink/10 rounded-lg appearance-none cursor-pointer accent-ink" />
                             </div>
 
                             <!-- Fallback URL Input (optional, keeps flexibility) -->
@@ -445,11 +504,13 @@ onMounted(() => {
                 </div>
 
                 <div v-for="item in contents" :key="item.id"
-                    @click="item.content_type === 'Directory' ? navigateInto(item) : navigateToArticle(item)"
+                    @click="item.type === 'Folder' ? navigateInto(item) : navigateToArticle(item)"
                     class="flex items-center justify-between p-3 rounded hover:bg-surface/50 border border-transparent hover:border-ink/5 group transition-colors cursor-pointer">
 
+
+
                     <div class="flex items-center gap-3">
-                        <i v-if="item.content_type === 'Directory'"
+                        <i v-if="item.type === 'Folder'"
                             class="ri-folder-fill text-xl text-yellow-500/80"></i>
                         <i v-else class="ri-file-text-line text-xl text-ink/40"></i>
 
@@ -488,8 +549,36 @@ onMounted(() => {
 
                 <TagInput v-model="kbForm.tags" placeholder="Tags" class="mb-3" />
 
-                <input v-model="kbForm.cover_image" placeholder="Cover Image URL (optional)"
-                    class="w-full bg-surface border border-ink/10 rounded px-3 py-2 mb-6 text-sm focus:outline-none focus:border-accent" />
+                <div class="mb-4">
+                    <label class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Cover Image</label>
+                    <div class="relative group w-full h-32 rounded-lg overflow-hidden bg-ash/10 border border-ink/10">
+                        <img v-if="kbForm.cover_image" :src="kbForm.cover_image" class="w-full h-full object-cover" 
+                             :style="{ objectPosition: `50% ${kbForm.cover_offset_y || 50}%` }" />
+                        <div v-else class="w-full h-full flex items-center justify-center text-ink/20">
+                            <i class="ri-image-add-line text-3xl"></i>
+                        </div>
+                        <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <label class="cursor-pointer bg-white text-black px-3 py-1.5 rounded-full font-medium text-xs hover:bg-white/90 transition-colors flex items-center gap-1">
+                                <i class="ri-upload-cloud-line"></i> Upload
+                                <input type="file" accept="image/*" class="hidden" @change="handleKbCreateImageUpload" />
+                            </label>
+                        </div>
+                    </div>
+
+                    
+                    <!-- Position Slider -->
+                    <div v-if="kbForm.cover_image" class="mt-2 bg-surface p-2 rounded border border-ink/5">
+                         <label class="block text-[10px] font-bold uppercase tracking-wider text-ink/40 mb-1 flex justify-between">
+                            <span>Position</span>
+                            <span>{{ kbForm.cover_offset_y }}%</span>
+                        </label>
+                        <input type="range" min="0" max="100" v-model.number="kbForm.cover_offset_y" 
+                            class="w-full h-1 bg-ink/10 rounded-lg appearance-none cursor-pointer accent-ink" />
+                    </div>
+
+                    <input v-model="kbForm.cover_image" placeholder="Or enter image URL..."
+                        class="mt-2 w-full bg-transparent border-b border-ink/10 py-1 text-xs text-ink/60 focus:outline-none focus:border-accent" />
+                </div>
                 <div class="flex justify-end gap-2 text-xs font-medium">
                     <button @click="kbFormVisible = false" class="px-3 py-1.5 hover:bg-surface rounded">Cancel</button>
                     <button @click="createKb"
@@ -502,7 +591,7 @@ onMounted(() => {
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
             @click.self="contentFormVisible = false">
             <div class="bg-paper p-6 rounded-lg border border-ink/10 shadow-xl w-96 max-w-full">
-                <h3 class="text-lg font-bold mb-4">New {{ contentFormType }}</h3>
+                <h3 class="text-lg font-bold mb-4">New Folder</h3>
                 <input v-model="contentForm.title" placeholder="Title"
                     class="w-full bg-surface border border-ink/10 rounded px-3 py-2 mb-4 text-sm focus:outline-none focus:border-accent"
                     autoFocus @keyup.enter="createContent" />

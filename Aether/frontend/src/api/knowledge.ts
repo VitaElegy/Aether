@@ -9,6 +9,7 @@ export interface KnowledgeBase {
     description?: string;
     tags?: string[];
     cover_image?: string;
+    cover_offset_y: number; // Percentage 0-100
     visibility: 'Public' | 'Private' | 'Internal';
     created_at: string;
     updated_at: string;
@@ -19,6 +20,7 @@ export interface CreateKnowledgeBaseRequest {
     description?: string;
     tags?: string[];
     cover_image?: string;
+    cover_offset_y?: number;
     visibility?: 'Public' | 'Private' | 'Internal';
 }
 
@@ -27,6 +29,7 @@ export interface UpdateKnowledgeBaseRequest {
     description?: string;
     tags?: string[];
     cover_image?: string;
+    cover_offset_y?: number;
     visibility?: 'Public' | 'Private' | 'Internal';
 }
 
