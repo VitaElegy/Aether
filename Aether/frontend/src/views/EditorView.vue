@@ -36,6 +36,7 @@ const commitMessage = ref('');
 const localCache = useStorage('aether_editor_current', {
   id: null as string | null,
   knowledge_base_id: null as string | null,
+  parent_id: null as string | null,
   title: '',
   body: '',
   category: '',
@@ -46,6 +47,7 @@ const localCache = useStorage('aether_editor_current', {
 const form = reactive({
   title: '',
   knowledge_base_id: null as string | null,
+  parent_id: null as string | null,
   body: '',
   category: '',
   tags: [] as string[],
@@ -146,6 +148,7 @@ onMounted(async () => {
       form.visibility = data.visibility;
       form.status = data.status; // Server is truth for status
       form.knowledge_base_id = data.node?.knowledge_base_id || null;
+      form.parent_id = data.node?.parent_id || null;
       // Initialize body from server
       form.body = data.body.data;
 
@@ -178,18 +181,45 @@ onMounted(async () => {
       }
     }
   } else {
-    // New Entry
+    // New Entry initialization
     timestamps.value = { created: new Date().toISOString(), updated: new Date().toISOString() };
     
-    // Only restore if cache was for a new entry (null id)
-    if (localCache.value?.id === null && (localCache.value?.body || localCache.value?.title)) {
-       // Check if cache actually has content
-       if (localCache.value.body.length > 5 || localCache.value.title.length > 0) {
+    // Initialize from Query Params (Context Intent)
+    const intendedKbId = route.query.knowledge_base_id as string | undefined;
+    const intendedParentId = route.query.parent_id as string | undefined;
+
+    if (intendedKbId) form.knowledge_base_id = intendedKbId;
+    if (intendedParentId) form.parent_id = intendedParentId;
+
+    // Check Local Cache for "New Entry" Draft (id === null)
+    if (localCache.value?.id === null) {
+       // STRICT CHECK: Does the cached draft belong to the SAME context?
+       const cacheKbId = localCache.value.knowledge_base_id || undefined; // Normalizing null to undefined for comparison
+       const cacheParentId = localCache.value.parent_id || undefined;
+
+       // Helper: Normalize undefined/null for loose comparison if needed, but stricter is better.
+       // We accept Match if: Both undefined OR Both Equal.
+       const kbMatch = (intendedKbId === cacheKbId) || (!intendedKbId && !cacheKbId);
+       const parentMatch = (intendedParentId === cacheParentId) || (!intendedParentId && !cacheParentId);
+
+       if (kbMatch && parentMatch && (localCache.value.body?.length > 5 || localCache.value.title?.length > 0)) {
+           // Context Matches -> Safe to Restore
            form.title = localCache.value.title;
            form.body = localCache.value.body;
            form.tags = localCache.value.tags;
            form.category = localCache.value.category;
+           // Explicitly keep context fields from cache as they matched
+           form.knowledge_base_id = localCache.value.knowledge_base_id;
+           form.parent_id = localCache.value.parent_id;
+
            MessagePlugin.info('Restored unsaved new draft.', 2000);
+       } else {
+           // Context Mismatch -> Start Clean (Cache is from a different location)
+           // Do NOT clear the cache yet? Or Clear it? 
+           // If we don't clear, we might recover it if user goes back to the other folder.
+           // But simplicity suggests: Clear it to avoid "Ghosting".
+           // Decision: Do NOT restore. We start fresh. User expects a blank slate in a new folder.
+           // Optional: We could log or warn, but better to be silent and correct.
        }
     }
   }
@@ -230,6 +260,7 @@ const saveDraft = async () => {
       visibility: form.visibility,
       status: form.status, // Respect current status (e.g. keep Published if editing live)
       knowledge_base_id: form.knowledge_base_id || null, // Sanitize empty string to null
+      parent_id: form.parent_id || null,
       snapshot: false // Do not create version snapshot for auto-save
     };
 
@@ -335,7 +366,9 @@ const executePublish = async () => {
       visibility: form.visibility || 'Public',
       status: 'Published',
       reason: commitMessage.value,
+      reason: commitMessage.value,
       knowledge_base_id: form.knowledge_base_id || null, // Sanitize empty string to null
+      parent_id: form.parent_id || null,
       snapshot: true // Explicitly create version snapshot
     };
 
@@ -362,6 +395,8 @@ const executePublish = async () => {
       tags: [],
       visibility: 'Public',
       status: 'Draft',
+      status: 'Draft',
+      parent_id: null,
       timestamp: 0
     };
     MessagePlugin.success('Published.');
@@ -384,6 +419,12 @@ const goBack = () => {
   // Check if there is a history entry to go back to within the router's state
   if (window.history.state && window.history.state.back) {
     router.back();
+  } else if (draftId.value && form.knowledge_base_id) {
+    // Context-aware fallback: Go to Knowledge Base
+    // Ideally we should go to the specific folder if possible, but we need a route for that.
+    // SelfSpace uses internal state for folders, so simple routing might just go to root KB.
+    // But let's try pushing to the space view.
+    router.push('/space'); 
   } else {
     // Fallback to home if no history (e.g. direct link or fresh tab)
     router.push('/');

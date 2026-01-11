@@ -34,7 +34,7 @@ export interface Content {
     author_name?: string;
     knowledge_base_id?: string;
     parent_id?: string;
-    content_type: 'Article' | 'Directory';
+    type: 'Article' | 'Folder';
     created_at: string;
     updated_at: string;
 }
@@ -50,7 +50,7 @@ export interface CreateContentPayload {
     snapshot?: boolean;
     knowledge_base_id?: string;
     parent_id?: string;
-    type?: 'Article' | 'Directory';
+    type?: 'Article' | 'Folder';
 }
 
 export const contentApi = {
