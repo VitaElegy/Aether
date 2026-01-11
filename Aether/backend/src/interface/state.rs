@@ -14,6 +14,7 @@ pub struct AppState {
     pub export_service: Arc<dyn ExportService>,
     pub permission_service: crate::domain::permission_service::PermissionService<PostgresRepository>,
     pub dictionary: DictionaryLoader,
+    pub dictionary_cache: moka::future::Cache<String, String>, // JSON serialized entry
 }
 
 impl FromRef<AppState> for Arc<dyn AuthService> {

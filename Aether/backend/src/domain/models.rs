@@ -62,6 +62,16 @@ pub struct Article {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VocabularyExample {
+    pub id: Uuid,
+    pub sentence: String,
+    pub translation: Option<String>,
+    pub note: Option<String>,
+    pub image_url: Option<String>,
+    pub created_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Vocabulary {
     #[serde(flatten)]
     pub node: Node,
@@ -69,10 +79,20 @@ pub struct Vocabulary {
     pub definition: String,
     pub translation: Option<String>,
     pub phonetic: Option<String>,
+    // Removed old context_sentence/image_url in favor of examples list, 
+    // but keeping for backward compat if needed, or just deprecate.
+    // User wants "multiple examples". 
+    // Let's deprecate single context_sentence/image_url or map the first example to them.
+    // Ideally we return the full objects.
     pub context_sentence: Option<String>, 
     pub image_url: Option<String>, 
+    
     pub language: String,
     pub status: String,
+    
+    // New Fields
+    pub root: Option<String>, // The actual root string, e.g. "spec"
+    pub examples: Vec<VocabularyExample>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

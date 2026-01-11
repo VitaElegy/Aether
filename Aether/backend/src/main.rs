@@ -226,6 +226,31 @@ async fn main() {
         "ALTER TABLE nodes ADD CONSTRAINT fk_nodes_parent FOREIGN KEY (parent_id) REFERENCES nodes(id) ON DELETE CASCADE;"
     )).await.map_err(|e| println!("Migration note (nodes.parent_fk): {}", e));
 
+    // --- NEW VOCABULARY SCHEMA ---
+    let _ = db.execute_unprepared("
+        CREATE TABLE IF NOT EXISTS vocab_roots (
+            id UUID PRIMARY KEY,
+            root TEXT UNIQUE NOT NULL,
+            meaning TEXT
+        );
+
+        CREATE TABLE IF NOT EXISTS vocab_examples (
+            id UUID PRIMARY KEY,
+            vocab_id UUID NOT NULL, -- FK to vocab_details.id (which is same as node.id)
+            sentence TEXT NOT NULL,
+            translation TEXT,
+            note TEXT,
+            image_url TEXT,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (vocab_id) REFERENCES vocab_details(id) ON DELETE CASCADE
+        );
+    ").await.map_err(|e| println!("Migration note (vocab_new_tables): {}", e));
+
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE vocab_details ADD COLUMN root_id UUID REFERENCES vocab_roots(id) ON DELETE SET NULL;"
+    )).await.map_err(|e| println!("Migration note (vocab.root_id): {}", e));
+
 
 
     // Initialize Auth Service
@@ -290,12 +315,18 @@ async fn main() {
         Err(e) => tracing::warn!("Public group init: {}", e),
     }
     
+    let dictionary_cache = moka::future::Cache::builder()
+        .max_capacity(1000)
+        .time_to_live(std::time::Duration::from_secs(3600))
+        .build();
+
     let state = AppState {
         repo,
         auth_service,
         export_service,
         permission_service,
         dictionary,
+        dictionary_cache,
     };
 
     // --- 4. Build Router with Trace Middleware ---
@@ -318,8 +349,9 @@ async fn main() {
         .route("/", get(health_check))
         .nest_service("/uploads", ServeDir::new("uploads"))
         .merge(api_routes)
+        .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024)) // 50MB Limit
         .layer(TraceLayer::new_for_http()); // Magic happens here: Automatic logging for every request
-
+    
     let addr = "0.0.0.0:3000";
     let listener = TcpListener::bind(addr).await.unwrap();
     tracing::info!("Aether Core online at {}", addr);
