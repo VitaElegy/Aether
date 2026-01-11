@@ -12,8 +12,8 @@ pub async fn upload_handler(
 ) -> impl IntoResponse {
     const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5 MB
 
-    while let Some(field) = multipart.next_field().await.unwrap() {
-        let name = field.name().unwrap().to_string();
+    while let Ok(Some(field)) = multipart.next_field().await {
+        let name = field.name().unwrap_or("").to_string();
 
         if name == "file" {
             let file_name = field.file_name().unwrap_or("unknown").to_string();
@@ -28,7 +28,7 @@ pub async fn upload_handler(
             let mut data = Vec::new();
             let mut stream = field;
 
-            while let Some(chunk) = stream.chunk().await.unwrap() {
+            while let Ok(Some(chunk)) = stream.chunk().await {
                 if data.len() + chunk.len() > MAX_FILE_SIZE {
                     return (StatusCode::PAYLOAD_TOO_LARGE, Json(serde_json::json!({ "error": "File size exceeds 5MB limit" }))).into_response();
                 }
@@ -41,7 +41,10 @@ pub async fn upload_handler(
 
             // Ensure uploads directory exists
             let upload_dir = "uploads/avatars";
-            fs::create_dir_all(upload_dir).await.unwrap();
+            if let Err(e) = fs::create_dir_all(upload_dir).await {
+                eprintln!("Failed to create upload dir: {}", e);
+                 return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Server storage error" }))).into_response();
+            }
 
             // Generate unique filename
             let ext = Path::new(&file_name).extension().and_then(|s| s.to_str()).unwrap_or("png");
@@ -49,7 +52,10 @@ pub async fn upload_handler(
             let filepath = format!("{}/{}", upload_dir, new_filename);
 
             // Save file
-            fs::write(&filepath, data).await.unwrap();
+            if let Err(e) = fs::write(&filepath, data).await {
+                 eprintln!("Failed to write file: {}", e);
+                 return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": "Failed to save file" }))).into_response();
+            }
 
             // Return URL (assuming static file serving is set up at /uploads)
             let public_url = format!("/uploads/avatars/{}", new_filename);
@@ -57,7 +63,7 @@ pub async fn upload_handler(
         }
     }
 
-    (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "No file provided" }))).into_response()
+    (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "No file field found" }))).into_response()
 }
 
 pub fn router() -> axum::Router<crate::interface::state::AppState> {
