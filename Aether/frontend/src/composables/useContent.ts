@@ -20,6 +20,8 @@ export interface ContentItem {
     parent_id: string | null;
     slug?: string;
     type?: 'Article' | 'Folder'; // Add Type
+    user_permission?: 'author' | 'editor' | 'viewer';
+    collaborators?: { id: string; username: string; avatar_url: string | null }[];
 }
 
 export function useContent() {
@@ -32,6 +34,11 @@ export function useContent() {
 
     const isAuthor = computed(() => {
         return authStore.user && article.value && authStore.user.id === article.value.author_id;
+    });
+
+    const canEdit = computed(() => {
+        if (!article.value || !authStore.user) return false;
+        return isAuthor.value || article.value.user_permission === 'editor';
     });
 
     const load = async (id: string) => {
@@ -154,6 +161,7 @@ export function useContent() {
         error,
         isSaving,
         isAuthor,
+        canEdit,
         load,
         save,
         create

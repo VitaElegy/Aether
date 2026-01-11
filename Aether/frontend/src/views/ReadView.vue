@@ -19,7 +19,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const prefStore = usePreferencesStore();
 
-const { article, loading, isAuthor, load } = useContent();
+const { article, loading, isAuthor, canEdit, load } = useContent();
 
 const id = route.params.id as string;
 const kbTitle = ref<string>('');
@@ -220,7 +220,10 @@ const handleEdit = () => {
                         <i class="ri-pushpin-line" :class="{ 'rotate-45': rightMode === 'docked' }"></i>
                     </button>
 
-                    <button v-if="isAuthor" @click="handleEdit"
+                    <!-- Collaborators -->
+
+
+                    <button v-if="canEdit" @click="handleEdit"
                         class="text-xs font-black uppercase tracking-widest text-accent hover:brightness-125 transition-all">
                         Modify
                     </button>
@@ -280,6 +283,22 @@ const handleEdit = () => {
                                 <span
                                     class="text-[10px] font-mono text-ink/50 uppercase tracking-[0.2em]">{{ new Date(article.created_at).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) }}</span>
                             </div>
+                        </div>
+                        
+                        <!-- Collaborators -->
+                        <div v-if="article.collaborators?.length" class="mt-6 flex items-center gap-3 animate-slide-up" style="animation-delay: 100ms">
+                             <div class="flex -space-x-3">
+                                <div v-for="collab in article.collaborators" :key="collab.id" 
+                                    @click="router.push(`/profile/${collab.id}`)"
+                                    class="w-8 h-8 rounded-full border-2 border-paper overflow-hidden bg-surface relative flex items-center justify-center cursor-pointer hover:scale-110 hover:z-10 transition-all shadow-sm"
+                                    :title="`Collaborator: ${collab.username}`">
+                                    <img v-if="collab.avatar_url" :src="collab.avatar_url" class="w-full h-full object-cover">
+                                    <span v-else class="text-[9px] font-black text-ink/40">{{ collab.username.substring(0, 1).toUpperCase() }}</span>
+                                </div>
+                            </div>
+                            <span class="text-[10px] font-black text-ink/30 uppercase tracking-widest pl-2">
+                                + {{ article.collaborators.length }} Contributor{{ article.collaborators.length > 1 ? 's' : '' }}
+                            </span>
                         </div>
                     </div>
 
