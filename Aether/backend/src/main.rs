@@ -203,6 +203,11 @@ async fn main() {
         "ALTER TABLE nodes ADD COLUMN knowledge_base_id UUID REFERENCES knowledge_bases(id) ON DELETE SET NULL;"
     )).await.map_err(|e| println!("Migration warning (likely exists): {}", e));
 
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE knowledge_bases ADD COLUMN cover_offset_y INT NOT NULL DEFAULT 50;"
+    )).await.map_err(|e| println!("Migration warning (likely exists): {}", e));
+
 
 
     // Initialize Auth Service

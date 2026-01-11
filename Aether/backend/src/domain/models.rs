@@ -195,6 +195,7 @@ pub struct KnowledgeBase {
     pub description: Option<String>,
     pub tags: Vec<String>,
     pub cover_image: Option<String>,
+    pub cover_offset_y: i32,
     pub visibility: Visibility,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
