@@ -17,6 +17,7 @@ pub struct CreateKnowledgeBaseRequest {
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
     pub cover_image: Option<String>,
+    pub cover_offset_y: Option<i32>,
     pub visibility: Option<String>,
 }
 
@@ -26,6 +27,7 @@ pub struct UpdateKnowledgeBaseRequest {
     pub description: Option<String>,
     pub tags: Option<Vec<String>>,
     pub cover_image: Option<String>,
+    pub cover_offset_y: Option<i32>,
     pub visibility: Option<String>,
 }
 
@@ -90,6 +92,7 @@ pub async fn create_knowledge_base_handler(
         description: payload.description,
         tags: payload.tags.unwrap_or_default(),
         cover_image: payload.cover_image,
+        cover_offset_y: payload.cover_offset_y.unwrap_or(50),
         visibility: match payload.visibility.as_deref() {
             Some("Public") => Visibility::Public,
             Some("Internal") => Visibility::Internal,
@@ -175,6 +178,9 @@ pub async fn update_knowledge_base_handler(
     }
     if let Some(cover) = payload.cover_image {
         existing.cover_image = Some(cover);
+    }
+    if let Some(offset) = payload.cover_offset_y {
+        existing.cover_offset_y = offset.clamp(0, 100);
     }
     if let Some(vis) = payload.visibility {
         existing.visibility = match vis.as_str() {
