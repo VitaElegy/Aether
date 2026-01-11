@@ -21,6 +21,7 @@ impl DraftRepository for PostgresRepository {
              tags: Set(tags_json),
              category: Set(draft.category),
              knowledge_base_id: Set(draft.knowledge_base_id),
+             parent_id: Set(draft.parent_id),
              updated_at: Set(chrono::Utc::now().into()), // Force update time
          };
 
@@ -35,6 +36,7 @@ impl DraftRepository for PostgresRepository {
                          draft::Column::Tags,
                          draft::Column::Category,
                          draft::Column::KnowledgeBaseId,
+                         draft::Column::ParentId,
                          draft::Column::UpdatedAt,
                      ])
                      .to_owned()
@@ -61,6 +63,7 @@ impl DraftRepository for PostgresRepository {
                 tags: m.tags.map(|t| serde_json::from_str(&t).unwrap_or_default()),
                 category: m.category,
                 knowledge_base_id: m.knowledge_base_id,
+                parent_id: m.parent_id,
                 updated_at: m.updated_at.into(), // Convert back to UTC
             })),
             None => Ok(None),

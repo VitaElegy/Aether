@@ -13,6 +13,7 @@ import CollaboratorModal from './CollaboratorModal.vue';
 import { usePreferencesStore } from '@/stores/preferences';
 import { knowledgeApi, type KnowledgeBase } from '@/api/knowledge';
 import { useContent } from '@/composables/useContent';
+import { draftApi, type DraftData } from '@/api/draft';
 
 const router = useRouter();
 const route = useRoute();
@@ -36,16 +37,8 @@ const showCollaboratorModal = ref(false);
 const commitMessage = ref('');
 
 // Local Storage Cache - Content ONLY (No status/lifecycle)
-const localCache = useStorage('aether_editor_current', {
-  id: null as string | null,
-  knowledge_base_id: null as string | null,
-  parent_id: null as string | null,
-  title: '',
-  body: '',
-  category: '',
-  tags: [] as string[],
-  timestamp: 0
-});
+// const localCache = useStorage('aether_editor_current', { ... }); 
+// REPLACED BY SERVER SIDE DRAFT API
 
 const form = reactive({
   title: '',
@@ -166,58 +159,56 @@ const editor = useEditor({
 });
 
 // Initialization
+// Initialization
 onMounted(async () => {
-  if (draftId.value) {
+  // 1. Check for Server-Side Draft
+  const serverDraft = await draftApi.get();
+  let draftLoaded = false;
+
+  if (serverDraft) {
+      const isNewEntry = !draftId.value;
+      const conflictsWithCurrent = draftId.value && serverDraft.target_article_id && draftId.value !== serverDraft.target_article_id;
+      
+      let shouldLoad = false;
+
+      if (conflictsWithCurrent) {
+        // User is opening Article A, but has a draft for Article B.
+        // Prompt user (Simplification: Just notify for now, or maybe don't load? 
+        // For this fix, let's assume we ONLY load if it matches or is new)
+        MessagePlugin.warning('You have an active draft for another article. It was not loaded.', 5000);
+      } else {
+        // Match! Load it.
+        shouldLoad = true;
+      }
+
+      if (shouldLoad) {
+          form.title = serverDraft.title || form.title;
+          form.body = serverDraft.body || form.body;
+          form.tags = serverDraft.tags || form.tags;
+          form.category = serverDraft.category || form.category;
+          form.knowledge_base_id = serverDraft.knowledge_base_id || form.knowledge_base_id;
+          // form.parent_id = serverDraft.parent_id || form.parent_id; // Backend doesn't support yet
+          
+          if (editor.value && form.body) editor.value.commands.setContent(form.body);
+          MessagePlugin.info('Restored unsaved draft from server.', 3000);
+          draftLoaded = true;
+      }
+  }
+
+  if (draftId.value && !draftLoaded) {
     await load(draftId.value);
-    
-    // Check Cache for *Unsaved Content*
-    // Condition: Same ID AND Cache is NEWER than Server Update
-    if (
-        article.value &&
-        localCache.value?.id === draftId.value && 
-        localCache.value?.body && 
-        localCache.value.timestamp > new Date(article.value.updated_at).getTime()
-    ) {
-         MessagePlugin.info('Restored unsaved content changes from local cache.', 3000);
-         // Restore content fields
-         form.title = localCache.value.title || form.title;
-         form.body = localCache.value.body || form.body;
-         form.tags = localCache.value.tags?.length ? localCache.value.tags : form.tags;
-         form.category = localCache.value.category || form.category;
-         if (editor.value) editor.value.commands.setContent(form.body);
-    }
-  } else {
-    // New Entry initialization... (same as before)
-    timestamps.value = { created: new Date().toISOString(), updated: new Date().toISOString() };
-    
-     // Initialize from Query Params (Context Intent)
-    const intendedKbId = route.query.knowledge_base_id as string | undefined;
-    const intendedParentId = route.query.parent_id as string | undefined;
-
-    if (intendedKbId) form.knowledge_base_id = intendedKbId;
-    if (intendedParentId) form.parent_id = intendedParentId;
-
-    // Check Local Cache for "New Entry" Draft (id === null)
-    if (localCache.value?.id === null) {
-       const cacheKbId = localCache.value.knowledge_base_id || undefined;
-       const cacheParentId = localCache.value.parent_id || undefined;
-       const kbMatch = (intendedKbId === cacheKbId) || (!intendedKbId && !cacheKbId);
-       const parentMatch = (intendedParentId === cacheParentId) || (!intendedParentId && !cacheParentId);
-
-       if (kbMatch && parentMatch && (localCache.value.body?.length > 5 || localCache.value.title?.length > 0)) {
-           form.title = localCache.value.title;
-           form.body = localCache.value.body;
-           form.tags = localCache.value.tags;
-           form.category = localCache.value.category;
-           form.knowledge_base_id = localCache.value.knowledge_base_id;
-           form.parent_id = localCache.value.parent_id;
-           MessagePlugin.info('Restored unsaved new draft.', 2000);
-       }
-    }
-    
-    if (editor.value && form.body) {
-         editor.value.commands.setContent(form.body);
-    }
+    // If we loaded from live, form watcher will sync via 'watch(article)' below
+  } else if (!draftId.value && !draftLoaded) {
+     timestamps.value = { created: new Date().toISOString(), updated: new Date().toISOString() };
+     
+     const intendedKbId = route.query.knowledge_base_id as string | undefined;
+     const intendedParentId = route.query.parent_id as string | undefined;
+     if (intendedKbId) form.knowledge_base_id = intendedKbId;
+     if (intendedParentId) form.parent_id = intendedParentId;
+  }
+ 
+  if (editor.value && form.body && !draftLoaded) {
+       editor.value.commands.setContent(form.body);
   }
 
   // Fetch KBs ...
@@ -238,55 +229,24 @@ onMounted(async () => {
 });
 
 
-// Auto-Save managed by useContent
+// Auto-Save managed by Draft API (Decoupled from Live)
 const saveDraft = async () => {
   if (!form.title && !form.body) return;
   
-  // PROTECT LIVE CONTENT: Do NOT auto-save to backend if article is Published.
-  // Edits remain in Local Cache until explicit "Publish" action.
-  if (form.status === 'Published') return;
-
-  if (!draftId.value) {
-      // First save (Create)
-      try {
-           const payload = {
-              title: form.title || 'Untitled Draft',
-              body: form.body,
-              tags: form.tags,
-              category: form.category || '',
-              visibility: form.visibility as any,
-              status: form.status as any, 
-              knowledge_base_id: form.knowledge_base_id || null,
-              parent_id: form.parent_id || null,
-          };
-          const newId = await create(payload);
-          draftId.value = newId;
-          // Refresh state via composable to sync (redundant if create does it, but safer to be sure)
-          if (draftId.value) await load(draftId.value);
-          router.replace({ name: 'editor', params: { id: draftId.value } });
-      } catch (e) {
-          console.error("Failed to create draft", e);
-      }
-  } else {
-      // Update via composable
-      try {
-           await save({
-              title: form.title,
-              body: form.body,
-              tags: form.tags,
-              category: form.category,
-              visibility: form.visibility as any,
-              status: form.status as any,
-              knowledge_base_id: form.knowledge_base_id,
-              parent_id: form.parent_id,
-          });
-          timestamps.value.updated = new Date().toISOString();
-      } catch (err: any) {
-        if (err.response && err.response.status === 409) {
-            autoSaveEnabled.value = false;
-            MessagePlugin.error('Title exists. Auto-save PAUSED. Change title and re-enable.', 5000);
-        }
-      }
+  // Always save to Draft API, never touch live content auto-magically
+  try {
+       await draftApi.save({
+          target_article_id: draftId.value || null,
+          title: form.title,
+          body: form.body,
+          tags: form.tags,
+          category: form.category,
+          knowledge_base_id: form.knowledge_base_id,
+          parent_id: form.parent_id // Pass it even if backend drops it for now
+      });
+      timestamps.value.updated = new Date().toISOString();
+  } catch (e) {
+      console.error("Auto-save failed", e);
   }
 };
 
@@ -295,11 +255,8 @@ const debouncedAutoSave = useDebounceFn(() => {
 }, 2000);
 
 // Decoupled Watchers
-// 1. Local Cache Recovery: Always persist to browser storage
-watch(form, (newVal) => {
-  if (isSyncing.value) return; // Don't update cache if change came from server sync
-  localCache.value = { ...newVal, id: draftId.value, timestamp: Date.now() };
-}, { deep: true });
+// 1. Removed Local Cache Watcher
+// watch(form, (newVal) => { ... }, { deep: true });
 
 // 2. Server Auto-Save: Only trigger if NOT restoring and enabled
 watch(form, () => {
@@ -386,16 +343,11 @@ const executePublish = async () => {
             });
         }
 
-        localCache.value = {
-            id: null,
-            title: '',
-            body: '',
-            category: '',
-            tags: [],
-            knowledge_base_id: null,
-            parent_id: null,
-            timestamp: 0
-        };
+
+
+        // Cleanup Draft
+        await draftApi.delete();
+        
         MessagePlugin.success('Published.');
         await router.push('/');
     } catch (err: any) {

@@ -20,6 +20,7 @@ pub struct DraftUpdateDTO {
     pub tags: Option<Vec<String>>,
     pub category: Option<String>,
     pub knowledge_base_id: Option<Uuid>,
+    pub parent_id: Option<Uuid>,
 }
 
 pub fn router() -> Router<AppState> {
@@ -51,6 +52,7 @@ async fn save_draft_handler(
         tags: payload.tags,
         category: payload.category,
         knowledge_base_id: payload.knowledge_base_id,
+        parent_id: payload.parent_id,
         updated_at: chrono::Utc::now(), // Placeholder, repo sets DB time
     };
 

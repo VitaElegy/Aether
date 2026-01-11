@@ -12,6 +12,7 @@ pub struct Model {
     pub tags: Option<String>, // Serialized JSON
     pub category: Option<String>,
     pub knowledge_base_id: Option<Uuid>,
+    pub parent_id: Option<Uuid>,
     pub updated_at: DateTimeWithTimeZone,
 }
 
