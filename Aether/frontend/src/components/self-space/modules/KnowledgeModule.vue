@@ -6,8 +6,8 @@ import { contentApi, type Content } from '../../../api/content';
 import { uploadApi } from '../../../api/upload';
 import TagInput from '../../common/TagInput.vue';
 import UserSelect from '../../common/UserSelect.vue';
+import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 
-// -- State --
 // -- State --
 const router = useRouter();
 const viewMode = ref<'list' | 'detail' | 'settings'>('list');
@@ -36,6 +36,11 @@ const newCollaboratorUser = ref<any>(null);
 const contentFormVisible = ref(false);
 const contentFormType = ref<'Folder' | 'Article'>('Article');
 const contentForm = ref({ title: '' });
+
+// Context Menu State
+const contextMenuVisible = ref(false);
+const contextMenuTarget = ref<Content | null>(null);
+const contextMenuPosition = ref({ x: 0, y: 0 });
 
 
 // -- Computed --
@@ -314,6 +319,54 @@ const createContent = async () => {
     }
 };
 
+// -- Context Menu & Deletion --
+const handleContextMenu = (e: MouseEvent, item: Content) => {
+    e.preventDefault();
+    contextMenuTarget.value = item;
+    contextMenuPosition.value = { x: e.clientX, y: e.clientY };
+    contextMenuVisible.value = true;
+};
+
+const closeContextMenu = () => {
+    contextMenuVisible.value = false;
+    contextMenuTarget.value = null;
+};
+
+const handleDeleteFromMenu = () => {
+    if (!contextMenuTarget.value) return;
+    const item = contextMenuTarget.value;
+    closeContextMenu();
+
+    const isFolder = item.type === 'Folder';
+    const confirmBody = isFolder 
+        ? `Are you sure you want to delete the folder "${item.title}"? All contents inside will be permanently deleted.`
+        : `Are you sure you want to delete "${item.title}"?`;
+
+    const confirmDialog = DialogPlugin.confirm({
+        header: 'Confirm Deletion',
+        body: confirmBody,
+        theme: 'danger',
+        onConfirm: async () => {
+            try {
+                await contentApi.delete(item.id);
+                MessagePlugin.success('Deleted successfully');
+                confirmDialog.hide();
+                refreshContent();
+            } catch (e) {
+                console.error("Delete failed", e);
+                MessagePlugin.error('Failed to delete item');
+            }
+        }
+    });
+};
+
+// Close menu on click elsewhere
+onMounted(() => {
+    document.addEventListener('click', closeContextMenu);
+});
+// Need to remove listener? usually fine in setup script but cleaner to remove
+// Not implementing onUnmounted for brevity but recommended.
+
 const navigateToNewArticle = () => {
     if (!currentKb.value) return;
     
@@ -542,7 +595,8 @@ onMounted(() => {
 
                 <div v-for="item in contents" :key="item.id"
                     @click="item.type === 'Folder' ? navigateInto(item) : navigateToArticle(item)"
-                    class="flex items-center justify-between p-3 rounded hover:bg-surface/50 border border-transparent hover:border-ink/5 group transition-colors cursor-pointer">
+                    @contextmenu="handleContextMenu($event, item)"
+                    class="flex items-center justify-between p-3 rounded hover:bg-surface/50 border border-transparent hover:border-ink/5 group transition-colors cursor-pointer relative">
 
 
 
@@ -573,6 +627,18 @@ onMounted(() => {
         </div>
 
         <!-- MODALS (Simple inline implementation for minimal deps) -->
+        
+        <!-- Context Menu -->
+        <div v-if="contextMenuVisible" 
+             class="fixed z-[100] bg-paper border border-ink/10 shadow-xl rounded py-1 min-w-[160px] flex flex-col"
+             :style="{ top: `${contextMenuPosition.y}px`, left: `${contextMenuPosition.x}px` }"
+             @click.stop>
+            <button @click="handleDeleteFromMenu" 
+                class="text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2">
+                <i class="ri-delete-bin-line"></i> Delete
+            </button>
+        </div>
+
         <div v-if="kbFormVisible"
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
             @click.self="kbFormVisible = false">

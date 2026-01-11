@@ -8,7 +8,22 @@ use crate::domain::{
 use uuid::Uuid;
 use chrono::Utc;
 use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+
+#[derive(Serialize)]
+pub struct CollaboratorInfo {
+    pub id: Uuid,
+    pub username: String,
+    pub avatar_url: Option<String>,
+}
+
+#[derive(Serialize)]
+pub struct ContentResponse {
+    #[serde(flatten)]
+    pub item: crate::domain::models::ContentItem,
+    pub user_permission: String, // "author", "editor", "viewer"
+    pub collaborators: Vec<CollaboratorInfo>,
+}
 
 #[derive(Deserialize)]
 pub struct CreateContentRequest {
@@ -327,7 +342,40 @@ pub async fn get_content_handler(
 
             // Unified Permission Check
             if check_view_permission(&state.repo, node, &user.0).await {
-                 (StatusCode::OK, Json(item)).into_response()
+                // Determine Permission Level
+                let user_permission = if let Some(u) = &user.0 {
+                    if u.id == node.author_id {
+                        "author"
+                    } else if check_edit_permission(&state.repo, node, u).await {
+                        "editor"
+                    } else {
+                        "viewer"
+                    }
+                } else {
+                    "viewer"
+                };
+
+                // Fetch Collaborators (Editors)
+                // Note: We use "editor" relation on "node" entity
+                let collaborator_ids = PermissionRepository::get_collaborators(&*state.repo, node.id, "node", "editor").await.unwrap_or_default();
+                let mut collaborators = Vec::new();
+                for uid in collaborator_ids {
+                    if let Ok(Some(u)) = UserRepository::find_by_id(&*state.repo, &UserId(uid)).await {
+                        collaborators.push(CollaboratorInfo {
+                            id: u.id.0,
+                            username: u.username,
+                            avatar_url: u.avatar_url,
+                        });
+                    }
+                }
+
+                let response = ContentResponse {
+                    item,
+                    user_permission: user_permission.to_string(),
+                    collaborators,
+                };
+
+                 (StatusCode::OK, Json(response)).into_response()
             } else {
                  (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response()
             }
@@ -350,11 +398,11 @@ pub async fn delete_content_handler(
     
     let node = existing_item.node();
 
-    if node.author_id != user.id && !user.has_permission(0x0100) {
+    if !check_edit_permission(&state.repo, node, &user).await {
         return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
     }
 
-    match state.repo.delete(&id).await {
+    match state.repo.delete_recursive(&id).await {
         Ok(_) => (StatusCode::NO_CONTENT, ()).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }

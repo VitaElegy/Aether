@@ -234,9 +234,13 @@ impl ArticleRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, _viewer_id: Option<UserId>, _author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError> {
+    async fn list(&self, _viewer_id: Option<UserId>, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError> {
         let mut query = node::Entity::find()
             .find_also_related(article_detail::Entity);
+
+        if let Some(uid) = author_id {
+            query = query.filter(node::Column::AuthorId.eq(uid.0));
+        }
 
         if let Some(kb_id) = knowledge_base_id {
             // In KB view, show everything (Folders, Articles, etc.)
@@ -371,6 +375,41 @@ impl ArticleRepository for PostgresRepository {
     
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError> {
         node::Entity::delete_by_id(*id).exec(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(())
+    }
+
+    async fn delete_recursive(&self, id: &Uuid) -> Result<(), RepositoryError> {
+        // Fallback Robust Implementation: BFS Traversal in Application Layer
+        // This ensures deletion works even if DB Cascade is not configured or CTEs fail (SQLite specific issues)
+        
+        let mut to_delete = vec![*id];
+        let mut idx = 0;
+
+        // 1. BFS to find all descendants
+        while idx < to_delete.len() {
+            let current = to_delete[idx];
+            let children = node::Entity::find()
+                .filter(node::Column::ParentId.eq(current))
+                .all(&self.db)
+                .await
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            
+            for child in children {
+                to_delete.push(child.id);
+            }
+            idx += 1;
+        }
+
+        // 2. Delete in Reverse Order (Children first) to satisfy FK constraints (NO ACTION)
+        to_delete.reverse();
+
+        for target_id in to_delete {
+             node::Entity::delete_by_id(target_id)
+                .exec(&self.db)
+                .await
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        }
+
         Ok(())
     }
 

@@ -72,6 +72,7 @@ pub trait ArticleRepository: Send + Sync {
     async fn get_history(&self, id: &Uuid) -> Result<Vec<ContentVersionSnapshot>, RepositoryError>;
     async fn get_diff(&self, id: &Uuid, v1: &str, v2: &str) -> Result<ContentDiff, RepositoryError>;
     async fn search(&self, query: &str) -> Result<Vec<Article>, RepositoryError>;
+    async fn delete_recursive(&self, id: &Uuid) -> Result<(), RepositoryError>;
 }
 
 #[async_trait]
