@@ -1,12 +1,12 @@
 use axum::{
-    routing::{get, put, delete},
+    routing::get,
     Router,
     extract::{State, Json},
     response::{IntoResponse},
     http::StatusCode,
 };
 use uuid::Uuid;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use crate::interface::state::AppState;
 use crate::interface::api::auth::AuthenticatedUser;
 use crate::domain::models::{UserDraft, UserId};
