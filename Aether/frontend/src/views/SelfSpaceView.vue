@@ -24,6 +24,14 @@ const switchModule = (id: string) => {
 if (pluginStore.plugins.length > 0 && !pluginStore.getPlugin(currentModuleId.value)) {
     currentModuleId.value = pluginStore.plugins[0].id;
 }
+// Navigation
+const goBack = () => {
+    if (window.history.state && window.history.state.back) {
+        router.back();
+    } else {
+        router.push('/');
+    }
+};
 </script>
 
 <template>
@@ -35,11 +43,11 @@ if (pluginStore.plugins.length > 0 && !pluginStore.getPlugin(currentModuleId.val
         <!-- Top Navigation Bar -->
         <TopNavBar>
             <template #left>
-                <button @click="router.push('/')"
+                <button @click="goBack"
                     class="text-ink/60 hover:text-accent transition-colors flex items-center gap-2"
-                    title="返回首页">
+                    title="返回">
                     <i class="ri-arrow-left-line text-xl"></i>
-                    <span class="sr-only">返回首页</span>
+                    <span class="sr-only">返回</span>
                 </button>
             </template>
 

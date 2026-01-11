@@ -51,8 +51,8 @@ const rebuildTree = () => {
         const children = getChildren(parentId);
         // Sort: Directories first, then Articles. Alphabetical within.
         children.sort((a, b) => {
-            if (a.content_type !== b.content_type) {
-                return a.content_type === 'Directory' ? -1 : 1;
+            if (a.type !== b.type) {
+                return a.type === 'Folder' ? -1 : 1;
             }
             return a.title.localeCompare(b.title);
         });
@@ -61,7 +61,7 @@ const rebuildTree = () => {
             const isOpen = openFolders.value[child.id] || false;
             result.push({ item: child, level, isOpen });
 
-            if (child.content_type === 'Directory' && isOpen) {
+            if (child.type === 'Folder' && isOpen) {
                 traverse(child.id, level + 1);
             }
         }
@@ -73,7 +73,7 @@ const rebuildTree = () => {
 
 const toggleFolder = (folder: Content) => {
     console.log("[DirectoryTree] Toggling folder:", folder.id, openFolders.value[folder.id]);
-    if (folder.content_type.toLowerCase() !== 'directory') return;
+    if (folder.type !== 'Folder') return;
     openFolders.value[folder.id] = !openFolders.value[folder.id];
     rebuildTree();
 };
@@ -92,8 +92,8 @@ const expandPathTo = (targetId: string) => {
 };
 
 const navigateTo = (item: Content) => {
-    console.log("[DirectoryTree] Clicked item:", item.title, item.content_type, item.id);
-    if (item.content_type.toLowerCase() === 'directory') {
+    console.log("[DirectoryTree] Clicked item:", item.title, item.type, item.id);
+    if (item.type === 'Folder') {
         toggleFolder(item);
     } else {
         console.log("[DirectoryTree] Navigating to article:", item.id);
@@ -131,7 +131,7 @@ watch(() => props.knowledgeBaseId, () => {
 
                 <!-- Icon -->
                 <span class="opacity-70 flex-shrink-0 w-4 text-center">
-                    <template v-if="node.item.content_type === 'Directory'">
+                    <template v-if="node.item.type === 'Folder'">
                         <i v-if="node.isOpen" class="ri-folder-open-fill text-yellow-500/80"></i>
                         <i v-else class="ri-folder-3-fill text-yellow-500/80"></i>
                     </template>
