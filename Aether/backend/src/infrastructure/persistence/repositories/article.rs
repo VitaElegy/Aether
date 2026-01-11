@@ -2,7 +2,7 @@ use async_trait::async_trait;
 use sea_orm::*;
 use uuid::Uuid;
 use chrono::Utc;
-use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, NodeType, PermissionMode, ContentItem, ContentDiff, DiffChange};
+use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, NodeType, PermissionMode, ContentItem, ContentDiff};
 use crate::domain::models::UserId;
 use crate::domain::ports::{ArticleRepository, PermissionRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;

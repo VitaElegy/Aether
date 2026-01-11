@@ -4,7 +4,7 @@ use uuid::Uuid;
 use thiserror::Error; // Added back
 use crate::domain::models::{
     Article, Vocabulary, Memo, User, UserId, AuthClaims, Comment, CommentId,
-    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, ContentItem, Visibility, ContentDiff
+    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, ContentItem, ContentDiff
 };
 
 #[derive(Debug, Clone, Serialize, Error)] // Added Error
