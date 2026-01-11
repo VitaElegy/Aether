@@ -10,6 +10,8 @@ pub async fn upload_handler(
     _user: AuthenticatedUser,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
+    const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5 MB
+
     while let Some(field) = multipart.next_field().await.unwrap() {
         let name = field.name().unwrap().to_string();
 
@@ -22,7 +24,20 @@ pub async fn upload_handler(
                 return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Only images are allowed" }))).into_response();
             }
 
-            let data = field.bytes().await.unwrap();
+            // Stream and validate size
+            let mut data = Vec::new();
+            let mut stream = field;
+
+            while let Some(chunk) = stream.chunk().await.unwrap() {
+                if data.len() + chunk.len() > MAX_FILE_SIZE {
+                    return (StatusCode::PAYLOAD_TOO_LARGE, Json(serde_json::json!({ "error": "File size exceeds 5MB limit" }))).into_response();
+                }
+                data.extend_from_slice(&chunk);
+            }
+
+            if data.is_empty() {
+                 return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Empty file" }))).into_response();
+            }
 
             // Ensure uploads directory exists
             let upload_dir = "uploads/avatars";
