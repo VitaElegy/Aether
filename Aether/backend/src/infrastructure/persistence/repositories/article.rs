@@ -158,8 +158,9 @@ impl ArticleRepository for PostgresRepository {
                     .one(&self.db)
                     .await
                     .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-                Ok(Some(ContentItem::Article(map_article(n, d, user))))
-            },
+
+                 Ok(Some(ContentItem::Article(map_article(n, d, user))))
+             },
             Some((n, None)) => {
                  // Sync with list: Return NotFound for incomplete Articles
                  if n.r#type == "Article" {

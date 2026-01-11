@@ -100,7 +100,7 @@ pub async fn create_content_handler(
         let slug = payload.slug.unwrap_or_else(|| {
             format!("{}-{}", payload.title.to_lowercase().replace(" ", "-"), &id.to_string()[..8])
         });
-
+        
         let article = Article {
             node: Node {
                 id,
