@@ -1,10 +1,11 @@
 use async_trait::async_trait;
 use sea_orm::*;
 use chrono::Utc;
-use crate::domain::models::{User, UserId};
+use crate::domain::models::{User, UserId, ExperienceItem};
 use crate::domain::ports::{UserRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::persistence::entities::user;
+use serde_json;
 
 #[async_trait]
 impl UserRepository for PostgresRepository {
@@ -24,6 +25,7 @@ impl UserRepository for PostgresRepository {
             avatar_url: m.avatar_url,
             password_hash: m.password_hash,
             permissions: m.permissions as u64,
+            experience: m.experience.and_then(|v| serde_json::from_value(v).ok()),
         }))
     }
 
@@ -42,6 +44,7 @@ impl UserRepository for PostgresRepository {
             avatar_url: m.avatar_url,
             password_hash: m.password_hash,
             permissions: m.permissions as u64,
+            experience: m.experience.and_then(|v| serde_json::from_value(v).ok()),
         }))
     }
 
@@ -56,13 +59,15 @@ impl UserRepository for PostgresRepository {
             avatar_url: Set(u.avatar_url),
             password_hash: Set(u.password_hash),
             permissions: Set(u.permissions as i64),
+            experience: Set(u.experience.map(|v| serde_json::to_value(v).unwrap_or(serde_json::Value::Null))),
         };
         user::Entity::insert(model)
              .on_conflict(
                 sea_orm::sea_query::OnConflict::column(user::Column::Id)
                     .update_columns([
                         user::Column::Username, user::Column::Email, user::Column::DisplayName,
-                        user::Column::Bio, user::Column::AvatarUrl, user::Column::Permissions
+                        user::Column::Bio, user::Column::AvatarUrl, user::Column::Permissions,
+                        user::Column::Experience
                     ])
                     .to_owned()
             )
@@ -93,6 +98,7 @@ impl UserRepository for PostgresRepository {
             avatar_url: m.avatar_url,
             password_hash: m.password_hash,
             permissions: m.permissions as u64,
+            experience: m.experience.and_then(|v| serde_json::from_value(v).ok()),
         }).collect())
     }
 }

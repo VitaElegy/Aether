@@ -108,7 +108,8 @@ async fn main() {
             permission_data TEXT DEFAULT '{}', -- Advanced ACLs
             created_at TIMESTAMPTZ NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
-            FOREIGN KEY(author_id) REFERENCES users(id)
+            FOREIGN KEY(author_id) REFERENCES users(id),
+            FOREIGN KEY(parent_id) REFERENCES nodes(id) ON DELETE CASCADE
         );
 
         -- File System Driver: Articles
@@ -192,6 +193,7 @@ async fn main() {
             tags TEXT,
             category TEXT,
             knowledge_base_id UUID,
+            parent_id UUID,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
         );
@@ -206,6 +208,23 @@ async fn main() {
         db.get_database_backend(),
         "ALTER TABLE knowledge_bases ADD COLUMN cover_offset_y INT NOT NULL DEFAULT 50;"
     )).await.map_err(|e| println!("Migration note (kb.offset): {}", e));
+
+
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE users ADD COLUMN experience JSONB DEFAULT '[]';"
+    )).await.map_err(|e| println!("Migration note (user.experience): {}", e));
+
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE user_drafts ADD COLUMN parent_id UUID;"
+    )).await.map_err(|e| println!("Migration note (draft.parent_id): {}", e));
+
+    // Attempt to add Self-Referential FK for Cascade Delete (Postgres Only usually)
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE nodes ADD CONSTRAINT fk_nodes_parent FOREIGN KEY (parent_id) REFERENCES nodes(id) ON DELETE CASCADE;"
+    )).await.map_err(|e| println!("Migration note (nodes.parent_fk): {}", e));
 
 
 
@@ -248,6 +267,7 @@ async fn main() {
             avatar_url: None,
             password_hash: hash,
             permissions: u64::MAX,
+            experience: None,
         };
         UserRepository::save(&*repo, admin).await.expect("Failed to seed admin");
     }

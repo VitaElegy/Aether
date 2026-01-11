@@ -34,6 +34,7 @@ const profile = computed(() => {
             bio: authStore.user.bio || 'Searching for meaning in the noise.',
             location: 'Unknown',
             avatar_url: authStore.user.avatar_url || '',
+            experience: authStore.user.experience || [],
             stats: { entries: entries.value.length, collections: kbs.value.length }
         };
     } else if (remoteProfile.value) {
@@ -45,6 +46,7 @@ const profile = computed(() => {
             bio: remoteProfile.value.bio || 'Searching for meaning in the noise.',
             location: 'Unknown',
             avatar_url: remoteProfile.value.avatar_url || '',
+            experience: remoteProfile.value.experience || [],
             stats: { entries: entries.value.length, collections: kbs.value.length }
         };
     }
@@ -57,6 +59,7 @@ const profile = computed(() => {
         bio: '...',
         location: 'Unknown',
         avatar_url: '',
+        experience: [],
         stats: { entries: entries.value.length, collections: kbs.value.length }
     };
 });
@@ -220,7 +223,26 @@ const handleLogout = () => {
                         </div>
                     </div>
                 </div>
+
+                <div v-if="profile.experience && profile.experience.length > 0" class="mt-8 pt-8 border-t border-dashed border-neutral-200">
+                    <h3 class="text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-4">Journey</h3>
+                    <div class="space-y-6 border-l border-neutral-200 ml-1 pl-6 relative">
+                        <div v-for="(exp, i) in profile.experience" :key="i" class="relative group">
+                            <!-- Timeline Dot -->
+                            <div class="absolute -left-[31px] top-1.5 w-2.5 h-2.5 rounded-full border border-neutral-300 bg-paper group-hover:border-ink group-hover:bg-ink transition-colors"></div>
+                            
+                            <div class="flex flex-col sm:flex-row sm:items-baseline gap-1 sm:gap-2 mb-1">
+                                <span class="font-bold text-ink">{{ exp.title }}</span>
+                                <span class="text-neutral-400 text-sm">at</span>
+                                <span class="font-serif italic text-neutral-600">{{ exp.organization }}</span>
+                            </div>
+                            <div class="text-[10px] font-mono text-neutral-400 uppercase tracking-widest mb-1">{{ exp.start_date }} — {{ exp.end_date || 'Present' }}</div>
+                            <p v-if="exp.description" class="text-sm text-neutral-500 leading-relaxed">{{ exp.description }}</p>
+                        </div>
+                    </div>
+                </div>
             </div>
+
 
             <!-- Tabs -->
             <div class="flex border-b border-ash/50 mb-12">

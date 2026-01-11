@@ -141,12 +141,24 @@ pub struct User {
     #[serde(skip_serializing)]
     pub password_hash: String,
     pub permissions: u64,
+    pub experience: Option<Vec<ExperienceItem>>,
 }
 
 impl User {
     pub fn has_permission(&self, required_perm: u64) -> bool {
         (self.permissions & required_perm) == required_perm
     }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExperienceItem {
+    pub id: String,
+    pub title: String,
+    pub organization: String,
+    pub start_date: String,
+    pub end_date: Option<String>,
+    pub description: Option<String>,
+    pub link: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -210,5 +222,6 @@ pub struct UserDraft {
     pub tags: Option<Vec<String>>,
     pub category: Option<String>,
     pub knowledge_base_id: Option<Uuid>,
+    pub parent_id: Option<Uuid>,
     pub updated_at: DateTime<Utc>,
 }

@@ -41,6 +41,17 @@ export interface User {
   // Rust serializers (serde_json) might serialize u64 as number or stirng depending on settings.
   // It's safer to treat as number for low bits, but if we need high bits we must ensure backend sends string.
   // For this demo let's assume low bits.
+  experience?: ExperienceItem[];
+}
+
+export interface ExperienceItem {
+  id: string;
+  title: string;
+  organization: string;
+  start_date: string; // YYYY-MM
+  end_date?: string; // YYYY-MM or 'Present'
+  description?: string;
+  link?: string;
 }
 
 export const useAuthStore = defineStore('auth', () => {

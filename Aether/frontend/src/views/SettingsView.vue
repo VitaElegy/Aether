@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
-import { useAuthStore } from '../stores/auth';
+import { useAuthStore, type ExperienceItem } from '../stores/auth';
 import { usePreferencesStore } from '../stores/preferences';
 import axios from 'axios';
 
@@ -15,7 +15,8 @@ const form = ref({
     display_name: '',
     bio: '',
     email: '',
-    avatar_url: ''
+    avatar_url: '',
+    experience: [] as ExperienceItem[]
 });
 
 const status = ref<'idle' | 'saving' | 'uploading' | 'success' | 'error'>('idle');
@@ -28,7 +29,8 @@ const syncForm = () => {
             display_name: authStore.user.display_name || authStore.user.username || '',
             bio: authStore.user.bio || '',
             email: authStore.user.email || '',
-            avatar_url: authStore.user.avatar_url || ''
+            avatar_url: authStore.user.avatar_url || '',
+            experience: authStore.user.experience ? JSON.parse(JSON.stringify(authStore.user.experience)) : []
         };
     }
 };
@@ -83,6 +85,20 @@ const uploadAvatar = async (file: File) => {
     }
 };
 
+const addExperience = () => {
+    form.value.experience.push({
+        id: crypto.randomUUID(),
+        title: '',
+        organization: '',
+        start_date: '',
+        description: ''
+    });
+};
+
+const removeExperience = (index: number) => {
+    form.value.experience.splice(index, 1);
+};
+
 const save = async () => {
     status.value = 'saving';
     errorMessage.value = '';
@@ -91,7 +107,8 @@ const save = async () => {
             display_name: form.value.display_name,
             bio: form.value.bio,
             email: form.value.email,
-            avatar_url: form.value.avatar_url
+            avatar_url: form.value.avatar_url,
+            experience: form.value.experience
         });
         status.value = 'success';
         setTimeout(() => status.value = 'idle', 2000);
@@ -187,6 +204,67 @@ const save = async () => {
                             <input v-model="form.email" type="email"
                                 class="w-full bg-transparent border-b border-neutral-200 py-2 text-ink font-mono text-sm focus:outline-none focus:border-black transition-colors" />
                         </div>
+                    </div>
+
+                    <!-- Experience Section -->
+                    <div class="pt-8 border-t border-neutral-100">
+                         <div class="flex items-center justify-between mb-8">
+                             <div>
+                                <h3 class="text-lg font-bold text-ink">Experience</h3>
+                                <p class="text-[10px] text-neutral-400 font-mono uppercase tracking-widest mt-1">Career & Education Ops</p>
+                             </div>
+                             <button @click="addExperience" 
+                                class="w-8 h-8 flex items-center justify-center rounded-full border border-neutral-200 hover:border-black hover:bg-black hover:text-white transition-all">
+                                 <i class="ri-add-line"></i>
+                             </button>
+                         </div>
+
+                         <div class="space-y-8">
+                             <div v-for="(item, index) in form.experience" :key="index" 
+                                class="relative p-6 bg-neutral-50/50 rounded-xl border border-neutral-100 group transition-all hover:bg-neutral-50 hover:shadow-sm">
+                                 
+                                 <button @click="removeExperience(index)"
+                                    class="absolute top-4 right-4 text-neutral-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100">
+                                     <i class="ri-delete-bin-line"></i>
+                                 </button>
+
+                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                     <div class="group/field">
+                                         <label class="block text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Title</label>
+                                         <input v-model="item.title" type="text" placeholder="e.g. Senior Eng"
+                                             class="w-full bg-transparent border-b border-neutral-200 py-1 text-sm font-bold text-ink focus:outline-none focus:border-black transition-colors" />
+                                     </div>
+                                     <div class="group/field">
+                                         <label class="block text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Organization</label>
+                                         <input v-model="item.organization" type="text" placeholder="e.g. Acme Corp"
+                                             class="w-full bg-transparent border-b border-neutral-200 py-1 text-sm font-bold text-ink focus:outline-none focus:border-black transition-colors" />
+                                     </div>
+                                 </div>
+
+                                 <div class="grid grid-cols-2 gap-4 mb-4">
+                                      <div class="group/field">
+                                         <label class="block text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Start</label>
+                                         <input v-model="item.start_date" type="text" placeholder="YYYY-MM"
+                                             class="w-full bg-transparent border-b border-neutral-200 py-1 text-xs font-mono text-ink focus:outline-none focus:border-black transition-colors" />
+                                     </div>
+                                     <div class="group/field">
+                                         <label class="block text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-1">End</label>
+                                         <input v-model="item.end_date" type="text" placeholder="Present"
+                                             class="w-full bg-transparent border-b border-neutral-200 py-1 text-xs font-mono text-ink focus:outline-none focus:border-black transition-colors" />
+                                     </div>
+                                 </div>
+
+                                 <div class="group/field">
+                                     <label class="block text-[10px] font-bold uppercase tracking-widest text-neutral-400 mb-1">Description</label>
+                                     <textarea v-model="item.description" rows="2"
+                                         class="w-full bg-transparent border-b border-neutral-200 py-1 text-sm text-neutral-600 focus:text-ink focus:outline-none focus:border-black transition-colors resize-none"></textarea>
+                                 </div>
+                             </div>
+                             
+                             <div v-if="form.experience.length === 0" class="text-center py-8 text-neutral-300 text-xs italic">
+                                 No experience listed. Add your journey.
+                             </div>
+                         </div>
                     </div>
 
                     <div class="pt-8 flex items-center justify-between">

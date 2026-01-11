@@ -6,7 +6,7 @@ use serde::Deserialize;
 use std::sync::Arc;
 use crate::domain::{
     ports::{AuthService, UserRepository},
-    models::{User, permissions},
+    models::{User, permissions, ExperienceItem},
 };
 use uuid::Uuid;
 use crate::infrastructure::auth::jwt_service::hash_password;
@@ -169,7 +169,8 @@ pub async fn register_handler(
         bio: None,
         avatar_url: None,
         password_hash: hash_password(&payload.password),
-        permissions: 1, 
+        permissions: 1,
+        experience: None,
     };
 
     match state.repo.save(user).await {
@@ -184,6 +185,7 @@ pub struct UpdateUserRequest {
     bio: Option<String>,
     avatar_url: Option<String>,
     email: Option<String>,
+    experience: Option<Vec<ExperienceItem>>,
 }
 
 pub async fn get_user_handler(
@@ -220,6 +222,7 @@ pub async fn update_user_handler(
     if let Some(bio) = payload.bio { user.bio = Some(bio); }
     if let Some(avatar) = payload.avatar_url { user.avatar_url = Some(avatar); }
     if let Some(email) = payload.email { user.email = email; }
+    if let Some(experience) = payload.experience { user.experience = Some(experience); }
 
     match state.repo.save(user).await {
         Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "message": "User updated" }))),

@@ -15,6 +15,7 @@ pub struct Model {
     pub password_hash: String,
     pub permissions: i64, 
     pub created_at: DateTimeWithTimeZone,
+    pub experience: Option<serde_json::Value>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
