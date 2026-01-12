@@ -162,17 +162,49 @@ impl VocabularyRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, _query: Option<String>) -> Result<Vec<Vocabulary>, RepositoryError> {
+    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>, sort_by: Option<String>, order: Option<String>) -> Result<Vec<Vocabulary>, RepositoryError> {
         // Eager Loading using find_with_related is messy for 3 levels, so doing it iteratively or with find_also
         // Let's do a basic list then fetch details.
         
-        let results = node::Entity::find()
+        let mut select = node::Entity::find()
             .filter(node::Column::Type.eq("Vocabulary"))
             .filter(node::Column::AuthorId.eq(user_id.0)) 
-            .find_also_related(vocab_detail::Entity)
+            .find_also_related(vocab_detail::Entity);
+            
+        // Query Search
+        if let Some(q) = query {
+            // Filter by word (Node Title)
+            select = select.filter(node::Column::Title.contains(&q));
+        }
+
+        // Sorting
+        let sort_col = sort_by.as_deref().unwrap_or("created_at");
+        let is_desc = order.as_deref().unwrap_or("desc") == "desc";
+        let order_enum = if is_desc { sea_orm::Order::Desc } else { sea_orm::Order::Asc };
+        
+        match sort_col {
+             "query_count" => {
+                 select = select.order_by(vocab_detail::Column::QueryCount, order_enum);
+             },
+             "is_important" => {
+                 select = select.order_by(vocab_detail::Column::IsImportant, order_enum);
+             },
+             "word" | "title" => {
+                 select = select.order_by(node::Column::Title, order_enum);
+             },
+             _ => {
+                 select = select.order_by(node::Column::CreatedAt, order_enum);
+             }
+        }
+        
+        // Stabilize Sort
+        if sort_col != "created_at" {
+             select = select.order_by_desc(node::Column::CreatedAt);
+        }
+
+        let results = select
             .limit(limit)
             .offset(offset)
-            .order_by_desc(node::Column::CreatedAt)
             .all(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         
          let mut vocabs = Vec::new();
@@ -197,6 +229,13 @@ impl VocabularyRepository for PostgresRepository {
 
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError> {
         node::Entity::delete_by_id(*id).exec(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(())
+    }
+
+    async fn delete_many(&self, ids: &[Uuid]) -> Result<(), RepositoryError> {
+        node::Entity::delete_many()
+            .filter(node::Column::Id.is_in(ids.to_vec()))
+            .exec(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(())
     }
 

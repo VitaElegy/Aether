@@ -80,8 +80,10 @@ pub trait VocabularyRepository: Send + Sync {
     async fn save(&self, vocab: Vocabulary) -> Result<Uuid, RepositoryError>;
     async fn find_by_word(&self, user_id: &UserId, word: &str) -> Result<Option<Vocabulary>, RepositoryError>; 
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<Vocabulary>, RepositoryError>;
-    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>) -> Result<Vec<Vocabulary>, RepositoryError>;
+    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>, sort_by: Option<String>, order: Option<String>) -> Result<Vec<Vocabulary>, RepositoryError>;
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
+    // Batch Operations
+    async fn delete_many(&self, ids: &[Uuid]) -> Result<(), RepositoryError>; 
     async fn increment_query_count(&self, id: &Uuid) -> Result<(), RepositoryError>;
     async fn set_importance(&self, id: &Uuid, is_important: bool) -> Result<(), RepositoryError>;
 }
@@ -91,6 +93,7 @@ pub trait MemoRepository: Send + Sync {
     async fn save(&self, memo: Memo) -> Result<Uuid, RepositoryError>;
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<Memo>, RepositoryError>;
     async fn list(&self, viewer_id: Option<UserId>, author_id: Option<UserId>) -> Result<Vec<Memo>, RepositoryError>;
+    async fn find_by_date_range(&self, author_id: UserId, start: chrono::DateTime<chrono::Utc>, end: chrono::DateTime<chrono::Utc>) -> Result<Vec<Memo>, RepositoryError>;
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
 }
 
