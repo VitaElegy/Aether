@@ -39,6 +39,13 @@ interface Vocabulary {
 const vocabularyList = ref<Vocabulary[]>([]);
 const listLoading = ref(false);
 const searchQuery = ref('');
+const showLibrary = ref(false);
+const sortBy = ref('created_at');
+const sortOrder = ref('desc');
+
+// Batch Selection State
+const isSelectionMode = ref(false);
+const selectedIds = ref<Set<string>>(new Set());
 
 // Computed for Detail View
 const currentVocabId = computed(() => {
@@ -275,11 +282,62 @@ const fetchDefinitionInfo = async (word: string) => {
         
         if (entry) {
             previewEntry.value = entry;
-            // ... assignment logic
+        } else {
+            // Fallback: Construct synthetic entry from local data if available
+            const existing = vocabularyList.value.find(v => v.word.toLowerCase() === word.toLowerCase());
+            if (existing) {
+                previewEntry.value = {
+                    word: existing.word,
+                    phonetic: existing.phonetic,
+                    phonetics: [],
+                    meanings: [
+                        {
+                            partOfSpeech: 'Local',
+                            definitions: [{
+                                definition: existing.definition,
+                                example: '',
+                                synonyms: [],
+                                antonyms: []
+                            }],
+                            synonyms: [],
+                            antonyms: []
+                        }
+                    ],
+                    license: { name: 'Local', url: '' },
+                    sourceUrls: []
+                };
+            } else {
+                 previewEntry.value = null;
+            }
         }
     } catch (e) {
         console.error('Lookup Error:', e);
-        // ... error logic
+        // Fallback on error too
+        const existing = vocabularyList.value.find(v => v.word.toLowerCase() === word.toLowerCase());
+        if (existing) {
+             previewEntry.value = {
+                word: existing.word,
+                phonetic: existing.phonetic,
+                phonetics: [],
+                meanings: [
+                    {
+                        partOfSpeech: 'Local',
+                        definitions: [{
+                            definition: existing.definition,
+                            example: '',
+                            synonyms: [],
+                            antonyms: []
+                        }],
+                        synonyms: [],
+                        antonyms: []
+                    }
+                ],
+                license: { name: 'Local', url: '' },
+                sourceUrls: []
+            };
+        } else {
+             previewEntry.value = null;
+        }
     } finally {
         isSearchingDef.value = false;
     }
@@ -373,6 +431,25 @@ const saveWord = async () => {
     }
 };
 
+// Aesthetic Helpers
+const gradients = [
+    'bg-gradient-to-br from-rose-100/40 via-orange-50/40 to-white', 
+    'bg-gradient-to-bl from-indigo-100/40 via-blue-50/40 to-white',
+    'bg-gradient-to-tr from-emerald-100/40 via-teal-50/40 to-white',
+    'bg-gradient-to-br from-violet-100/40 via-fuchsia-50/40 to-white',
+    'bg-gradient-to-tl from-amber-100/40 via-yellow-50/40 to-white',
+    'bg-gradient-to-br from-cyan-100/40 via-sky-50/40 to-white',
+    'bg-gradient-to-tr from-fuchsia-100/40 via-pink-50/40 to-white'
+];
+
+const getGradient = (word: string) => {
+    let sum = 0;
+    for (let i = 0; i < word.length; i++) {
+        sum += word.charCodeAt(i);
+    }
+    return gradients[sum % gradients.length];
+};
+
 const deleteVocabulary = async (id: string, e?: Event) => {
     if(e) e.stopPropagation();
     try {
@@ -384,9 +461,75 @@ const deleteVocabulary = async (id: string, e?: Event) => {
         // If in preview, clear it
         if (previewEntry.value?.word === vocabularyList.value.find(v => v.id === id)?.word) {
              previewEntry.value = null;
+             isDetailView.value = false;
         }
     } catch (e) {
         MessagePlugin.error('Delete failed');
+    }
+};
+
+const deleteExample = async (index: number) => {
+    // Determine ID to update
+    const item = vocabularyList.value.find(v => v.word.toLowerCase() === createForm.word.toLowerCase());
+    if (!item) {
+        // Just local state if not saved yet
+        removeExample(index);
+        return;
+    }
+
+    // Remove from local state
+    createForm.examples.splice(index, 1);
+    
+    // Save changes to backend
+    await saveWord(); 
+    MessagePlugin.success('Example removed');
+};
+
+const toggleSelection = (id: string, e?: Event) => {
+    e?.stopPropagation();
+    if (selectedIds.value.has(id)) {
+        const newSet = new Set(selectedIds.value);
+        newSet.delete(id);
+        selectedIds.value = newSet;
+    } else {
+        const newSet = new Set(selectedIds.value);
+        newSet.add(id);
+        selectedIds.value = newSet;
+    }
+};
+
+const deleteSelected = async () => {
+    if (selectedIds.value.size === 0) return;
+    
+    try {
+        const token = localStorage.getItem('aether_token');
+        const config = { headers: { Authorization: `Bearer ${token}` } };
+        
+        await axios.post('/api/vocabulary/batch-delete', { ids: Array.from(selectedIds.value) }, config);
+        
+        MessagePlugin.success(`Deleted ${selectedIds.value.size} items`);
+        
+        // Reset Selection
+        isSelectionMode.value = false;
+        selectedIds.value = new Set();
+        
+        // Refresh List
+        fetchVocabularyList(searchQuery.value);
+        
+    } catch (e) {
+        console.error(e);
+        MessagePlugin.error('Batch delete failed');
+    }
+};
+
+const handleCardClick = (item: any) => {
+    if (isSelectionMode.value) {
+        toggleSelection(item.id);
+    } else {
+        // Switch to "Detail Mode" (Spotlight)
+        searchQuery.value = item.word;
+        selectSuggestion(item.word);
+        showLibrary.value = false; // Close library to show spotlight/detail
     }
 };
 
@@ -396,8 +539,8 @@ const fetchVocabularyList = async (query = '') => {
         const token = localStorage.getItem('aether_token');
         const config = { headers: { Authorization: `Bearer ${token}` } };
         const url = query 
-            ? `/api/vocabulary?limit=100&query=${query}` 
-            : '/api/vocabulary?limit=100';
+            ? `/api/vocabulary?limit=100&query=${query}&sort_by=${sortBy.value}&order=${sortOrder.value}` 
+            : `/api/vocabulary?limit=100&sort_by=${sortBy.value}&order=${sortOrder.value}`;
             
         const res = await axios.get(url, config);
         vocabularyList.value = res.data;
@@ -435,61 +578,183 @@ const goBack = () => {
     <div class="h-full flex flex-col relative font-sans text-ink">
         
         <!-- Header Info (Fade out when searching) -->
-        <!-- Temporarily hidden per user request for clean look
-        <div class="absolute top-0 left-0 right-0 z-10 flex items-center justify-between px-8 py-6 transition-all duration-500" 
-             :class="{ 'opacity-0 -translate-y-4 pointer-events-none': isSpotlightActive }">
-            <h1 class="text-3xl font-serif font-black tracking-tight">Vocabulary</h1>
-            <div class="bg-ink/5 px-3 py-1 rounded-full text-xs font-bold text-ink/50">
-                {{ vocabularyList.length }} Entries
-            </div>
+        <!-- Implicit Library Toggle (Top Right) -->
+        <div class="absolute top-8 right-8 z-50">
+            <button 
+                @click="showLibrary = !showLibrary"
+                class="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 group"
+                :class="showLibrary ? 'bg-ink text-white shadow-xl rotate-90' : 'bg-white/50 hover:bg-white text-ink/40 hover:text-ink hover:shadow-lg'"
+                title="Toggle Library"
+            >
+                <i :class="showLibrary ? 'ri-close-line' : 'ri-book-3-line'" class="text-xl"></i>
+            </button>
         </div>
-        -->
 
         <!-- Main Scrollable Area -->
         <div class="flex-1 relative w-full h-full overflow-hidden">
             
             <!-- Collection Grid (Underneath) -->
-            <!-- Temporarily hidden per user request
-            <div class="w-full h-full overflow-y-auto px-8 py-32 custom-scrollbar transition-all duration-500 ease-out"
-                 :class="{ 'opacity-20 scale-95 blur-sm overflow-hidden': isSpotlightActive }">
+            <div 
+                 v-if="showLibrary"
+                 class="w-full h-full overflow-y-auto px-8 py-32 custom-scrollbar transition-all duration-500 ease-out animate-fade-in"
+                 :class="{ 'opacity-20 scale-95 blur-sm overflow-hidden': isSpotlightActive }"
+            >
+                <!-- Library Header/Close -->
+                <div class="max-w-7xl mx-auto mb-8 flex justify-between items-end">
+                    <div>
+                        <h2 class="text-2xl font-serif font-bold text-ink">My Words</h2>
+                        <span class="text-xs font-bold uppercase tracking-wider text-ink/40">{{ vocabularyList.length }} Entries</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <!-- Batch Delete Controls -->
+                         <template v-if="isSelectionMode">
+                             <span class="text-sm font-bold text-ink/60 mr-2">{{ selectedIds.size }} Selected</span>
+                             
+                             <button 
+                                @click="deleteSelected"
+                                :disabled="selectedIds.size === 0"
+                                class="px-3 py-1 rounded bg-red-500 text-white font-bold text-xs hover:bg-red-600 disabled:opacity-50 transition-colors"
+                             >
+                                Delete
+                             </button>
+                             <button 
+                                @click="isSelectionMode = false; selectedIds.clear()"
+                                class="px-3 py-1 rounded bg-gray-100 text-ink/60 font-bold text-xs hover:bg-gray-200 transition-colors"
+                             >
+                                Cancel
+                             </button>
+                         </template>
+                         
+                         <!-- Sort Controls (Hidden in Selection Mode) -->
+                         <template v-else>
+                             <button
+                                @click="isSelectionMode = true"
+                                class="px-3 py-1 rounded bg-white border border-ink/10 text-ink/60 hover:text-ink hover:border-ink/30 transition-all font-bold text-xs mr-2"
+                             >
+                                Select
+                             </button>
+                             
+                             <t-select 
+                                v-model="sortBy" 
+                                size="small" 
+                                class="w-32" 
+                                :popup-props="{ overlayClassName: 'text-xs font-bold' }"
+                                @change="fetchVocabularyList(searchQuery)"
+                             >
+                                <t-option value="created_at" label="Date Added" />
+                                <t-option value="query_count" label="Most Searched" />
+                                <t-option value="is_important" label="Important" />
+                             </t-select>
+
+                             <button 
+                                @click="sortOrder = sortOrder === 'asc' ? 'desc' : 'asc'; fetchVocabularyList(searchQuery)"
+                                class="w-8 h-8 rounded bg-white border border-ink/10 flex items-center justify-center text-ink/60 hover:text-ink hover:border-ink/30 transition-all font-bold text-xs"
+                             >
+                                {{ sortOrder === 'asc' ? 'A-Z' : 'Z-A' }}
+                             </button>
+                         </template>
+                    </div>
+                </div>
+
                 <div v-if="vocabularyList.length === 0" class="text-center py-20 opacity-30">
                     <p class="text-4xl mb-4">✨</p>
                     Your collection is empty.
                 </div>
                 
-                <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 pb-20 max-w-7xl mx-auto">
+                <div v-else class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 pb-20 max-w-7xl mx-auto">
                      <div 
                         v-for="item in vocabularyList" 
                         :key="item.id" 
-                        class="group relative bg-white rounded-xl shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all duration-300 h-64 overflow-hidden border border-ink/5 cursor-pointer"
-                        @click="searchQuery = item.word; selectSuggestion(item.word)"
-                    >
-                        <div v-if="item.image_url" class="absolute inset-0">
-                            <img :src="item.image_url" class="w-full h-full object-cover opacity-10 group-hover:opacity-20 transition-opacity filter grayscale">
-                        </div>
-                        <div class="relative z-10 p-6 h-full flex flex-col justify-between">
-                            <div>
-                                <h3 class="text-2xl font-serif font-bold text-ink mb-1 group-hover:text-accent transition-colors">{{ item.word }}</h3>
-                                <p class="text-sm text-ink/50 line-clamp-2 h-10">{{ item.definition }}</p>
+                         class="group relative bg-white rounded-2xl shadow-sm hover:shadow-2xl hover:-translate-y-1 transition-all duration-300 overflow-hidden border border-ink/5 cursor-pointer flex flex-col"
+                         :class="{ 'ring-2 ring-accent ring-offset-2': isSelectionMode && selectedIds.has(item.id) }"
+                         @click="handleCardClick(item)"
+                     >
+                         <!-- Image Header (Fixed Height) -->
+                         <div class="h-40 w-full relative overflow-hidden" :class="item.image_url ? 'bg-ink/5' : getGradient(item.word)">
+                            <img 
+                                v-if="item.image_url" 
+                                :src="item.image_url" 
+                                class="absolute inset-0 w-full h-full object-cover transition-transform duration-700 ease-out group-hover:scale-110 group-hover:-rotate-1"
+                            >
+                            <div v-else class="absolute inset-0 flex items-center justify-center">
+                                <!-- Background Big Letter (Parallax Back) -->
+                                <span class="text-9xl font-serif italic text-ink/5 absolute -bottom-8 -right-8 select-none transition-transform duration-700 ease-out group-hover:scale-150 group-hover:rotate-12 group-hover:translate-x-4">
+                                    {{ item.word.charAt(0) }}
+                                </span>
+                                <!-- Foreground Letter (Parallax Front) -->
+                                <span class="text-5xl font-serif font-bold text-ink/20 relative z-10 transition-transform duration-500 ease-out group-hover:-translate-y-4 group-hover:scale-110">
+                                    {{ item.word.charAt(0) }}
+                                </span>
                             </div>
-                            <div v-if="item.translation" class="text-xs font-bold text-accent/80 bg-accent/5 px-2 py-1 rounded w-fit">
-                                {{ item.translation }}
-                            </div>
-                        </div>
-                    </div>
+                            
+                            <!-- Overlay Gradient -->
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500"></div>
+                            
+                            <!-- Selection Checkbox (Top Right) -->
+                             <div v-if="isSelectionMode" class="absolute top-3 right-3 z-30">
+                                 <div 
+                                    class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all shadow-md"
+                                    :class="selectedIds.has(item.id) ? 'border-accent bg-accent text-white scale-110' : 'border-white bg-white/80 text-transparent'"
+                                 >
+                                     <i class="ri-check-line text-xs font-bold"></i>
+                                 </div>
+                             </div>
+                         </div>
+
+                         <!-- Content Body -->
+                         <div class="p-5 flex-1 flex flex-col relative bg-white">
+                             
+                             <!-- Title & Meta Row -->
+                             <div class="flex justify-between items-start mb-2">
+                                <h3 class="text-xl font-serif font-bold text-ink group-hover:text-accent transition-colors truncate pr-2">{{ item.word }}</h3>
+                                
+                                <div class="flex gap-1 shrink-0">
+                                    <!-- Dynamic Sort Badge -->
+                                    <span v-if="sortBy === 'query_count'" class="text-[10px] uppercase font-bold bg-amber-50 text-amber-600 px-2 py-0.5 rounded-full flex items-center gap-1 border border-amber-100">
+                                        <i class="ri-fire-fill"></i> {{ item.query_count }}
+                                    </span>
+                                    <span v-else-if="sortBy === 'created_at'" class="text-[10px] uppercase font-bold bg-slate-50 text-slate-500 px-2 py-0.5 rounded-full flex items-center gap-1 border border-slate-100">
+                                        {{ new Date(item.created_at).toLocaleDateString(undefined, { month: 'numeric', day: 'numeric'}) }}
+                                    </span>
+                                    
+                                    <!-- Important Star -->
+                                    <i v-if="item.is_important" class="ri-star-fill text-yellow-400 text-sm"></i>
+                                </div>
+                             </div>
+
+                             <!-- Translation Tag -->
+                             <div class="mb-3">
+                                <span v-if="item.translation" class="inline-block text-xs font-bold text-ink/50 bg-ink/5 px-2 py-1 rounded-md">
+                                    {{ item.translation }}
+                                </span>
+                             </div>
+
+                             <!-- Definition (Truncated) -->
+                             <p class="text-sm text-ink/60 line-clamp-2 leading-relaxed h-10 mb-2">
+                                {{ item.definition || 'No definition provided.' }}
+                             </p>
+                             
+                             <!-- Footer Actions (Hover Reveal) -->
+                             <div class="mt-auto pt-4 border-t border-ink/5 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity transform translate-y-2 group-hover:translate-y-0 duration-300">
+                                <span class="text-xs font-bold text-accent uppercase tracking-wider flex items-center gap-1">
+                                    View Details <i class="ri-arrow-right-line"></i>
+                                </span>
+                             </div>
+                         </div>
+                     </div>
                 </div>
             </div>
-            -->
+
 
             <!-- Unified Search Bar -->
-            <!-- Position: centered by default (top-1/2), moves to top (top-24) when active -->
+            <!-- Position: centered by default (top-1/2), moves moves up if Library is open OR Spotlight is active -->
             <div 
                 class="absolute left-0 right-0 z-50 flex justify-center transition-all duration-500 cubic-bezier(0.34, 1.56, 0.64, 1)"
-                :class="[ isSpotlightActive ? 'top-24 translate-y-0' : 'top-[35%] -translate-y-1/2' ]"
+                :class="[ (isSpotlightActive || showLibrary) ? 'top-16 translate-y-0' : 'top-[40%] -translate-y-1/2' ]"
             >
                 <div 
                     class="relative group w-full transition-all duration-500 ease-out"
-                    :class="[ isSpotlightActive ? 'max-w-4xl' : 'max-w-xl' ]"
+                    :class="[ (isSpotlightActive || showLibrary) ? 'max-w-4xl' : 'max-w-xl' ]"
                 >
                     <i class="ri-search-line absolute left-6 top-1/2 -translate-y-1/2 text-2xl transition-colors duration-300"
                        :class="isSpotlightActive ? 'text-accent' : 'text-ink/30'"></i>
@@ -746,6 +1011,25 @@ const goBack = () => {
                         </button>
                         <h2 class="text-xl font-serif font-bold">{{ previewEntry.word }}</h2>
                     </div>
+                    
+                    <!-- Detail View Actions -->
+                    <div class="flex items-center gap-4">
+                        <button 
+                            @click="saveWord"
+                            class="flex items-center gap-2 px-4 py-2 rounded-lg text-white bg-ink hover:bg-ink/90 font-bold transition-all text-sm shadow-lg"
+                        >
+                            <i class="ri-save-3-line"></i> Save Changes
+                        </button>
+                        
+                        <template v-if="currentVocabId">
+                            <button 
+                                @click="deleteVocabulary(currentVocabId)"
+                                class="flex items-center gap-2 px-4 py-2 rounded-lg text-red-500 hover:bg-red-50 font-bold transition-all text-sm"
+                            >
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </template>
+                    </div>
                 </div>
 
                 <!-- Content (Reusing the nice layout but centered) -->
@@ -803,25 +1087,57 @@ const goBack = () => {
 
                         <!-- Examples Gallery -->
                         <div class="p-16 bg-gray-50">
-                            <h3 class="text-xs font-bold uppercase tracking-widest text-ink/30 mb-8 flex items-center gap-2">
-                                <i class="ri-clapperboard-line"></i> Collected Scenes
+                            <h3 class="text-xs font-bold uppercase tracking-widest text-ink/30 mb-8 flex items-center justify-between">
+                                <span class="flex items-center gap-2"><i class="ri-clapperboard-line"></i> Collected Scenes</span>
+                                <button @click="addExample" class="text-accent hover:text-accent/80 transition-colors text-xs flex items-center gap-1">
+                                    <i class="ri-add-line"></i> Add Scene
+                                </button>
                             </h3>
                             <div class="grid grid-cols-1 gap-12">
                                 <div v-for="(ex, idx) in createForm.examples" :key="idx" 
-                                     class="relative aspect-[21/9] rounded-2xl overflow-hidden shadow-2xl group transition-transform hover:scale-[1.01]"
+                                    class="relative aspect-[21/9] rounded-2xl overflow-hidden shadow-2xl group transition-transform hover:scale-[1.01]"
                                 >
-                                    <!-- Image BG -->
-                                    <img v-if="ex.image_url" :src="ex.image_url" class="absolute inset-0 w-full h-full object-cover">
-                                    <div v-else class="absolute inset-0 bg-gradient-to-br from-gray-800 to-black"></div>
-                                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent"></div>
+                                    <!-- Delete Button (Top Right) -->
+                                    <button 
+                                        v-if="currentVocabId"
+                                        @click="deleteExample(idx)"
+                                        class="absolute top-4 right-4 z-50 w-10 h-10 rounded-full bg-black/40 backdrop-blur text-white/50 hover:bg-red-500 hover:text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                                        title="Delete Scene"
+                                    >
+                                        <i class="ri-delete-bin-line"></i>
+                                    </button>
+                                    <!-- Image BG (Cinematic Zoom) -->
+                                    <div class="absolute inset-0 overflow-hidden rounded-2xl">
+                                        <img 
+                                            v-if="ex.image_url" 
+                                            :src="ex.image_url" 
+                                            class="absolute inset-0 w-full h-full object-cover transition-transform duration-[2000ms] ease-out group-hover:scale-110"
+                                        >
+                                        <div v-else class="absolute inset-0 bg-gradient-to-br from-gray-800 to-black transition-colors duration-700 group-hover:from-gray-900 group-hover:to-gray-900"></div>
+                                    </div>
+                                    <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent transition-opacity duration-500 group-hover:opacity-80"></div>
                                     
-                                    <!-- Text Content -->
-                                    <div class="absolute inset-0 flex flex-col justify-end items-center p-12 text-center pb-16">
-                                        <p class="text-3xl font-serif font-medium text-white mb-4 drop-shadow-xl leading-relaxed">
-                                            "{{ ex.sentence }}"
-                                        </p>
-                                        <p v-if="ex.translation" class="text-white/60 text-lg font-light tracking-wide mb-2">{{ ex.translation }}</p>
-                                        <p v-if="ex.note" class="text-accent text-xs font-bold uppercase tracking-widest bg-black/50 px-3 py-1 rounded-full backdrop-blur-md border border-accent/20">{{ ex.note }}</p>
+                                    <!-- Text Content (Editable + Parallax) -->
+                                    <div class="absolute inset-0 flex flex-col justify-end items-center p-12 text-center pb-16 z-20 transition-transform duration-500 ease-out group-hover:-translate-y-2">
+                                        <textarea 
+                                            v-model="ex.sentence"
+                                            class="w-full bg-transparent border-none text-3xl font-serif font-medium text-white placeholder:text-white/20 outline-none resize-none p-0 text-center drop-shadow-xl leading-relaxed mb-4 scrollbar-hide focus:scale-105 transition-transform duration-300"
+                                            placeholder="Type a sentence..."
+                                            rows="2"
+                                        ></textarea>
+                                        
+                                        <div class="h-auto overflow-hidden transition-all duration-500 w-full flex flex-col items-center gap-2 opacity-80 group-hover:opacity-100 translate-y-4 group-hover:translate-y-0">
+                                            <input 
+                                                v-model="ex.translation"
+                                                class="w-full bg-transparent text-center text-lg text-white/80 placeholder:text-white/30 outline-none font-light tracking-wide mb-2 focus:text-white transition-colors"
+                                                placeholder="Translation..."
+                                            />
+                                            <input 
+                                                v-model="ex.note"
+                                                class="bg-black/50 px-4 py-1 rounded-full backdrop-blur-md border border-accent/20 text-center text-xs text-accent font-bold uppercase tracking-widest placeholder:text-white/10 outline-none w-auto min-w-[100px] hover:bg-black/70 transition-colors"
+                                                placeholder="ADD NOTE"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
