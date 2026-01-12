@@ -23,7 +23,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, draft, permission, user
+    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, draft, permission, user, system
 };
 
 
@@ -132,9 +132,11 @@ async fn main() {
             phonetic TEXT,
             language TEXT NOT NULL DEFAULT 'en',
             status TEXT NOT NULL,
+            query_count INT NOT NULL DEFAULT 0,
+            is_important BOOLEAN NOT NULL DEFAULT FALSE,
             FOREIGN KEY(id) REFERENCES nodes(id) ON DELETE CASCADE
         );
-
+        
         -- File System Driver: Memos
         CREATE TABLE IF NOT EXISTS memo_details (
             id UUID PRIMARY KEY, -- FK to nodes.id
@@ -251,6 +253,16 @@ async fn main() {
         "ALTER TABLE vocab_details ADD COLUMN root_id UUID REFERENCES vocab_roots(id) ON DELETE SET NULL;"
     )).await.map_err(|e| println!("Migration note (vocab.root_id): {}", e));
 
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE vocab_details ADD COLUMN query_count INT NOT NULL DEFAULT 0;"
+    )).await.map_err(|e| println!("Migration note (vocab.query_count): {}", e));
+
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE vocab_details ADD COLUMN is_important BOOLEAN NOT NULL DEFAULT FALSE;"
+    )).await.map_err(|e| println!("Migration note (vocab.is_important): {}", e));
+
 
 
     // Initialize Auth Service
@@ -343,6 +355,7 @@ async fn main() {
         .merge(draft::router())
         .merge(permission::router())
         .merge(user::router())
+        .merge(system::router())
         .with_state(state);
 
     let app = Router::new()

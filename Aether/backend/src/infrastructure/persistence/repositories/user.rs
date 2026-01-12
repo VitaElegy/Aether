@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use sea_orm::*;
 use chrono::Utc;
-use crate::domain::models::{User, UserId, ExperienceItem};
+use crate::domain::models::{User, UserId};
 use crate::domain::ports::{UserRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::persistence::entities::user;
