@@ -234,7 +234,7 @@ impl ArticleRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, _viewer_id: Option<UserId>, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError> {
+    async fn list(&self, _viewer_id: Option<UserId>, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, tag: Option<String>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError> {
         let mut query = node::Entity::find()
             .find_also_related(article_detail::Entity);
 
@@ -251,6 +251,19 @@ impl ArticleRepository for PostgresRepository {
             // effectively enforces existence (like Inner Join) + condition.
             query = query.filter(node::Column::Type.eq("Article"))
                          .filter(article_detail::Column::Status.eq("Published"));
+            
+            if let Some(t) = tag {
+                // Approximate JSON array search using string matching
+                // Note: Only safe for simple alphanumeric tags.
+                // Ideally, switch to JSONB containment operator (@>) if SeaORM/Postgres support enables it.
+                // Format: ["foo","bar"] -> LIKE '%"foo"%'
+                let like_expr = format!("%\"{}\"%", t);
+                 query = query.filter(
+                    sea_orm::sea_query::Expr::col((article_detail::Entity, article_detail::Column::Tags))
+                        .cast_as(sea_orm::sea_query::Alias::new("TEXT"))
+                        .like(like_expr)
+                );
+            }
             
             // SECURITY FIX: Filter by Visibility using the cached 'permission_mode' column
             // 1. Base: Public is always visible

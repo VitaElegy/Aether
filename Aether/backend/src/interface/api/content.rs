@@ -304,6 +304,7 @@ pub struct ListParams {
     pub limit: Option<u64>,
     pub author_id: Option<Uuid>,
     pub knowledge_base_id: Option<Uuid>,
+    pub tag: Option<String>,
 }
 
 pub async fn list_content_handler(
@@ -316,8 +317,9 @@ pub async fn list_content_handler(
     let offset = params.offset.unwrap_or(0);
     let author_id = params.author_id.map(UserId);
     let knowledge_base_id = params.knowledge_base_id;
+    let tag = params.tag;
 
-    match state.repo.list(viewer_id, author_id, knowledge_base_id, limit, offset).await {
+    match state.repo.list(viewer_id, author_id, knowledge_base_id, tag, limit, offset).await {
         Ok(articles) => (StatusCode::OK, Json(articles)).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
