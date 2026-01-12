@@ -1,22 +1,25 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
+import { ref, onMounted, computed, watch } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import { useAuthStore } from '../stores/auth';
 import axios from 'axios';
 import DynamicRenderer from '../components/DynamicRenderer.vue';
 import SearchBar from '../components/SearchBar.vue';
 
+const route = useRoute();
 const router = useRouter();
 const authStore = useAuthStore();
 const posts = ref<any[]>([]);
+const currentTag = computed(() => route.query.tag as string | undefined);
 
-onMounted(async () => {
-    if (!authStore.user || !authStore.user.username) {
-        await authStore.fetchUser();
-    }
-
+const fetchContent = async () => {
     try {
-        const res = await axios.get('/api/content');
+        const params: any = {};
+        if (currentTag.value) {
+            params.tag = currentTag.value;
+        }
+
+        const res = await axios.get('/api/content', { params });
         console.log('API Response:', res.data);
 
         if (!Array.isArray(res.data)) {
@@ -36,16 +39,32 @@ onMounted(async () => {
             type: p.body.type,
             data: p.body.type === 'Markdown' ? { content: p.body.data } : p.body.data,
             tags: p.tags,
-            visibility: p.permission_mode // Mapped from flattened JSON
+            visibility: p.permission_mode
         }));
-
-        console.log('Processed posts:', posts.value.length);
     } catch (err: any) {
         console.error('Failed to fetch content:', err);
-        console.error('Error response:', err.response?.data);
         posts.value = [];
     }
+};
+
+onMounted(async () => {
+    if (!authStore.user || !authStore.user.username) {
+        await authStore.fetchUser();
+    }
+    await fetchContent();
 });
+
+watch(() => route.query.tag, () => {
+    fetchContent();
+});
+
+const filterByTag = (tag: string) => {
+    router.push({ query: { tag } });
+};
+
+const clearFilter = () => {
+    router.push({ query: {} });
+};
 
 const goToProfile = (id: string) => router.push(`/profile/${id}`);
 </script>
@@ -104,6 +123,18 @@ const goToProfile = (id: string) => router.push(`/profile/${id}`);
                 </div>
             </header>
 
+            <!-- Filter Status -->
+            <div v-if="currentTag" class="mb-12 flex items-center justify-between bg-accent/5 border border-accent/20 p-4 rounded-xl">
+                 <div class="flex items-center gap-3">
+                    <span class="text-accent text-xs font-black uppercase tracking-widest">Active Filter:</span>
+                    <span class="bg-accent text-paper px-3 py-1 text-xs font-bold rounded-full">#{{ currentTag }}</span>
+                 </div>
+                 <button @click="clearFilter" class="text-ink/40 hover:text-red-500 transition-colors text-xs font-bold uppercase tracking-widest flex items-center gap-2">
+                    <i class="ri-close-circle-line text-lg"></i>
+                    Clear
+                 </button>
+            </div>
+
             <!-- Feed Grid -->
             <div v-if="posts.length > 0" class="grid grid-cols-1 gap-12">
                 <article v-for="post in posts" :key="post.id"
@@ -154,7 +185,8 @@ const goToProfile = (id: string) => router.push(`/profile/${id}`);
 
                         <div class="flex flex-wrap gap-2">
                             <span v-for="tag in post.tags" :key="tag"
-                                class="text-[10px] font-bold text-ink/60 bg-ash/30 px-3 py-1 rounded-full hover:bg-accent/10 hover:text-accent transition-all cursor-crosshair">
+                                @click.stop="filterByTag(tag)"
+                                class="text-[10px] font-bold text-ink/60 bg-ash/30 px-3 py-1 rounded-full hover:bg-accent/10 hover:text-accent transition-all cursor-crosshair z-10 relative">
                                 #{{ tag.toUpperCase() }}
                             </span>
                         </div>

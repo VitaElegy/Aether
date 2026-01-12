@@ -261,7 +261,8 @@ const handleEdit = () => {
                             <span v-if="article.category"
                                 class="text-[10px] font-black uppercase tracking-[0.2em] bg-accent text-paper px-4 py-1.5 rounded-sm shadow-lg shadow-accent/20">{{ article.category }}</span>
                             <span v-for="tag in article.tags" :key="tag"
-                                class="text-[10px] font-mono uppercase tracking-widest border border-ash text-ink/40 px-3 py-1.5 rounded-sm hover:border-accent hover:text-accent transition-all select-none">#{{
+                                @click="router.push(`/?tag=${tag}`)"
+                                class="text-[10px] font-mono uppercase tracking-widest border border-ash text-ink/40 px-3 py-1.5 rounded-sm hover:border-accent hover:text-accent transition-all select-none cursor-pointer">#{{
                                     tag }}</span>
                         </div>
 
