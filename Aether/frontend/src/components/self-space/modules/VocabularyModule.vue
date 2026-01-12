@@ -23,6 +23,8 @@ interface Vocabulary {
     // New Fields
     root?: string;
     examples: VocabularyExample[];
+    query_count?: number;
+    is_important?: boolean;
     
     // Deprecated / Mapped
     context_sentence?: string;
@@ -37,6 +39,25 @@ interface Vocabulary {
 const vocabularyList = ref<Vocabulary[]>([]);
 const listLoading = ref(false);
 const searchQuery = ref('');
+
+// Computed for Detail View
+const currentVocabId = computed(() => {
+    if (!previewEntry.value) return null;
+    return vocabularyList.value.find(v => v.word.toLowerCase() === previewEntry.value!.word.toLowerCase())?.id;
+});
+
+const isCurrentImportant = computed(() => {
+    if (!previewEntry.value) return false;
+    return vocabularyList.value.find(v => v.word.toLowerCase() === previewEntry.value!.word.toLowerCase())?.is_important || false;
+});
+
+const currentQueryCount = computed(() => {
+     if (!previewEntry.value) return 0;
+    return vocabularyList.value.find(v => v.word.toLowerCase() === previewEntry.value!.word.toLowerCase())?.query_count || 0;
+});
+
+
+
 
 // Spotlight State
 const isSpotlightActive = ref(false);
@@ -114,7 +135,7 @@ const debouncedSearch = useDebounceFn(async (val: string) => {
             if (aStarts && !bStarts) return -1;
             if (!aStarts && bStarts) return 1;
 
-            // 3. Length Priority (Shorter is usually more relevant for equal match types)
+            // 3. Length Priority
             return a.length - b.length;
         });
 
@@ -193,6 +214,10 @@ const selectSuggestion = async (word: string) => {
                 createForm.examples = [];
             }
         }
+        
+        // INCREMENT QUERY COUNT
+        incrementQueryCount(existing.id);
+
     } else {
         // Reset form for new entry
         createForm.translation = '';
@@ -200,6 +225,46 @@ const selectSuggestion = async (word: string) => {
         createForm.examples = [];
     }
 };
+
+const incrementQueryCount = async (id: string) => {
+    try {
+        const token = localStorage.getItem('aether_token');
+        await axios.post(`/api/vocabulary/${id}/increment_query`, {}, {
+             headers: { Authorization: `Bearer ${token}` }
+        });
+        // Update local state
+        const item = vocabularyList.value.find(v => v.id === id);
+        if (item) {
+            item.query_count = (item.query_count || 0) + 1;
+        }
+    } catch (e) {
+        console.error('Failed to increment count', e);
+    }
+};
+
+const toggleImportance = async (id: string) => {
+    const item = vocabularyList.value.find(v => v.id === id);
+    if (!item) return;
+
+    const newState = !item.is_important;
+    // Optimistic Update
+    item.is_important = newState;
+
+    try {
+        const token = localStorage.getItem('aether_token');
+        await axios.post(`/api/vocabulary/${id}/toggle_importance`, { is_important: newState }, {
+             headers: { Authorization: `Bearer ${token}` }
+        });
+        MessagePlugin.success(newState ? 'Marked as Important' : 'Unmarked');
+    } catch (e) {
+        // Revert on error
+        item.is_important = !newState;
+        console.error('Failed to toggle importance', e);
+        MessagePlugin.error('Action failed');
+    }
+};
+
+
 
 const fetchDefinitionInfo = async (word: string) => {
     console.log('Fetching Definition:', word);
@@ -286,7 +351,15 @@ const saveWord = async () => {
     try {
         const token = localStorage.getItem('aether_token');
         const config = { headers: { Authorization: `Bearer ${token}` } };
-        await axios.post('/api/vocabulary', createForm, config);
+        
+        // Preserve existing extra fields if updating
+        const existing = vocabularyList.value.find(v => v.word.toLowerCase() === createForm.word.toLowerCase());
+        const payload = {
+             ...createForm,
+             // Note: query_count and is_important are handled by server preservation logic in save_vocabulary,
+        };
+        
+        await axios.post('/api/vocabulary', payload, config);
         MessagePlugin.success('Saved');
         searchQuery.value = '';
         isSpotlightActive.value = false;
@@ -355,6 +428,7 @@ window.addEventListener('popstate', () => {
 const goBack = () => {
     history.back();
 };
+
 </script>
 
 <template>
@@ -490,7 +564,19 @@ const goBack = () => {
                                 
                                 <div class="flex items-end justify-between">
                                     <div>
-                                        <h2 class="text-5xl font-serif font-black text-ink tracking-tighter mb-2">{{ previewEntry.word }}</h2>
+                                        <div class="flex items-center gap-3 mb-2">
+                                            <h2 class="text-5xl font-serif font-black text-ink tracking-tighter">{{ previewEntry.word }}</h2>
+                                            <!-- Important Star (Quick View) -->
+                                            <button 
+                                                v-if="currentVocabId"
+                                                @click="toggleImportance(currentVocabId)"
+                                                class="text-2xl transition-all duration-300 hover:scale-110"
+                                                :class="isCurrentImportant ? 'text-yellow-400' : 'text-ink/10 hover:text-yellow-400'"
+                                                title="Toggle Importance"
+                                            >
+                                                <i :class="isCurrentImportant ? 'ri-star-fill' : 'ri-star-line'"></i>
+                                            </button>
+                                        </div>
                                         <div class="flex items-center gap-3">
                                             <span v-if="previewEntry.phonetic" class="font-mono text-xs text-ink/50 bg-white/50 px-2 py-1 rounded border border-ink/5">{{ previewEntry.phonetic }}</span>
                                             
@@ -503,6 +589,10 @@ const goBack = () => {
                                                     placeholder="Root..."
                                                 />
                                             </div>
+                                            <!-- Query Count Badge -->
+                                            <span v-if="currentQueryCount > 0" class="flex items-center gap-1 text-xs font-bold text-accent bg-accent/5 px-2 py-1 rounded-full">
+                                                <i class="ri-search-line"></i> {{ currentQueryCount }}
+                                            </span>
                                         </div>
                                     </div>
                                     
@@ -665,10 +755,26 @@ const goBack = () => {
                         <div class="relative bg-ink/5 p-16 pb-8">
                              <div class="flex items-end justify-between">
                                 <div>
-                                    <h1 class="text-8xl font-serif font-black text-ink tracking-tighter mb-4">{{ previewEntry.word }}</h1>
+                                    <div class="flex items-center gap-4 mb-4">
+                                         <h1 class="text-8xl font-serif font-black text-ink tracking-tighter">{{ previewEntry.word }}</h1>
+                                        <!-- Important Star (Detail) -->
+                                        <button 
+                                            v-if="currentVocabId"
+                                            @click="toggleImportance(currentVocabId)"
+                                            class="text-4xl transition-all duration-300 hover:scale-110"
+                                            :class="isCurrentImportant ? 'text-yellow-400' : 'text-ink/10 hover:text-yellow-400'"
+                                            title="Toggle Importance"
+                                        >
+                                            <i :class="isCurrentImportant ? 'ri-star-fill' : 'ri-star-line'"></i>
+                                        </button>
+                                    </div>
                                     <div class="flex items-center gap-4 text-xl">
                                         <span v-if="previewEntry.phonetic" class="font-mono text-ink/50 bg-white/50 px-3 py-1 rounded border border-ink/5">{{ previewEntry.phonetic }}</span>
                                         <span v-if="createForm.root" class="text-ink/60 font-serif italic">root: {{ createForm.root }}</span>
+                                        <!-- Query Count Badge -->
+                                        <span v-if="currentQueryCount > 0" class="flex items-center gap-1 text-sm font-bold text-accent bg-accent/5 px-2 py-1 rounded-full">
+                                            <i class="ri-search-line"></i> {{ currentQueryCount }} Lookups
+                                        </span>
                                     </div>
                                 </div>
                                 <div class="text-4xl font-serif font-bold text-accent">{{ createForm.translation }}</div>
