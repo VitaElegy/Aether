@@ -43,6 +43,7 @@ import SlideDesign from './slides/SlideDesign.vue'
 import SlideAlgorithms from './slides/SlideAlgorithms.vue'
 import SlideDevProcess from './slides/SlideDevProcess.vue'
 import SlideRoadmap from './slides/SlideRoadmap.vue'
+import SlideCommits from './slides/SlideCommits.vue'
 import SlideAuthors from './slides/SlideAuthors.vue'
 import SlideClosing from './slides/SlideClosing.vue'
 
@@ -61,6 +62,7 @@ const slides = [
   SlideAlgorithms,
   SlideDevProcess,
   SlideRoadmap,
+  SlideCommits,
   SlideAuthors,
   SlideClosing
 ]
