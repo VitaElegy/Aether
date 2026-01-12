@@ -93,6 +93,10 @@ pub struct Vocabulary {
     // New Fields
     pub root: Option<String>, // The actual root string, e.g. "spec"
     pub examples: Vec<VocabularyExample>,
+    #[serde(default)]
+    pub query_count: i32,
+    #[serde(default)]
+    pub is_important: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

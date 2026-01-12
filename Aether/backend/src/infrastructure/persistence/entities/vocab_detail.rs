@@ -14,6 +14,10 @@ pub struct Model {
     pub language: String,
     pub status: String,
     pub root_id: Option<Uuid>,
+    #[sea_orm(default_value = 0)]
+    pub query_count: i32,
+    #[sea_orm(default_value = false)]
+    pub is_important: bool,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

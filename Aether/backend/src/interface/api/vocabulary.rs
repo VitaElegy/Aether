@@ -53,7 +53,8 @@ pub struct ListVocabularyRequest {
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/vocabulary", post(save_vocabulary).get(list_vocabulary))
-        .route("/api/vocabulary/:id", delete(delete_vocabulary))
+        .route("/api/vocabulary/:id/increment_query", post(increment_query_count))
+        .route("/api/vocabulary/:id/toggle_importance", post(toggle_importance))
 }
 
 async fn save_vocabulary(
@@ -63,13 +64,11 @@ async fn save_vocabulary(
 ) -> impl IntoResponse {
     let user_id = UserId(auth.id);
     
-    let user_id = UserId(auth.id);
-    
     // Check for existing word to Determine Upsert vs Create
-    let (id, is_update) = if let Ok(Some(existing)) = state.repo.find_by_word(&user_id, &payload.word).await {
-         (existing.node.id, true)
+    let (id, is_update, existing_count, existing_importance) = if let Ok(Some(existing)) = state.repo.find_by_word(&user_id, &payload.word).await {
+         (existing.node.id, true, existing.query_count, existing.is_important)
     } else {
-         (Uuid::new_v4(), false)
+         (Uuid::new_v4(), false, 0, false)
     };
     
     // Map Examples
@@ -107,6 +106,8 @@ async fn save_vocabulary(
         status: "New".to_string(),
         root: payload.root,
         examples,
+        query_count: existing_count, // Preserve or 0
+        is_important: existing_importance, // Preserve or false
     };
 
     match state.repo.save(vocab).await {
@@ -136,6 +137,34 @@ async fn delete_vocabulary(
 ) -> impl IntoResponse {
     match state.repo.delete(&id).await {
         Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "deleted" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+struct ImportancePayload {
+    is_important: bool
+}
+
+async fn increment_query_count(
+    _auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    match state.repo.increment_query_count(&id).await {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "updated" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+async fn toggle_importance(
+    _auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<ImportancePayload>,
+) -> impl IntoResponse {
+    match state.repo.set_importance(&id, payload.is_important).await {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "updated" }))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }

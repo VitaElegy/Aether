@@ -73,11 +73,13 @@ impl VocabularyRepository for PostgresRepository {
             language: Set(vocab.language),
             status: Set(vocab.status),
             root_id: Set(root_id),
+            query_count: Set(vocab.query_count),
+            is_important: Set(vocab.is_important),
         };
         vocab_detail::Entity::insert(detail_model)
             .on_conflict(
                 sea_orm::sea_query::OnConflict::column(vocab_detail::Column::Id)
-                    .update_columns([vocab_detail::Column::Definition, vocab_detail::Column::Translation, vocab_detail::Column::Status, vocab_detail::Column::RootId])
+                    .update_columns([vocab_detail::Column::Definition, vocab_detail::Column::Translation, vocab_detail::Column::Status, vocab_detail::Column::RootId, vocab_detail::Column::QueryCount, vocab_detail::Column::IsImportant])
                     .to_owned()
             )
             .exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
@@ -197,6 +199,28 @@ impl VocabularyRepository for PostgresRepository {
         node::Entity::delete_by_id(*id).exec(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(())
     }
+
+    async fn increment_query_count(&self, id: &Uuid) -> Result<(), RepositoryError> {
+        use sea_orm::sea_query::{Query, Expr};
+        // Atomic increment using SeaQuery
+        let stmt = sea_orm::Statement::from_sql_and_values(
+            self.db.get_database_backend(),
+            r#"UPDATE vocab_details SET query_count = query_count + 1 WHERE id = $1"#,
+            vec![(*id).into()]
+        );
+        self.db.execute(stmt).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(())
+    }
+
+    async fn set_importance(&self, id: &Uuid, is_important: bool) -> Result<(), RepositoryError> {
+        let stmt = sea_orm::Statement::from_sql_and_values(
+            self.db.get_database_backend(),
+            r#"UPDATE vocab_details SET is_important = $1 WHERE id = $2"#,
+            vec![is_important.into(), (*id).into()]
+        );
+        self.db.execute(stmt).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(())
+    }
 }
 
 fn map_vocab(n: node::Model, d: vocab_detail::Model, root: Option<String>, examples: Vec<crate::domain::models::VocabularyExample>) -> Vocabulary {
@@ -226,6 +250,8 @@ fn map_vocab(n: node::Model, d: vocab_detail::Model, root: Option<String>, examp
         status: d.status,
         root,
         examples,
+        query_count: d.query_count,
+        is_important: d.is_important,
     }
 }
 
