@@ -13,6 +13,7 @@ pub struct Model {
     pub tags: serde_json::Value, // Stored as JSON string
     pub cover_image: Option<String>,
     pub cover_offset_y: i32,
+    pub renderer_id: Option<String>,
     pub visibility: String,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,

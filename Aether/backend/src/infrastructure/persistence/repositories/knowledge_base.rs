@@ -18,6 +18,7 @@ impl KnowledgeBaseRepository for PostgresRepository {
             tags: Set(serde_json::to_value(kb.tags).unwrap_or(serde_json::json!([]))),
             cover_image: Set(kb.cover_image),
             cover_offset_y: Set(kb.cover_offset_y),
+            renderer_id: Set(kb.renderer_id),
             visibility: Set(match kb.visibility {
                 Visibility::Public => "Public".to_string(),
                 Visibility::Private => "Private".to_string(),
@@ -36,6 +37,7 @@ impl KnowledgeBaseRepository for PostgresRepository {
                         knowledge_base::Column::Tags,
                         knowledge_base::Column::CoverImage,
                         knowledge_base::Column::CoverOffsetY,
+                        knowledge_base::Column::RendererId,
                         knowledge_base::Column::Visibility,
                         knowledge_base::Column::UpdatedAt,
                     ])
@@ -112,6 +114,7 @@ fn map_to_domain(model: knowledge_base::Model) -> KnowledgeBase {
         tags: serde_json::from_value(model.tags).unwrap_or_default(),
         cover_image: model.cover_image,
         cover_offset_y: model.cover_offset_y,
+        renderer_id: model.renderer_id,
         visibility: match model.visibility.as_str() {
             "Internal" => Visibility::Internal,
             "Private" => Visibility::Private,
