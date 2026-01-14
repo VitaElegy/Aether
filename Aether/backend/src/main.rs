@@ -211,6 +211,11 @@ async fn main() {
         "ALTER TABLE knowledge_bases ADD COLUMN cover_offset_y INT NOT NULL DEFAULT 50;"
     )).await.map_err(|e| println!("Migration note (kb.offset): {}", e));
 
+    let _ = db.execute(sea_orm::Statement::from_string(
+        db.get_database_backend(),
+        "ALTER TABLE knowledge_bases ADD COLUMN renderer_id TEXT;"
+    )).await.map_err(|e| println!("Migration note (kb.renderer_id): {}", e));
+
 
     let _ = db.execute(sea_orm::Statement::from_string(
         db.get_database_backend(),
@@ -262,6 +267,34 @@ async fn main() {
         db.get_database_backend(),
         "ALTER TABLE vocab_details ADD COLUMN is_important BOOLEAN NOT NULL DEFAULT FALSE;"
     )).await.map_err(|e| println!("Migration note (vocab.is_important): {}", e));
+
+    // --- SEMANTIC INDEX (Math KB V2) ---
+    let _ = db.execute_unprepared("
+        CREATE TABLE IF NOT EXISTS semantic_nodes (
+            id UUID PRIMARY KEY,
+            article_id UUID NOT NULL,
+            client_id TEXT NOT NULL, -- The 'id' in the markdown block
+            type TEXT NOT NULL,      -- theorem, function, etc.
+            title TEXT,
+            content TEXT,
+            metrics JSONB DEFAULT '{}',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (article_id) REFERENCES nodes(id) ON DELETE CASCADE,
+            UNIQUE (article_id, client_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS semantic_edges (
+            id UUID PRIMARY KEY,
+            source_id UUID NOT NULL,
+            target_id UUID NOT NULL,
+            relation_type TEXT NOT NULL,
+            metrics JSONB DEFAULT '{}',
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (source_id) REFERENCES semantic_nodes(id) ON DELETE CASCADE,
+            FOREIGN KEY (target_id) REFERENCES semantic_nodes(id) ON DELETE CASCADE
+        );
+    ").await.map_err(|e| println!("Migration note (semantic_index): {}", e));
 
 
 
@@ -332,6 +365,8 @@ async fn main() {
         .time_to_live(std::time::Duration::from_secs(3600))
         .build();
 
+    let indexer_service = Arc::new(crate::domain::indexer_service::IndexerService::new(db.clone()));
+
     let state = AppState {
         repo,
         auth_service,
@@ -339,6 +374,7 @@ async fn main() {
         permission_service,
         dictionary,
         dictionary_cache,
+        indexer_service,
     };
 
     // --- 4. Build Router with Trace Middleware ---
@@ -356,6 +392,7 @@ async fn main() {
         .merge(permission::router())
         .merge(user::router())
         .merge(system::router())
+        .merge(crate::interface::api::graph::router())
         .with_state(state);
 
     let app = Router::new()

@@ -6,6 +6,7 @@ use crate::domain::ports::{
 };
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::dictionary::loader::DictionaryLoader;
+use crate::domain::indexer_service::IndexerService;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -15,11 +16,18 @@ pub struct AppState {
     pub permission_service: crate::domain::permission_service::PermissionService<PostgresRepository>,
     pub dictionary: DictionaryLoader,
     pub dictionary_cache: moka::future::Cache<String, String>, // JSON serialized entry
+    pub indexer_service: Arc<IndexerService>,
 }
 
 impl FromRef<AppState> for Arc<dyn AuthService> {
     fn from_ref(state: &AppState) -> Self {
         state.auth_service.clone()
+    }
+}
+
+impl FromRef<AppState> for Arc<IndexerService> {
+    fn from_ref(state: &AppState) -> Self {
+        state.indexer_service.clone()
     }
 }
 

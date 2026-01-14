@@ -13,3 +13,4 @@ pub mod draft;
 pub mod permission;
 pub mod user;
 pub mod system;
+pub mod graph;

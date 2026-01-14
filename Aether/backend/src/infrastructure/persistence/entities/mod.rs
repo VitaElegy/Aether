@@ -13,3 +13,5 @@ pub mod group;
 pub mod relationship;
 pub mod vocab_root;
 pub mod vocab_example;
+pub mod semantic_node;
+pub mod semantic_edge;

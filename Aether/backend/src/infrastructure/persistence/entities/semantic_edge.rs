@@ -1,0 +1,36 @@
+use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "semantic_edges")]
+pub struct Model {
+    #[sea_orm(primary_key, auto_increment = false)]
+    pub id: Uuid,
+    pub source_id: Uuid,
+    pub target_id: Uuid,
+    pub relation_type: String,
+    pub metrics: Json,
+    pub created_at: DateTimeWithTimeZone,
+}
+
+#[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
+pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::semantic_node::Entity",
+        from = "Column::SourceId",
+        to = "super::semantic_node::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    SourceNode,
+    #[sea_orm(
+        belongs_to = "super::semantic_node::Entity",
+        from = "Column::TargetId",
+        to = "super::semantic_node::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    TargetNode,
+}
+
+impl ActiveModelBehavior for ActiveModel {}

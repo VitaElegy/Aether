@@ -170,6 +170,8 @@ pub async fn create_content_handler(
             format!("{}-{}", payload.title.to_lowercase().replace(" ", "-"), &id.to_string()[..8])
         });
         
+        let body_content = payload.body.clone();
+
         let article = Article {
             node: Node {
                 id,
@@ -192,7 +194,18 @@ pub async fn create_content_handler(
         };
 
         match ArticleRepository::save(&*state.repo, article, UserId(user.id), payload._reason).await {
-            Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response(),
+            Ok(id) => {
+                // Background Indexing for Graph
+                let indexer = state.indexer_service.clone();
+                let body = body_content;
+                tokio::spawn(async move {
+                    if let Err(e) = indexer.index_article(id, &body).await {
+                        tracing::error!("Async Indexing failed for {}: {}", id, e);
+                    }
+                });
+
+                (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response()
+            },
             Err(RepositoryError::DuplicateTitle(msg)) => (StatusCode::CONFLICT, Json(serde_json::json!({ "error": msg }))).into_response(),
             Err(RepositoryError::ValidationError(msg)) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": msg }))).into_response(),
             Err(e) => {
@@ -260,6 +273,8 @@ pub async fn update_content_handler(
                 _ => existing.status, // KEEP EXISTING STATUS
             };
 
+            let body_content = payload.body.clone();
+
             let updated_article = Article {
                 node: Node {
                     id,
@@ -288,7 +303,17 @@ pub async fn update_content_handler(
             }
 
             match ArticleRepository::save(&*state.repo, updated_article, UserId(user.id), payload._reason).await {
-                Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "id": id }))).into_response(),
+                Ok(_) => {
+                    // Background Indexing
+                    let indexer = state.indexer_service.clone();
+                    // body_content is owned string here, we move it to async block
+                    tokio::spawn(async move {
+                         if let Err(e) = indexer.index_article(id, &body_content).await {
+                             tracing::error!("Async Indexing failed for {}: {}", id, e);
+                         }
+                    });
+                    (StatusCode::OK, Json(serde_json::json!({ "id": id }))).into_response()
+                },
                 Err(RepositoryError::DuplicateTitle(msg)) => (StatusCode::CONFLICT, Json(serde_json::json!({ "error": msg }))).into_response(),
                 Err(RepositoryError::ValidationError(msg)) => (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": msg }))).into_response(),
                 Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
