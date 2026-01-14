@@ -10,6 +10,7 @@ export interface KnowledgeBase {
     tags?: string[];
     cover_image?: string;
     cover_offset_y: number; // Percentage 0-100
+    renderer_id?: string;
     visibility: 'Public' | 'Private' | 'Internal';
     created_at: string;
     updated_at: string;
@@ -21,6 +22,7 @@ export interface CreateKnowledgeBaseRequest {
     tags?: string[];
     cover_image?: string;
     cover_offset_y?: number;
+    renderer_id?: string;
     visibility?: 'Public' | 'Private' | 'Internal';
 }
 
@@ -30,6 +32,7 @@ export interface UpdateKnowledgeBaseRequest {
     tags?: string[];
     cover_image?: string;
     cover_offset_y?: number;
+    renderer_id?: string;
     visibility?: 'Public' | 'Private' | 'Internal';
 }
 
@@ -40,28 +43,35 @@ export interface Collaborator {
     role: string;
 }
 
+// Helper to get headers
+const getAuthHeaders = () => ({
+    headers: {
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+    }
+});
+
 export const knowledgeApi = {
     async list(): Promise<KnowledgeBase[]> {
-        const response = await axios.get(`${API_BASE}/knowledge-bases`);
+        const response = await axios.get(`${API_BASE}/knowledge-bases`, getAuthHeaders());
         return response.data;
     },
 
     async get(id: string): Promise<KnowledgeBase> {
-        const response = await axios.get(`${API_BASE}/knowledge-bases/${id}`);
+        const response = await axios.get(`${API_BASE}/knowledge-bases/${id}`, getAuthHeaders());
         return response.data;
     },
 
     async create(payload: CreateKnowledgeBaseRequest): Promise<KnowledgeBase> {
-        const response = await axios.post(`${API_BASE}/knowledge-bases`, payload);
+        const response = await axios.post(`${API_BASE}/knowledge-bases`, payload, getAuthHeaders());
         return response.data;
     },
 
     async update(id: string, payload: UpdateKnowledgeBaseRequest): Promise<void> {
-        await axios.put(`${API_BASE}/knowledge-bases/${id}`, payload);
+        await axios.put(`${API_BASE}/knowledge-bases/${id}`, payload, getAuthHeaders());
     },
 
     async delete(id: string): Promise<void> {
-        await axios.delete(`${API_BASE}/knowledge-bases/${id}`);
+        await axios.delete(`${API_BASE}/knowledge-bases/${id}`, getAuthHeaders());
     },
 
     async listCollaborators(id: string): Promise<Collaborator[]> {
