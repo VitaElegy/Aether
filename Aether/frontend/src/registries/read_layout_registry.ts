@@ -4,12 +4,14 @@ import { type Component, defineAsyncComponent } from 'vue';
 const StandardReadLayout = defineAsyncComponent(() => import('@/components/layouts/StandardReadLayout.vue'));
 const MathArchiveLayout = defineAsyncComponent(() => import('@/components/layouts/MathArchiveLayout.vue'));
 const RendererErrorLayout = defineAsyncComponent(() => import('@/components/layouts/RendererErrorLayout.vue'));
+const MathManuscriptLayout = defineAsyncComponent(() => import('@/components/layouts/MathManuscriptLayout.vue'));
 
 const registry = new Map<string, Component>();
 
 // Initialize with default
 registry.set('default', StandardReadLayout);
 registry.set('math_v1', MathArchiveLayout);
+registry.set('math_v3', MathManuscriptLayout);
 
 export const registerLayout = (id: string, component: Component) => {
     registry.set(id, component);
