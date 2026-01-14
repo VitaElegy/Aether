@@ -68,10 +68,8 @@ const fetchKBs = async () => {
 };
 
 const openKb = (kb: KnowledgeBase) => {
-    currentKb.value = kb;
-    currentPath.value = [];
-    viewMode.value = 'detail';
-    refreshContent();
+    // Navigate to the dedicated Knowledge Base Dashboard
+    router.push(`/kb/${kb.id}`);
 };
 
 const openSettings = () => {

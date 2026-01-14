@@ -43,12 +43,7 @@ const goBack = () => {
         <!-- Top Navigation Bar -->
         <TopNavBar>
             <template #left>
-                <button @click="goBack"
-                    class="text-ink/60 hover:text-accent transition-colors flex items-center gap-2"
-                    title="返回">
-                    <i class="ri-arrow-left-line text-xl"></i>
-                    <span class="sr-only">返回</span>
-                </button>
+                <!-- handled by global beacon -->
             </template>
 
             <template #center>

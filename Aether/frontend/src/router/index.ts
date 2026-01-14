@@ -65,6 +65,18 @@ const router = createRouter({
       meta: { transition: 'fade' }
     },
     {
+      path: '/kb/:id',
+      name: 'knowledge-base',
+      component: () => import('../views/KnowledgeBaseDetail.vue'),
+      meta: { transition: 'slide-right' }
+    },
+    {
+      path: '/kb/:id/tree',
+      name: 'kb-tree-detail',
+      component: () => import('../views/MathTreeDetailView.vue'),
+      meta: { transition: 'fade' }
+    },
+    {
       path: '/space/presentation',
       name: 'space-presentation',
       component: () => import('../components/self-space/presentation/PresentationContainer.vue'),
