@@ -40,15 +40,25 @@ watch(() => props.article, () => {
 </script>
 
 <template>
-    <div class="flex h-screen w-full bg-gray-50 dark:bg-[#0a0f14] overflow-hidden font-sans text-gray-900 dark:text-gray-200 transition-colors duration-300">
+    <div class="flex h-screen w-full bg-paper overflow-hidden font-sans text-ink transition-colors duration-300 relative">
+        <!-- Header Overlay -->
+        <div class="absolute top-0 left-0 w-full p-4 flex items-center justify-between z-50 pointer-events-none">
+            <div class="pointer-events-auto">
+                <button @click="$router.back()" class="flex items-center gap-2 text-ink/50 hover:text-ink transition-colors bg-paper/20 hover:bg-paper/40 backdrop-blur-md px-4 py-2 rounded-full shadow-sm border border-ink/5">
+                    <i class="ri-arrow-left-line"></i>
+                    <span class="text-xs font-bold tracking-widest uppercase font-mono">Return</span>
+                </button>
+            </div>
+        </div>
+
         <!-- LEFT: Ghost Sidebar -->
-        <div class="w-64 h-full border-r border-black/5 dark:border-white/5 relative z-10 transition-all duration-500 opacity-60 dark:opacity-40 hover:opacity-100 hover:w-72 bg-white/50 dark:bg-[#0a0f14]/90 backdrop-blur-sm">
+        <div class="w-64 h-full border-r border-ink/5 relative z-10 transition-all duration-500 opacity-60 hover:opacity-100 hover:w-72 bg-paper/50 backdrop-blur-sm">
              <GhostSidebar :nodes="semanticNodes" />
         </div>
 
         <!-- RIGHT: Focus Stage -->
         <div class="flex-1 h-full relative z-0">
-             <div v-if="loadingGraph" class="absolute inset-0 flex items-center justify-center text-cyan-500/50 text-xs font-mono uppercase">
+             <div v-if="loadingGraph" class="absolute inset-0 flex items-center justify-center text-accent/50 text-xs font-mono uppercase tracking-widest animate-pulse">
                   Scanning Geometry...
              </div>
              <FocusStage v-else :nodes="semanticNodes" />

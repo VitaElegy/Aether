@@ -28,3 +28,18 @@ export const getLayout = (id: string | null | undefined): Component => {
     }
     return layout;
 };
+
+// -- Dashboard Registry --
+const dashboardRegistry = new Map<string, Component>();
+
+// We will register components lazily or manually
+// dashboardRegistry.set('math_v1', MathDashboard);
+
+export const registerDashboard = (id: string, component: Component) => {
+    dashboardRegistry.set(id, component);
+};
+
+export const getDashboard = (id: string | null | undefined): Component | null => {
+    if (!id) return null; // Default handling provided by view
+    return dashboardRegistry.get(id) || null;
+};
