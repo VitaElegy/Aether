@@ -93,6 +93,27 @@ impl MemoRepository for PostgresRepository {
         node::Entity::delete_by_id(*id).exec(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(())
     }
+
+    async fn find_by_date_range(&self, author_id: UserId, start: chrono::DateTime<chrono::Utc>, end: chrono::DateTime<chrono::Utc>) -> Result<Vec<Memo>, RepositoryError> {
+        let results = node::Entity::find()
+            .filter(node::Column::Type.eq("Memo"))
+            .filter(node::Column::AuthorId.eq(author_id.0))
+            .filter(node::Column::CreatedAt.gte(start))
+            .filter(node::Column::CreatedAt.lte(end))
+            .find_also_related(memo_detail::Entity)
+            .order_by_desc(node::Column::CreatedAt)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let mut memos = Vec::new();
+        for (n, d) in results {
+            if let Some(detail) = d {
+                memos.push(map_memo(n, detail));
+            }
+        }
+        Ok(memos)
+    }
 }
 
 fn map_memo(n: node::Model, d: memo_detail::Model) -> Memo {
