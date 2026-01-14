@@ -15,3 +15,4 @@ pub mod vocab_root;
 pub mod vocab_example;
 pub mod semantic_node;
 pub mod semantic_edge;
+pub mod graph_node;

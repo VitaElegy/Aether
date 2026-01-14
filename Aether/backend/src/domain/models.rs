@@ -250,3 +250,15 @@ pub struct UserDraft {
     pub parent_id: Option<Uuid>,
     pub updated_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphNode {
+    pub id: Uuid,
+    pub knowledge_base_id: Uuid,
+    pub parent_id: Option<Uuid>,
+    pub label: String,
+    pub data: serde_json::Value,
+    pub rank: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}

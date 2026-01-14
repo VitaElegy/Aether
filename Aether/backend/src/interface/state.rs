@@ -17,6 +17,7 @@ pub struct AppState {
     pub dictionary: DictionaryLoader,
     pub dictionary_cache: moka::future::Cache<String, String>, // JSON serialized entry
     pub indexer_service: Arc<IndexerService>,
+    pub graph_service: Arc<crate::domain::graph_service::GraphService>,
 }
 
 impl FromRef<AppState> for Arc<dyn AuthService> {

@@ -8,3 +8,4 @@ pub mod tag;
 pub mod knowledge_base;
 pub mod draft;
 pub mod permission;
+pub mod graph_repo;

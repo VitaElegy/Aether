@@ -296,6 +296,21 @@ async fn main() {
         );
     ").await.map_err(|e| println!("Migration note (semantic_index): {}", e));
 
+    // --- GRAPH NODES (Phase 7: Manual Graph Editing) ---
+    let _ = db.execute_unprepared("
+        CREATE TABLE IF NOT EXISTS graph_nodes (
+            id UUID PRIMARY KEY,
+            knowledge_base_id UUID NOT NULL,
+            parent_id UUID,
+            label TEXT NOT NULL,
+            data JSONB DEFAULT '{}',
+            rank INT NOT NULL DEFAULT 0,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES graph_nodes(id) ON DELETE SET NULL
+        );
+    ").await.map_err(|e| println!("Migration note (graph_nodes): {}", e));
 
 
     // Initialize Auth Service
@@ -366,6 +381,7 @@ async fn main() {
         .build();
 
     let indexer_service = Arc::new(crate::domain::indexer_service::IndexerService::new(db.clone()));
+    let graph_service = Arc::new(crate::domain::graph_service::GraphService::new(repo.clone() as Arc<dyn crate::domain::ports::GraphRepository>));
 
     let state = AppState {
         repo,
@@ -375,6 +391,7 @@ async fn main() {
         dictionary,
         dictionary_cache,
         indexer_service,
+        graph_service,
     };
 
     // --- 4. Build Router with Trace Middleware ---

@@ -162,3 +162,11 @@ pub trait ExportService: Send + Sync {
         requester: Option<UserId>
     ) -> Result<Vec<u8>, RepositoryError>;
 }
+
+#[async_trait]
+pub trait GraphRepository: Send + Sync {
+    async fn save(&self, node: crate::domain::models::GraphNode) -> Result<Uuid, RepositoryError>;
+    async fn get_tree(&self, kb_id: &Uuid) -> Result<Vec<crate::domain::models::GraphNode>, RepositoryError>;
+    async fn find_by_id(&self, id: &Uuid) -> Result<Option<crate::domain::models::GraphNode>, RepositoryError>;
+    async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
+}

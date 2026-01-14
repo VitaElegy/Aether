@@ -6,3 +6,4 @@ pub mod diff_service;
 
 
 pub mod indexer_service;
+pub mod graph_service;
