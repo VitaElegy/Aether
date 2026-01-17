@@ -4,6 +4,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import { useDebounceFn } from '@vueuse/core';
 import { dictionaryApi, type DictionaryEntry } from '@/api/dictionary';
 import axios from 'axios';
+import ArticleAnalysisModule from './ArticleAnalysisModule.vue';
 
 interface VocabularyExample {
     id?: string;
@@ -42,6 +43,9 @@ const searchQuery = ref('');
 const showLibrary = ref(false);
 const sortBy = ref('created_at');
 const sortOrder = ref('desc');
+
+// Tab State
+const activeTab = ref<'vocabulary' | 'articles'>('vocabulary');
 
 // Batch Selection State
 const isSelectionMode = ref(false);
@@ -289,15 +293,12 @@ const fetchDefinitionInfo = async (word: string) => {
                 previewEntry.value = {
                     word: existing.word,
                     phonetic: existing.phonetic,
-                    phonetics: [],
                     meanings: [
                         {
                             partOfSpeech: 'Local',
                             definitions: [{
                                 definition: existing.definition,
-                                example: '',
-                                synonyms: [],
-                                antonyms: []
+                                example: ''
                             }],
                             synonyms: [],
                             antonyms: []
@@ -318,15 +319,12 @@ const fetchDefinitionInfo = async (word: string) => {
              previewEntry.value = {
                 word: existing.word,
                 phonetic: existing.phonetic,
-                phonetics: [],
                 meanings: [
                     {
                         partOfSpeech: 'Local',
                         definitions: [{
                             definition: existing.definition,
-                            example: '',
-                            synonyms: [],
-                            antonyms: []
+                            example: ''
                         }],
                         synonyms: [],
                         antonyms: []
@@ -579,8 +577,38 @@ const goBack = () => {
         
         <!-- Header Info (Fade out when searching) -->
         <!-- Implicit Library Toggle (Top Right) -->
-        <div class="absolute top-8 right-8 z-50">
+        <div class="absolute top-8 right-8 z-50 flex items-center gap-6">
+            
+            <!-- Minimal Text Switcher (London Academic Style) -->
+            <div class="flex items-center gap-3 font-serif text-sm">
+                <button 
+                    @click="activeTab = 'vocabulary'"
+                    class="transition-all duration-300 relative group"
+                    :class="activeTab === 'vocabulary' ? 'text-ink font-bold scale-105' : 'text-ink/30 hover:text-ink/60'"
+                >
+                    Words
+                    <span 
+                        class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-ink rounded-full opacity-0 transition-opacity"
+                        :class="{'opacity-100': activeTab === 'vocabulary'}"
+                    ></span>
+                </button>
+                <span class="text-ink/10 text-xs">/</span>
+                <button 
+                    @click="activeTab = 'articles'"
+                    class="transition-all duration-300 relative group"
+                    :class="activeTab === 'articles' ? 'text-ink font-bold scale-105' : 'text-ink/30 hover:text-ink/60'"
+                >
+                    Articles
+                     <span 
+                        class="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 bg-ink rounded-full opacity-0 transition-opacity"
+                        :class="{'opacity-100': activeTab === 'articles'}"
+                    ></span>
+                </button>
+            </div>
+
+            <!-- Existing Toggle (Only for Vocab Tab) -->
             <button 
+                v-if="activeTab === 'vocabulary'"
                 @click="showLibrary = !showLibrary"
                 class="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 group"
                 :class="showLibrary ? 'bg-ink text-white shadow-xl rotate-90' : 'bg-white/50 hover:bg-white text-ink/40 hover:text-ink hover:shadow-lg'"
@@ -590,8 +618,13 @@ const goBack = () => {
             </button>
         </div>
 
-        <!-- Main Scrollable Area -->
-        <div class="flex-1 relative w-full h-full overflow-hidden">
+        <!-- content: ARTICLES TAB -->
+        <div v-if="activeTab === 'articles'" class="w-full h-full pt-16">
+            <ArticleAnalysisModule :headless="true" />
+        </div>
+
+        <!-- content: VOCABULARY TAB -->
+        <div v-else class="flex-1 relative w-full h-full overflow-hidden">
             
             <!-- Collection Grid (Underneath) -->
             <div 
@@ -1150,6 +1183,8 @@ const goBack = () => {
                 </div>
             </div>
         </Transition>
+
+
     </div>
 </template>
 

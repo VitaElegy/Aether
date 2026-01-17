@@ -1,8 +1,13 @@
+
 <script setup lang="ts">
 import { ref, onMounted, computed, watch } from 'vue';
 import axios from 'axios';
 import { useDebounceFn } from '@vueuse/core';
 import type { MessagePlugin } from 'tdesign-vue-next';
+
+const props = defineProps<{
+    headless?: boolean;
+}>();
 
 // --- Types ---
 interface ArticleMeta {
@@ -152,7 +157,7 @@ const filteredArticles = computed(() => {
     <div class="w-full h-full flex flex-col relative overflow-hidden bg-gray-50/50">
         
         <!-- TOP NAV (Changes based on view) -->
-        <div class="h-16 flex items-center justify-between px-8 border-b border-ink/5 bg-white/80 backdrop-blur z-20">
+        <div v-if="!headless" class="h-16 flex items-center justify-between px-8 border-b border-ink/5 bg-white/80 backdrop-blur z-20">
             <div class="flex items-center gap-4">
                 <button 
                     v-if="viewMode !== 'list'" 
