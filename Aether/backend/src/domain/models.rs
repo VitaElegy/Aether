@@ -59,6 +59,7 @@ pub struct Article {
     pub tags: Vec<String>,
     pub author_name: Option<String>,
     pub author_avatar: Option<String>,
+    pub derived_data: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,6 +69,8 @@ pub struct VocabularyExample {
     pub translation: Option<String>,
     pub note: Option<String>,
     pub image_url: Option<String>,
+    pub article_id: Option<Uuid>,
+    pub sentence_uuid: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 

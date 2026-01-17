@@ -10,6 +10,8 @@ pub struct Model {
     pub translation: Option<String>,
     pub note: Option<String>,
     pub image_url: Option<String>,
+    pub article_id: Option<Uuid>,
+    pub sentence_uuid: Option<Uuid>,
     pub created_at: DateTimeWithTimeZone,
 }
 
