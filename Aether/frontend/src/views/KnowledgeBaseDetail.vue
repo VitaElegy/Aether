@@ -7,10 +7,12 @@ import { getDashboard } from '@/registries/read_layout_registry';
 // Lazy load known dashboards to register them
 // In a real plugin system these would be auto-discovered
 const MathDashboard = defineAsyncComponent(() => import('@/components/dashboard/MathDashboard.vue'));
+const MathDashboardV3 = defineAsyncComponent(() => import('@/components/dashboard/MathDashboardV3.vue'));
 
 // Register immediately for now (Manual Registration)
 import { registerDashboard } from '@/registries/read_layout_registry';
 registerDashboard('math_v1', MathDashboard);
+registerDashboard('math_v3', MathDashboardV3);
 
 const route = useRoute();
 const kbId = computed(() => route.params.id as string);

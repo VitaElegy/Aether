@@ -28,11 +28,15 @@ const selectedContext = ref<{ id: string, type: any, title: string, content: str
 // Lab State
 const isLabOpen = ref(false);
 const labFn = ref('x^2');
+const labDescription = ref('');
 
-const openLab = (fn: string) => {
+const openLab = (fn: string, description: string = '') => {
     labFn.value = fn;
+    labDescription.value = description;
     isLabOpen.value = true;
 };
+
+// ...
 
 // Actions
 const toggleIndex = () => {
@@ -71,6 +75,7 @@ const hydratePlotsInNode = async () => {
     targets.forEach((el) => {
         const target = el as HTMLElement;
         const fn = target.dataset.fn;
+        const rawDesc = target.dataset.description || '';
         const isHydrated = target.dataset.hydrated === 'true';
 
         // Check children.length instead of hasChildNodes to ignore comments/whitespace
@@ -79,10 +84,18 @@ const hydratePlotsInNode = async () => {
                 // MARK AS HYDRATED IMMEDIATELY to prevent race conditions
                 target.dataset.hydrated = 'true';
                 
+                // Decode Description
+                let description = '';
+                if (rawDesc) {
+                    try {
+                        description = decodeURIComponent(rawDesc);
+                    } catch (e) { console.error('Failed to decode description', e); }
+                }
+
                 // Add click listener for Lab
                 target.style.cursor = 'pointer';
                 target.title = 'Click to analyze in Lab';
-                target.addEventListener('click', () => openLab(fn));
+                target.addEventListener('click', () => openLab(fn, description));
 
                 const width = target.clientWidth || 600; 
                 functionPlot({
@@ -107,6 +120,17 @@ const hydratePlotsInNode = async () => {
         }
     });
 };
+
+// ...
+
+// Template Usage Update
+// <MathFunctionLab 
+//                 :is-open="isLabOpen" 
+//                 :initial-fn="labFn" 
+//                 :initial-description="labDescription"
+//                 @close="isLabOpen = false"
+//                 @update="(newFn) => labFn = newFn"
+//             />
 
 // Robust Hydration Triggers
 onMounted(() => {
@@ -139,56 +163,8 @@ const gridStyle = computed(() => {
     };
 });
 
-// Markdown Pre-processing for Semantic Blocks
-const processedContent = computed(() => {
-    const raw = (typeof props.article?.body === 'string' ? props.article.body : '');
-    if (!raw) return '';
-
-    // Transform ::: type {meta} ... ::: into <div class="semantic-block" ...>
-    // Regex matches: ::: type {json} (newline) content (newline) :::
-    return raw.replace(/:::\s*(\w+)\s*(\{.*?\})?\s*\n([\s\S]*?)\n:::/g, (match: string, type: string, metaStr: string, content: string) => {
-        const meta = metaStr || '{}';
-        
-        // Special Handling for Function Plots
-        if (type === 'function') {
-            let fn = content.trim(); 
-            // Try to parse meta for fn if content is just description
-            try {
-                const parsedMeta = JSON.parse(meta);
-                if (parsedMeta.fn) fn = parsedMeta.fn;
-            } catch (e) { /* ignore */ }
-            
-            return `
-<div class="semantic-block my-8 p-6 rounded-lg border border-orange-200 bg-orange-50/50 hover:shadow-md transition-all">
-    <div class="flex items-center justify-between mb-4">
-        <span class="text-[10px] font-black uppercase tracking-widest text-orange-600">Function Visualization</span>
-        <span class="text-xs font-mono text-orange-800/60">${fn}</span>
-    </div>
-    <!-- Hydration Target -->
-    <div class="math-function-inline w-full h-[200px] bg-white/50 rounded overflow-hidden relative" data-fn="${fn}"></div>
-    <div class="mt-4 text-xs text-ink/60 italic">
-        ${content}
-    </div>
-</div>`;
-        }
-
-        // Standard Semantic Blocks (Theorems, Definitions, etc.)
-        const badgeColor = type === 'theorem' ? 'text-purple-600 bg-purple-50 border-purple-200' :
-                          type === 'definition' ? 'text-blue-600 bg-blue-50 border-blue-200' :
-                          'text-ink/70 bg-ash/30 border-ash';
-        
-        return `
-<div class="semantic-block my-8 p-6 rounded-lg border-l-4 ${badgeColor} hover:shadow-sm transition-shadow">
-    <div class="flex items-center gap-2 mb-2">
-        <span class="text-xs font-black uppercase tracking-widest opacity-80">${type}</span>
-    </div>
-    <div class="italic text-ink/90">
-        ${content}
-    </div>
-</div>
-`;
-    });
-});
+// Markdown Pre-processing is now handled by MarkdownRenderer extensions (marked.use)
+// This ensures that inner content (especially math) is parsed correctly by the lexer.
 
 // Mock Logic to simulate context opening (since we haven't wired up the markdown parser yet)
 const simulateLinkClick = () => {
@@ -237,15 +213,27 @@ const simulateLinkClick = () => {
                             <h1 class="font-serif font-medium text-5xl text-ink mb-6 !leading-tight">
                                 {{ article?.title || 'Untitled Manuscript' }}
                             </h1>
+                            
+                            <!-- Author Info (Paper Style) -->
+                            <div v-if="article?.author_name" class="flex items-center justify-center gap-2 mb-8 text-ink/50 font-serif text-lg italic anim-enter delay-100">
+                                <span>By</span>
+                                <router-link 
+                                    :to="`/user/${article.author_id}`" 
+                                    class="hover:text-accent hover:underline decoration-1 underline-offset-4 transition-colors"
+                                >
+                                    {{ article.author_name }}
+                                </router-link>
+                            </div>
+
                             <div class="w-12 h-1 bg-ink/10 mx-auto"></div>
                         </div>
 
                         <!-- Content Render Slot -->
                         <div class="anim-enter delay-100 relative">
-                             <!-- Direct Rendering -->
+                             <!-- Direct Rendering: Pass raw body, MarkdownRenderer handles extensions now -->
                              <DynamicRenderer 
                                 :type="'Markdown'" 
-                                :data="{ content: processedContent }" 
+                                :data="{ content: (typeof article?.body === 'string' ? article.body : '') }" 
                              />
 
                              <!-- TEMP: Debug interaction -->
@@ -289,6 +277,7 @@ const simulateLinkClick = () => {
             <MathFunctionLab 
                 :is-open="isLabOpen" 
                 :initial-fn="labFn" 
+                :initial-description="labDescription"
                 @close="isLabOpen = false"
                 @update="(newFn) => labFn = newFn"
             />
