@@ -190,7 +190,11 @@ pub async fn create_content_handler(
             body: ContentBody::Markdown(payload.body),
             tags: payload.tags,
             author_name: None,
+            author_name: None,
             author_avatar: None,
+            derived_data: Some(serde_json::to_value(
+                crate::domain::sentence_parser::SentenceParser::parse(&payload.body, None) 
+            ).unwrap_or(serde_json::Value::Null)),
         };
 
         match ArticleRepository::save(&*state.repo, article, UserId(user.id), payload._reason).await {
@@ -294,6 +298,15 @@ pub async fn update_content_handler(
                 tags: payload.tags,
                 author_name: None,
                 author_avatar: None,
+                derived_data: {
+                    // Extract old map
+                    let old_map = existing.derived_data
+                        .and_then(|v| serde_json::from_value::<crate::domain::sentence_parser::SentenceMap>(v).ok());
+                    
+                    Some(serde_json::to_value(
+                        crate::domain::sentence_parser::SentenceParser::parse(&payload.body, old_map.as_ref())
+                    ).unwrap_or(serde_json::Value::Null))
+                },
             };
 
             if let Ok(Some(conflict)) = state.repo.find_by_title(&payload.title).await {

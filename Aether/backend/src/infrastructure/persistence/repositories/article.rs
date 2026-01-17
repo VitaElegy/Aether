@@ -74,6 +74,7 @@ impl ArticleRepository for PostgresRepository {
             category: Set(article.category),
             body: Set(body_json.clone()),
             tags: Set(serde_json::to_string(&article.tags).unwrap_or_default()),
+            derived_data: Set(article.derived_data.clone()),
         };
         article_detail::Entity::insert(detail_model)
             .on_conflict(
@@ -82,7 +83,8 @@ impl ArticleRepository for PostgresRepository {
                         article_detail::Column::Body, 
                         article_detail::Column::Tags,
                         article_detail::Column::Status,
-                        article_detail::Column::Slug
+                        article_detail::Column::Slug,
+                        article_detail::Column::DerivedData
                     ])
                     .to_owned()
             )
@@ -541,5 +543,6 @@ fn map_article(n: node::Model, d: article_detail::Model, match_user: Option<crat
         tags: serde_json::from_str(&d.tags).unwrap_or_default(),
         author_name: match_user.as_ref().map(|u| u.display_name.clone().unwrap_or(u.username.clone())),
         author_avatar: match_user.as_ref().and_then(|u| u.avatar_url.clone()),
+        derived_data: d.derived_data,
     }
 }

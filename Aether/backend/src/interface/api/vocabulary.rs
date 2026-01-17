@@ -23,6 +23,8 @@ pub struct ExampleRequest {
     pub translation: Option<String>,
     pub note: Option<String>,
     pub image_url: Option<String>,
+    pub article_id: Option<Uuid>,
+    pub sentence_uuid: Option<Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -62,6 +64,7 @@ pub fn router() -> Router<AppState> {
         .route("/api/vocabulary", post(save_vocabulary).get(list_vocabulary))
         .route("/api/vocabulary/batch-delete", post(batch_delete_vocabulary))
         .route("/api/vocabulary/:id", delete(delete_vocabulary))
+        .route("/api/vocabulary/:id/examples", post(add_example))
         .route("/api/vocabulary/:id/increment_query", post(increment_query_count))
         .route("/api/vocabulary/:id/toggle_importance", post(toggle_importance))
 }
@@ -89,6 +92,8 @@ async fn save_vocabulary(
             translation: e.translation,
             note: e.note,
             image_url: e.image_url,
+            article_id: e.article_id,
+            sentence_uuid: e.sentence_uuid,
             created_at: Utc::now(),
         }
     }).collect();
@@ -185,6 +190,47 @@ async fn toggle_importance(
 ) -> impl IntoResponse {
     match state.repo.set_importance(&id, payload.is_important).await {
         Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "updated" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+async fn add_example(
+    auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<ExampleRequest>,
+) -> impl IntoResponse {
+    let user_id = UserId(auth.id);
+    
+    // 1. Fetch Existing
+    let mut vocab = match state.repo.find_by_id(&id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Vocabulary not found" }))).into_response(),
+        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    };
+
+    // 2. Permission Check (Owner only)
+    if vocab.node.author_id != user_id.0 {
+        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+    }
+
+    // 3. Add Example
+    use crate::domain::models::VocabularyExample;
+    let new_example = VocabularyExample {
+        id: Uuid::new_v4(),
+        sentence: payload.sentence,
+        translation: payload.translation,
+        note: payload.note,
+        image_url: payload.image_url,
+        article_id: payload.article_id,
+        sentence_uuid: payload.sentence_uuid,
+        created_at: Utc::now(),
+    };
+    vocab.examples.push(new_example);
+
+    // 4. Save
+    match state.repo.save(vocab).await {
+        Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({ "status": "example_added" }))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }

@@ -100,6 +100,8 @@ impl VocabularyRepository for PostgresRepository {
                     translation: Set(ex.translation),
                     note: Set(ex.note),
                     image_url: Set(ex.image_url),
+                    article_id: Set(ex.article_id),
+                    sentence_uuid: Set(ex.sentence_uuid),
                     created_at: Set(ex.created_at.into()),
                 }
             }).collect();
@@ -301,6 +303,8 @@ fn map_example(e: crate::infrastructure::persistence::entities::vocab_example::M
         translation: e.translation,
         note: e.note,
         image_url: e.image_url,
+        article_id: e.article_id,
+        sentence_uuid: e.sentence_uuid,
         created_at: e.created_at.with_timezone(&Utc),
     }
 }
