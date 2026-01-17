@@ -13,6 +13,9 @@ registry.set('default', StandardReadLayout);
 registry.set('math_v1', MathArchiveLayout);
 registry.set('math_v3', MathManuscriptLayout);
 
+const EnglishArticleAnalyzer = defineAsyncComponent(() => import('@/components/english/EnglishArticleAnalyzer.vue'));
+registry.set('english_v1', EnglishArticleAnalyzer);
+
 export const registerLayout = (id: string, component: Component) => {
     registry.set(id, component);
     console.log(`[ReadLayoutRegistry] Registered: ${id}`);
