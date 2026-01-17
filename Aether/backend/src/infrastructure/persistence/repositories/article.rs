@@ -234,12 +234,17 @@ impl ArticleRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, _viewer_id: Option<UserId>, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, tag: Option<String>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError> {
+    async fn list(&self, _viewer_id: Option<UserId>, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>, tag: Option<String>, category: Option<String>, limit: u64, offset: u64) -> Result<Vec<ContentItem>, RepositoryError> {
         let mut query = node::Entity::find()
             .find_also_related(article_detail::Entity);
 
         if let Some(uid) = author_id {
             query = query.filter(node::Column::AuthorId.eq(uid.0));
+        }
+        
+        // Filter by Category if provided (applied to related article_detail)
+        if let Some(cat) = category {
+            query = query.filter(article_detail::Column::Category.eq(cat));
         }
 
         if let Some(kb_id) = knowledge_base_id {
