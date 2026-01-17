@@ -18,7 +18,7 @@ const contents = ref<Content[]>([]); // Current folder contents
 const isLoading = ref(false);
 
 const kbFormVisible = ref(false);
-const kbForm = ref({ title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50 });
+const kbForm = ref({ title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'default' });
 
 // Settings Form
 const settingsForm = ref({
@@ -27,7 +27,8 @@ const settingsForm = ref({
     tags: '',
     cover_image: '',
     cover_offset_y: 50,
-    visibility: 'Private' as 'Public' | 'Private' | 'Internal'
+    visibility: 'Private' as 'Public' | 'Private' | 'Internal',
+    renderer_id: 'default'
 });
 const collaborators = ref<any[]>([]); // { user_id, username, role, ... }
 const newCollaboratorRole = ref('Viewer');
@@ -80,7 +81,8 @@ const openSettings = () => {
         tags: currentKb.value.tags ? currentKb.value.tags.join(', ') : '',
         cover_image: currentKb.value.cover_image || '',
         cover_offset_y: currentKb.value.cover_offset_y || 50,
-        visibility: currentKb.value.visibility || 'Private'
+        visibility: currentKb.value.visibility || 'Private',
+        renderer_id: currentKb.value.renderer_id || 'default'
     };
     viewMode.value = 'settings';
     fetchCollaborators();
@@ -127,7 +129,8 @@ const updateKbSettings = async () => {
             tags: settingsForm.value.tags.split(',').map(t => t.trim()).filter(t => t),
             cover_image: settingsForm.value.cover_image,
             cover_offset_y: settingsForm.value.cover_offset_y,
-            visibility: settingsForm.value.visibility
+            visibility: settingsForm.value.visibility,
+            renderer_id: settingsForm.value.renderer_id
         });
 
         // Update local state
@@ -137,6 +140,7 @@ const updateKbSettings = async () => {
         currentKb.value.cover_image = settingsForm.value.cover_image;
         currentKb.value.cover_offset_y = settingsForm.value.cover_offset_y;
         currentKb.value.visibility = settingsForm.value.visibility;
+        currentKb.value.renderer_id = settingsForm.value.renderer_id;
 
         viewMode.value = 'detail';
         fetchKBs(); // Type of reload
@@ -263,10 +267,11 @@ const createKb = async () => {
             tags: kbForm.value.tags.split(',').map(t => t.trim()).filter(t => t),
             cover_image: kbForm.value.cover_image,
             cover_offset_y: kbForm.value.cover_offset_y,
-            visibility: 'Private' // Default
+            visibility: 'Private', // Default
+            renderer_id: kbForm.value.renderer_id
         });
         kbFormVisible.value = false;
-        kbForm.value = { title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50 };
+        kbForm.value = { title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'default' };
         fetchKBs();
     } catch (e: any) {
         if (e.response && e.response.status === 409) {
@@ -525,6 +530,17 @@ onMounted(() => {
                             </div>
                             <div>
                                 <label
+                                    class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Layout Renderer</label>
+                                <select v-model="settingsForm.renderer_id"
+                                    class="w-full bg-paper border border-ink/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-accent">
+                                    <option value="default">Standard (Blog)</option>
+                                    <option value="math_v1">Math Archive (Graph)</option>
+                                    <option value="math_v3">Math Manuscript (Book)</option>
+                                    <option value="english_v1">English Analysis (Academic)</option>
+                                </select>
+                            </div>
+                            <div class="col-span-2">
+                                <label
                                     class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Tags</label>
                                 <TagInput v-model="settingsForm.tags" placeholder="Add tags..." />
                             </div>
@@ -645,6 +661,18 @@ onMounted(() => {
                 <input v-model="kbForm.title" placeholder="Title"
                     class="w-full bg-surface border border-ink/10 rounded px-3 py-2 mb-3 text-sm focus:outline-none focus:border-accent"
                     autoFocus />
+                
+                <div class="mb-3">
+                     <label class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Layout</label>
+                     <select v-model="kbForm.renderer_id"
+                        class="w-full bg-surface border border-ink/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-accent">
+                        <option value="default">Standard (Blog)</option>
+                        <option value="math_v1">Math Archive (Graph)</option>
+                        <option value="math_v3">Math Manuscript (Book)</option>
+                        <option value="english_v1">English Analysis (Academic)</option>
+                    </select>
+                </div>
+
                 <textarea v-model="kbForm.description" placeholder="Description" rows="3"
                     class="w-full bg-surface border border-ink/10 rounded px-3 py-2 mb-3 text-sm focus:outline-none focus:border-accent"></textarea>
 
