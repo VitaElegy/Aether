@@ -57,7 +57,31 @@ Aether implements a **Relationship-Based Access Control** (ReBAC) system, inspir
     2.  **Computed**: Is User U a `member` of Group G, which is an `owner` of Node N?
 *   **Extensibility**: New logic (e.g., "Friend's content") requires NO schema changes, only new Tuple types.
 
-### 3.3 Dynamic Content Engine
+### 3.3 Dynamic Navigation & Module Registration
+To adhere to the "Clean Core" philosophy while allowing module-specific controls, the frontend uses a **Teleport Registration Pattern**:
+*   **Host**: `SelfSpaceView` provides two DOM Portals: `#nav-center-portal` and `#nav-right-portal`.
+*   **Arbitration**: `useNavigationStore` tracks the "Active State" (`hasCustomCenter`, `hasCustomRight`) to toggle between Default and Module content.
+*   **Injection**: Modules (e.g., `VocabularyModule`) and Sub-Modules (e.g., `ArticleAnalysisModule`) use Vue's `<Teleport>` to inject controls (Tabs, Buttons, Toggles) directly into the global shell.
+*   **Constraint**: A parent module MUST yield control (reset store state) before a child module can claim it, preventing "Zombie Buttons".
+
+```mermaid
+sequenceDiagram
+    participant Module as Feature Module
+    participant Store as NavigationStore
+    participant Host as SelfSpaceView (Shell)
+    
+    Host->>Host: Mounts #nav-center-portal
+    Module->>Store: onMounted { setCustomCenter(true) }
+    Store-->>Host: hasCustomCenter = true
+    Host->>Host: Hides Default Title
+    Module->>Host: <Teleport to="#nav-center-portal">
+    Host->>Host: Renders Custom Tab Switcher
+    
+    Module->>Store: onUnmounted { setCustomCenter(false) }
+    Store-->>Host: hasCustomCenter = false
+    Host->>Host: Shows Default Title
+```
+### 3.4 Dynamic Content Engine
 The frontend utilizes a **Strategy Pattern** for rendering:
 *   `DynamicRenderer.vue` acts as the context.
 *   Specific renderers (`Markdown`, `CodeSnippet`, `Video`) are lazy-loaded.
