@@ -139,7 +139,7 @@ function createNewVocab() {
     pointer-events: auto;
     width: 400px;
     height: 100%;
-    background: rgba(255, 253, 250, 0.95); /* Off-white paper */
+    background: rgba(249, 247, 241, 0.95); /* Warm Ivory match */
     backdrop-filter: blur(10px);
     box-shadow: -5px 0 30px rgba(0,0,0,0.1);
     position: absolute;

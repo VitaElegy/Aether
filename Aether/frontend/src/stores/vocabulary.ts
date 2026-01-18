@@ -64,9 +64,13 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
         }
     }
 
+    // Aesthetic Preferences
+    const fontMode = ref<'serif' | 'sans'>('serif');
+
     return {
         vocabularies,
         loading,
+        fontMode,
         searchWord,
         saveVocabulary,
         addExample
