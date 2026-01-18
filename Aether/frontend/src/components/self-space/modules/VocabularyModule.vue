@@ -327,12 +327,11 @@ const fetchDefinitionInfo = async (word: string) => {
                                 definition: existing.definition,
                                 example: ''
                             }],
-                            synonyms: [],
-                            antonyms: []
+
                         }
                     ],
-                    license: { name: 'Local', url: '' },
-                    sourceUrls: []
+                    source: 'Local',
+
                 };
             } else {
                  previewEntry.value = null;
@@ -353,12 +352,11 @@ const fetchDefinitionInfo = async (word: string) => {
                             definition: existing.definition,
                             example: ''
                         }],
-                        synonyms: [],
-                        antonyms: []
+
                     }
                 ],
-                license: { name: 'Local', url: '' },
-                sourceUrls: []
+                source: 'Local',
+
             };
         } else {
              previewEntry.value = null;
@@ -647,7 +645,7 @@ const goBack = () => {
         </Teleport>
 
         <!-- content: ARTICLES TAB -->
-        <div v-if="activeTab === 'articles'" class="w-full h-full pt-16">
+        <div v-if="activeTab === 'articles'" class="w-full h-full">
             <ArticleAnalysisModule :headless="true" />
         </div>
 
