@@ -253,11 +253,14 @@ impl ArticleRepository for PostgresRepository {
             // In KB view, show everything (Folders, Articles, etc.)
             query = query.filter(node::Column::KnowledgeBaseId.eq(kb_id));
         } else {
-            // Global Feed: Show only Articles AND Published status
-            // Note: find_also_related does a Left Join. Adding a filter on the related table
-            // effectively enforces existence (like Inner Join) + condition.
-            query = query.filter(node::Column::Type.eq("Article"))
-                         .filter(article_detail::Column::Status.eq("Published"));
+            // Global Feed:
+            // If viewing a specific author's profile (Self Space), show everything (Drafts included).
+            // If viewing global feed (no author), show only "Published".
+            query = query.filter(node::Column::Type.eq("Article"));
+            
+            if author_id.is_none() {
+                 query = query.filter(article_detail::Column::Status.eq("Published"));
+            }
             
             if let Some(t) = tag {
                 // Approximate JSON array search using string matching
