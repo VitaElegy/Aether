@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch, nextTick } from 'vue';
+import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useDebounceFn } from '@vueuse/core';
 import { dictionaryApi, type DictionaryEntry } from '@/api/dictionary';
@@ -44,8 +44,35 @@ const showLibrary = ref(false);
 const sortBy = ref('created_at');
 const sortOrder = ref('desc');
 
+import { useNavigationStore } from '@/stores/navigation';
+
+const navStore = useNavigationStore();
+
 // Tab State
 const activeTab = ref<'vocabulary' | 'articles'>('vocabulary');
+
+// Sync Navigation Bar State
+watch(activeTab, (newTab) => {
+    // Center is always hijacked by the Tab Switcher
+    navStore.setCustomCenter(true);
+    
+    // Right is hijacked by Dictionary Library Toggle ONLY in vocabulary mode
+    // In 'articles' mode, let the ArticleAnalysisModule handle it (it sets right in Reader mode)
+    if (newTab === 'vocabulary') {
+        navStore.setCustomRight(true);
+    } else {
+        navStore.setCustomRight(false);
+    }
+}, { immediate: true });
+
+onMounted(() => {
+    navStore.setCustomCenter(true);
+    if (activeTab.value === 'vocabulary') navStore.setCustomRight(true);
+});
+
+onUnmounted(() => {
+    navStore.reset();
+});
 
 // Batch Selection State
 const isSelectionMode = ref(false);
@@ -577,10 +604,9 @@ const goBack = () => {
         
         <!-- Header Info (Fade out when searching) -->
         <!-- Implicit Library Toggle (Top Right) -->
-        <div class="absolute top-8 right-8 z-50 flex items-center gap-6">
-            
-            <!-- Minimal Text Switcher (London Academic Style) -->
-            <div class="flex items-center gap-3 font-serif text-sm">
+        <!-- Navigation Teleports -->
+        <Teleport to="#nav-center-portal">
+             <div class="flex items-center gap-3 font-serif text-sm pointer-events-auto">
                 <button 
                     @click="activeTab = 'vocabulary'"
                     class="transition-all duration-300 relative group"
@@ -605,18 +631,20 @@ const goBack = () => {
                     ></span>
                 </button>
             </div>
+        </Teleport>
 
-            <!-- Existing Toggle (Only for Vocab Tab) -->
+        <Teleport to="#nav-right-portal">
+            <!-- Library Toggle (Only for Vocab Tab) -->
             <button 
                 v-if="activeTab === 'vocabulary'"
                 @click="showLibrary = !showLibrary"
-                class="w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300 group"
-                :class="showLibrary ? 'bg-ink text-white shadow-xl rotate-90' : 'bg-white/50 hover:bg-white text-ink/40 hover:text-ink hover:shadow-lg'"
+                class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 group ml-2"
+                :class="showLibrary ? 'bg-ink text-white shadow-xl rotate-90' : 'text-ink/40 hover:bg-ink/5 hover:text-ink'"
                 title="Toggle Library"
             >
                 <i :class="showLibrary ? 'ri-close-line' : 'ri-book-3-line'" class="text-xl"></i>
             </button>
-        </div>
+        </Teleport>
 
         <!-- content: ARTICLES TAB -->
         <div v-if="activeTab === 'articles'" class="w-full h-full pt-16">

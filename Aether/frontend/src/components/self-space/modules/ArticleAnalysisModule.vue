@@ -4,6 +4,7 @@ import { ref, onMounted, computed, watch } from 'vue';
 import axios from 'axios';
 import { useDebounceFn } from '@vueuse/core';
 import type { MessagePlugin } from 'tdesign-vue-next';
+import EnglishArticleAnalyzer from '@/components/english/EnglishArticleAnalyzer.vue';
 
 const props = defineProps<{
     headless?: boolean;
@@ -146,9 +147,14 @@ onMounted(() => {
 
 // --- Computed ---
 const filteredArticles = computed(() => {
-    if (!searchQuery.value) return articles.value;
+    // Stage 1: Absolute Safety Filter (Client-side Firewall)
+    // Even if backend leaks data, we ignore anything that isn't explicitly English Analysis
+    const safeList = articles.value.filter(a => a.category === 'English Analysis');
+
+    // Stage 2: Search Query
+    if (!searchQuery.value) return safeList;
     const q = searchQuery.value.toLowerCase();
-    return articles.value.filter(a => a.title.toLowerCase().includes(q));
+    return safeList.filter(a => a.title.toLowerCase().includes(q));
 });
 
 </script>
@@ -305,29 +311,8 @@ const filteredArticles = computed(() => {
             <!-- VIEW: READER (Analysis) -->
             <div v-else-if="viewMode === 'reader' && currentArticle" class="w-full h-full flex">
                 <!-- Main Reader -->
-                <div class="flex-1 h-full overflow-y-auto custom-scrollbar relative bg-white">
-                    <!-- Hero Header -->
-                    <div class="relative w-full h-64 overflow-hidden">
-                        <div class="absolute inset-0 bg-ink/10">
-                            <img v-if="currentArticle.body.background" :src="currentArticle.body.background" class="w-full h-full object-cover">
-                        </div>
-                        <div class="absolute inset-0 bg-gradient-to-t from-white via-transparent to-transparent"></div>
-                        <div class="absolute bottom-0 left-0 right-0 p-12 pb-8">
-                             <h1 class="text-5xl font-serif font-black text-ink mb-4 drop-shadow-sm">{{ currentArticle.title }}</h1>
-                             <div class="flex gap-4 text-sm text-ink/50">
-                                <span v-if="currentArticle.body.references?.length">
-                                    <i class="ri-links-line"></i> {{ currentArticle.body.references.length }} References
-                                </span>
-                             </div>
-                        </div>
-                    </div>
-
-                    <!-- Article Text -->
-                    <div class="max-w-3xl mx-auto px-8 py-12 pb-32">
-                         <div class="prose prose-lg prose-scholar max-w-none text-ink/80 leading-relaxed font-serif whitespace-pre-wrap">
-                            {{ currentArticle.body.text }}
-                         </div>
-                    </div>
+                <div class="flex-1 h-full overflow-y-auto custom-scrollbar relative bg-[#F9F7F1]">
+                    <EnglishArticleAnalyzer :article="currentArticle" />
                 </div>
 
                  <!-- Right Sidebar (History / Comments) -->
