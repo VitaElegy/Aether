@@ -4,9 +4,13 @@ import { useRouter } from 'vue-router';
 import TopNavBar from '../components/TopNavBar.vue';
 import ModuleSwitcher from '../components/self-space/ModuleSwitcher.vue';
 import { usePluginStore } from '../stores/plugins';
+import { useVocabularyStore } from '../stores/vocabulary';
+import { useNavigationStore } from '../stores/navigation';
 
 const router = useRouter();
 const pluginStore = usePluginStore();
+const vocabStore = useVocabularyStore();
+const navStore = useNavigationStore();
 
 // Default to the first registered plugin or fallback to 'articles'
 const currentModuleId = ref('articles');
@@ -47,7 +51,11 @@ const goBack = () => {
             </template>
 
             <template #center>
-                <div class="flex items-center gap-4">
+                <!-- DYNAMIC CENTER PORTAL -->
+                <div id="nav-center-portal" class="contents"></div>
+
+                <!-- Default Center Content -->
+                <div v-show="!navStore.hasCustomCenter" class="flex items-center gap-4">
                     <span class="text-[10px] font-black uppercase tracking-[0.3em] text-ink/40">
                         Self Space / {{ currentModuleLabel }}
                     </span>
@@ -55,12 +63,18 @@ const goBack = () => {
             </template>
 
             <template #right>
-                <div class="flex items-center gap-2">
-                     <button @click="router.push('/space/presentation')"
-                        class="text-ink/60 hover:text-accent transition-colors flex items-center gap-2 px-3 py-1 rounded-md hover:bg-ink/5"
-                        title="Presentation Mode">
-                        <i class="ri-slideshow-line text-lg"></i>
-                        <span class="text-xs font-medium uppercase tracking-wider">Present</span>
+                <!-- DYNAMIC RIGHT PORTAL -->
+                <div id="nav-right-portal" class="contents"></div>
+
+                <!-- Default Right Content -->
+                <div v-show="!navStore.hasCustomRight" class="flex items-center gap-2">
+                     <!-- Default Global Actions (e.g. Settings, Profile) -->
+                     <button 
+                        @click="router.push('/settings')"
+                        class="text-ink/30 hover:text-ink transition-colors px-2 py-1"
+                        title="Settings"
+                    >
+                        <i class="ri-settings-4-line text-lg"></i>
                     </button>
                 </div>
             </template>
