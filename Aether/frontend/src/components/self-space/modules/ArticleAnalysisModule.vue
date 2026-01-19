@@ -98,7 +98,8 @@ const fetchArticles = async () => {
                 status: item.status,
                 category: item.category,
                 body: parsedBody,
-                author_name: item.author_name
+                author_name: item.author_name,
+                derived_data: item.derived_data
             };
         });
     } catch (e: any) {
@@ -330,10 +331,10 @@ const filteredArticles = computed(() => {
                     <template v-if="viewMode === 'reader'">
                         <button 
                             @click="editArticle(currentArticle!)"
-                            class="p-2 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors relative mr-2"
-                            title="Edit"
+                            class="flex items-center gap-2 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg transition-colors text-sm font-medium"
+                            title="Edit this article"
                         >
-                            <i class="ri-edit-line text-lg"></i>
+                            <i class="ri-edit-line"></i> Edit
                         </button>
                     </template>
                  </div>
@@ -363,7 +364,13 @@ const filteredArticles = computed(() => {
                  </template>
 
                  <template v-if="viewMode === 'reader'">
-                     <button @click="viewMode = 'list'" class="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-900 mr-4">
+                     <button 
+                        @click="editArticle(currentArticle!)"
+                        class="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-900 mr-4 transition-colors"
+                     >
+                        EDIT
+                     </button>
+                     <button @click="viewMode = 'list'" class="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-900">
                         BACK
                      </button>
                 </template>
@@ -463,7 +470,7 @@ const filteredArticles = computed(() => {
                 </div>
 
                  <!-- Right Sidebar (Analysis Card) -->
-                 <aside class="w-96 border-l border-gray-200 bg-white h-full hidden xl:block relative z-30">
+                 <aside class="w-96 border-l border-gray-200 bg-white h-full relative z-30 flex-shrink-0">
                     <div class="absolute inset-0 overflow-y-auto p-6">
                         <AnalysisCard 
                             :word="analysisSelection.word"
