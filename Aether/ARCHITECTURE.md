@@ -81,6 +81,13 @@ sequenceDiagram
     Store-->>Host: hasCustomCenter = false
     Host->>Host: Shows Default Title
 ```
+
+### 3.5 English Module Architecture (Hydration Engine)
+The English Module solves the "Text vs Context" problem using a **Dual-Layer Approach**:
+-   **Static Layer**: Content renders as standard Markdown for readability.
+-   **Hydration Layer**: On load, `EnglishArticleAnalyzer` traverses the DOM (TreeWalker) and wraps detected sentences in `<span class="sentence-entity">` tags.
+-   **Event Logic**: Interactions are "Fuzzy Mapped" — A click captures the exact Word (Browser Selection) AND the surrounding Sentence ID (DOM Dataset), allowing simultaneous Dictionary Lookup and Contextual Saving.
+
 ### 3.4 Dynamic Content Engine
 The frontend utilizes a **Strategy Pattern** for rendering:
 *   `DynamicRenderer.vue` acts as the context.

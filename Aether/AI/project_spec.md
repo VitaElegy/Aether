@@ -40,35 +40,35 @@
 
 ### 2.1 Backend Constraints
 
-| Constraint | Rule | Location |
-|------------|------|----------|
-| **Zero Panic Policy** | Backend code must **NEVER panic**. Use `Result` and `AppError` types. | Section 3.3, 6.1 |
-| **Version ID Format** | Version IDs are **integers** (e.g., "1"). **NEVER** use SemVer (`0.0.1`). | Section 6.1.2 |
-| **Version Immutability** | `content_versions` table is **APPEND-ONLY**. Never update existing rows. | Section 6.1.2 |
-| **Diff Format** | API MUST return **Structured JSON** (`Vec<DiffChange>`). NEVER return raw diff strings. | Section 6.1.3 |
-| **SeaORM Query** | Avoid `select_only()` when hydrating full Models (causes "no column found" errors). | Section 8.2 |
-| **Error Handling** | Use `thiserror`. All errors map to `AppError`. Return `500` only for truly unrecoverable system faults. | Section 6.1.1 |
-| **Class Table Inheritance** | All queries involving specific data MUST JOIN the `nodes` table. | Section 5.2 |
+| Constraint                  | Rule                                                                                                    | Location         |
+| --------------------------- | ------------------------------------------------------------------------------------------------------- | ---------------- |
+| **Zero Panic Policy**       | Backend code must **NEVER panic**. Use `Result` and `AppError` types.                                   | Section 3.3, 6.1 |
+| **Version ID Format**       | Version IDs are **integers** (e.g., "1"). **NEVER** use SemVer (`0.0.1`).                               | Section 6.1.2    |
+| **Version Immutability**    | `content_versions` table is **APPEND-ONLY**. Never update existing rows.                                | Section 6.1.2    |
+| **Diff Format**             | API MUST return **Structured JSON** (`Vec<DiffChange>`). NEVER return raw diff strings.                 | Section 6.1.3    |
+| **SeaORM Query**            | Avoid `select_only()` when hydrating full Models (causes "no column found" errors).                     | Section 8.2      |
+| **Error Handling**          | Use `thiserror`. All errors map to `AppError`. Return `500` only for truly unrecoverable system faults. | Section 6.1.1    |
+| **Class Table Inheritance** | All queries involving specific data MUST JOIN the `nodes` table.                                        | Section 5.2      |
 
 ### 2.2 Frontend Constraints
 
-| Constraint | Rule | Location |
-|------------|------|----------|
-| **Composable Supremacy** | All state-mutating requests (POST/PUT/DELETE) MUST be in Composables. Prohibited: Direct `axios` calls in Components. | Section 6.3 |
-| **State Lock** | Use global state locks (`isSaving`, `isLoading`) to prevent Race Conditions. | Section 6.3 |
-| **Cache Decoupling** | `localStorage` MUST store content ONLY. NEVER restore `status`, `visibility`, `timestamps`. | Section 6.2.1 |
-| **Safe Restoration** | Cache restoration MUST NOT trigger Auto-Save. Use `isRestoring` flag. | Section 6.2.2 |
-| **Auto-Save Rules** | If `status` is 'Published', abort auto-save (local cache only). | Section 6.2.3 |
-| **Status Preservation** | Never hardcode `status: 'Draft'` in `saveDraft` - respect current `form.status`. | Section 6.2.3 |
-| **Renderer ID Check** | Frontend MUST check `kb.renderer_id` before mounting standard layout. | Section 12.1 |
+| Constraint               | Rule                                                                                                                  | Location      |
+| ------------------------ | --------------------------------------------------------------------------------------------------------------------- | ------------- |
+| **Composable Supremacy** | All state-mutating requests (POST/PUT/DELETE) MUST be in Composables. Prohibited: Direct `axios` calls in Components. | Section 6.3   |
+| **State Lock**           | Use global state locks (`isSaving`, `isLoading`) to prevent Race Conditions.                                          | Section 6.3   |
+| **Cache Decoupling**     | `localStorage` MUST store content ONLY. NEVER restore `status`, `visibility`, `timestamps`.                           | Section 6.2.1 |
+| **Safe Restoration**     | Cache restoration MUST NOT trigger Auto-Save. Use `isRestoring` flag.                                                 | Section 6.2.2 |
+| **Auto-Save Rules**      | If `status` is 'Published', abort auto-save (local cache only).                                                       | Section 6.2.3 |
+| **Status Preservation**  | Never hardcode `status: 'Draft'` in `saveDraft` - respect current `form.status`.                                      | Section 6.2.3 |
+| **Renderer ID Check**    | Frontend MUST check `kb.renderer_id` before mounting standard layout.                                                 | Section 12.1  |
 
 ### 2.3 Architecture Constraints
 
-| Constraint | Rule | Location |
-|------------|------|----------|
-| **ReBAC Auto-Tuple** | Creating content automatically creates `(node, owner, author)` tuple. | Section 5.2 |
-| **Global Beacon** | NO other back buttons allowed. The Beacon is the single source of truth. | Section 13.1 |
-| **Mixed Mode Rule** | Custom Dashboards MUST wrap standard content management. | Section 13.2 |
+| Constraint           | Rule                                                                     | Location     |
+| -------------------- | ------------------------------------------------------------------------ | ------------ |
+| **ReBAC Auto-Tuple** | Creating content automatically creates `(node, owner, author)` tuple.    | Section 5.2  |
+| **Global Beacon**    | NO other back buttons allowed. The Beacon is the single source of truth. | Section 13.1 |
+| **Mixed Mode Rule**  | Custom Dashboards MUST wrap standard content management.                 | Section 13.2 |
 
 ---
 
@@ -256,6 +256,11 @@ pub enum AppError {
 
 4. **Fluidity**: State changes (from "Thinking" to "Searching" to "Viewing") must use physics-based transitions, reinforcing the feeling of a continuous, living workspace.
 
+### 6.5 English Module Aesthetic ("London Academic")
+-   **Typography**: Serif (Times/Playfair) for content, Sans-Serif (Inter) for tools.
+-   **Interaction**: **"Blue Highlight"** (`rgba(0, 82, 217, 0.1)`) is the ONLY visual indicator of interaction. No heavy borders or shadows.
+-   **Sidebar**: The `AnalysisCard` is not a "Widget" but an "Annotation Column". It should feel like writing notes in the margin of a book.
+
 ---
 
 ## 7. Collaboration & Versioning Model
@@ -291,17 +296,17 @@ For any significant bug or architecture failure (Severity > Low), you **MUST**:
 
 ### 8.3 Common Pitfalls
 
-| Issue | Problem | Solution |
-|-------|---------|----------|
-| **Version Data Missing** | Backend `get_version` missing `body` field | Always include `body` in version endpoints |
-| **Diff Format Mismatch** | Frontend expects JSON Array, backend returns String | Return `Vec<DiffChange>` JSON array |
-| **SemVer Format** | Frontend formats integer IDs as SemVer (`0.0.1`) | Use integer string IDs ("1") |
-| **SeaORM select_only()** | Causes "no column found" errors | Use full model hydration, avoid `select_only()` |
-| **Race Conditions** | Concurrent POST requests bypass state locks | Use Composable state locks (`isSaving`) |
-| **Cache Scoping** | `localStorage` restoration doesn't match context | Match URL `kb_id` and `parent_id` |
-| **Ghost Articles** | Articles visible in list but 404 on get | Filter `list` endpoints to exclude incomplete articles |
-| **Auto-Save Overwrites** | Published content overwritten by auto-save | Never auto-save Published content to backend |
-| **Missing Auth Headers** | Frontend API calls fail without auth | Always include `Authorization` header |
+| Issue                    | Problem                                             | Solution                                               |
+| ------------------------ | --------------------------------------------------- | ------------------------------------------------------ |
+| **Version Data Missing** | Backend `get_version` missing `body` field          | Always include `body` in version endpoints             |
+| **Diff Format Mismatch** | Frontend expects JSON Array, backend returns String | Return `Vec<DiffChange>` JSON array                    |
+| **SemVer Format**        | Frontend formats integer IDs as SemVer (`0.0.1`)    | Use integer string IDs ("1")                           |
+| **SeaORM select_only()** | Causes "no column found" errors                     | Use full model hydration, avoid `select_only()`        |
+| **Race Conditions**      | Concurrent POST requests bypass state locks         | Use Composable state locks (`isSaving`)                |
+| **Cache Scoping**        | `localStorage` restoration doesn't match context    | Match URL `kb_id` and `parent_id`                      |
+| **Ghost Articles**       | Articles visible in list but 404 on get             | Filter `list` endpoints to exclude incomplete articles |
+| **Auto-Save Overwrites** | Published content overwritten by auto-save          | Never auto-save Published content to backend           |
+| **Missing Auth Headers** | Frontend API calls fail without auth                | Always include `Authorization` header                  |
 
 ---
 
