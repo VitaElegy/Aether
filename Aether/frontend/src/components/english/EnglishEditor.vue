@@ -1,16 +1,19 @@
 <script setup lang="ts">
-import { ref, reactive, watch, onBeforeUnmount } from 'vue';
+import { ref, reactive, watch, onBeforeUnmount, computed } from 'vue';
 import { useEditor, EditorContent } from '@tiptap/vue-3';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import { Markdown } from 'tiptap-markdown';
+import { useDebounceFn } from '@vueuse/core';
 import EnglishMetaDrawer from './EnglishMetaDrawer.vue';
 
 const props = defineProps<{
     initialData: {
+        id?: string;
         title: string;
         text: string;
         background: string;
+        category: string; // Added
         references: Array<{ title: string; url: string }>;
         status: 'Draft' | 'Published';
     };
@@ -21,10 +24,15 @@ const emit = defineEmits(['save', 'cancel']);
 // State
 const isLiveMode = ref(true);
 const showDrawer = ref(false);
+const saveStatus = ref<'Saved' | 'Saving...' | 'Unsaved'>('Saved');
+const lastSavedTime = ref<Date>(new Date());
+
 const form = reactive({
+    id: props.initialData.id,
     title: props.initialData.title,
     text: props.initialData.text,
     background: props.initialData.background,
+    category: props.initialData.category || 'English Analysis',
     references: [...props.initialData.references],
     status: props.initialData.status
 });
@@ -49,11 +57,45 @@ const editor = useEditor({
         updateStats(form.text);
     },
     editorProps: {
-        attributes: { class: 'prose prose-stone prose-lg max-w-none focus:outline-none min-h-[60vh] serif-font' },
+        attributes: { class: 'prose prose-stone prose-lg max-w-none focus:outline-none min-h-[60vh] font-sans' },
     }
 });
 
-// Watch for manual raw edits
+// Watch for ID/Status injections from parent (e.g. after Create)
+watch(() => props.initialData.id, (newId) => {
+    if (newId) form.id = newId;
+});
+watch(() => props.initialData.status, (newStatus) => {
+    if (newStatus) form.status = newStatus;
+});
+
+// Auto-Save Logic
+const triggerSave = useDebounceFn(() => {
+    if (form.status === 'Draft') {
+        saveStatus.value = 'Saving...';
+        emit('save', { ...form });
+        // Assume success for UI snappiness, or parent can callback. 
+        // ideally parent should signal completion, but for now:
+        setTimeout(() => {
+            saveStatus.value = 'Saved';
+            lastSavedTime.value = new Date();
+        }, 800);
+    }
+}, 2000);
+
+// Deep Watch for Auto-Save
+watch(
+    () => form,
+    () => {
+        if (form.status === 'Draft') {
+            saveStatus.value = 'Unsaved';
+            triggerSave();
+        }
+    },
+    { deep: true }
+);
+
+// Watch for manual raw edits (for stats)
 watch(() => form.text, (newVal) => {
     if (!isLiveMode.value) {
         updateStats(newVal);
@@ -69,13 +111,9 @@ const toggleMode = () => {
     }
 };
 
-const handleSave = () => {
-    emit('save', { ...form });
-};
-
 const handlePublish = () => {
     form.status = 'Published';
-    // Optionally auto-save on publish action
+    emit('save', { ...form });
 };
 
 const handleUnpublish = () => {
@@ -88,44 +126,40 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="english-editor-container bg-paper text-ink font-serif flex flex-col h-full relative">
+    <div class="english-editor-container bg-white text-ink font-sans flex flex-col h-full relative">
         
         <!-- Teleport Controls to Global Nav -->
         <Teleport to="#nav-right-portal">
-            <div class="flex items-center gap-6 pointer-events-auto">
-                 <button @click="$emit('cancel')" class="text-xs font-bold uppercase tracking-widest text-ink/40 hover:text-ink transition-colors mr-2">
-                    BACK
+            <div class="flex items-center gap-6 pointer-events-auto mr-4">
+                 
+                 <!-- Back / Cancel -->
+                 <button 
+                    @click="$emit('cancel')" 
+                    class="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors"
+                 >
+                    Back
                  </button>
 
-                 <!-- Status -->
-                 <span class="text-xs font-mono uppercase tracking-widest text-ink/30">
-                    {{ form.status === 'Published' ? 'PUB' : 'DRAFT' }}
-                 </span>
+                 <!-- Meta / Info -->
+                 <button 
+                     @click="showDrawer = true" 
+                     class="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors"
+                 >
+                    Info
+                 </button>
 
-                 <!-- Mode Toggle -->
-                 <div class="flex items-center gap-2">
-                    <button 
-                        @click="toggleMode" 
-                        class="text-xs font-bold uppercase tracking-widest transition-colors"
-                        :class="isLiveMode ? 'text-ink' : 'text-ink/40 hover:text-ink'"
-                    >
-                        {{ isLiveMode ? 'LIVE' : 'RAW' }}
-                    </button>
+                 <!-- Auto-Save Status -->
+                 <div class="text-xs font-bold uppercase tracking-widest transition-colors text-gray-300 select-none">
+                    {{ saveStatus }}
                  </div>
 
-                 <!-- Meta Trigger -->
+                 <!-- Publish Action (Primary Text Button) -->
                  <button 
-                    @click="showDrawer = true" 
-                    class="text-xs font-bold uppercase tracking-widest text-ink/40 hover:text-ink transition-colors"
+                    v-if="form.status === 'Draft'"
+                    @click="handlePublish"
+                    class="text-xs font-bold uppercase tracking-widest text-gray-900 border-b-2 border-gray-900 pb-0.5 hover:opacity-70 transition-opacity"
                 >
-                    INFO
-                 </button>
-
-                 <button 
-                    @click="handleSave"
-                    class="text-xs font-bold uppercase tracking-widest text-ink hover:text-ink/60 transition-colors"
-                >
-                    SAVE
+                    Publish
                  </button>
             </div>
         </Teleport>
@@ -138,7 +172,7 @@ onBeforeUnmount(() => {
                 <input
                     v-model="form.title"
                     placeholder="Analysis Title..."
-                    class="text-4xl sm:text-5xl font-bold tracking-tight mb-8 placeholder:text-stone-300 focus:outline-none w-full bg-transparent border-none p-0 flex-shrink-0 serif-font text-ink"
+                    class="text-4xl sm:text-5xl font-bold tracking-tight mb-8 placeholder:text-stone-300 focus:outline-none w-full bg-transparent border-none p-0 flex-shrink-0 font-sans text-ink"
                 />
 
                 <!-- Editor Body -->
@@ -166,34 +200,28 @@ onBeforeUnmount(() => {
 </template>
 
 <style scoped>
-.font-serif {
-    font-family: "Playfair Display", "Times New Roman", serif;
-}
-.serif-font {
-    font-family: "Playfair Display", "Times New Roman", serif;
-}
+/* Standard Aesthetic - No Custom Fonts */
 
 /* Tiptap Typography Overrides */
 :deep(.tiptap-editor .ProseMirror) { 
     outline: none; 
-    font-family: 'Crimson Text', serif;
-    font-size: 1.15rem;
-    line-height: 1.8;
-    color: #333;
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: var(--text-primary, #333);
 }
 
 :deep(.tiptap-editor .ProseMirror h1),
 :deep(.tiptap-editor .ProseMirror h2),
 :deep(.tiptap-editor .ProseMirror h3) { 
-    font-family: 'Playfair Display', serif;
-    color: #111;
+    color: var(--text-primary, #111);
     margin-top: 1.5em;
     margin-bottom: 0.5em;
+    font-weight: 700;
 }
 
-:deep(.tiptap-editor .ProseMirror h1) { font-size: 2em; line-height: 1.2; }
+:deep(.tiptap-editor .ProseMirror h1) { font-size: 1.8em; line-height: 1.2; }
 :deep(.tiptap-editor .ProseMirror h2) { font-size: 1.5em; }
-:deep(.tiptap-editor .ProseMirror p) { margin-bottom: 1.2em; }
+:deep(.tiptap-editor .ProseMirror p) { margin-bottom: 1.25em; }
 :deep(.tiptap-editor .ProseMirror p.is-editor-empty:first-child::before) { color: #d4d4d4; content: attr(data-placeholder); float: left; height: 0; pointer-events: none; }
 
 .custom-scrollbar::-webkit-scrollbar { width: 4px; }

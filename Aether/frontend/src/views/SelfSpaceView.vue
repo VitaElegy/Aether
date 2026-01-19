@@ -39,7 +39,7 @@ const goBack = () => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-paper text-ink selection:bg-accent/20 flex flex-col relative overflow-hidden">
+    <div class="h-screen bg-paper text-ink selection:bg-accent/20 flex flex-col relative overflow-hidden">
         <!-- Ambient Background Elements -->
         <div class="absolute top-0 left-0 w-full h-96 bg-gradient-to-b from-ash/10 to-transparent pointer-events-none">
         </div>
@@ -81,12 +81,12 @@ const goBack = () => {
         </TopNavBar>
 
         <!-- Main Content Area -->
-        <main class="flex-1 relative z-10 w-full h-full flex flex-col">
+        <main class="flex-1 relative z-10 w-full h-full flex flex-col pt-16">
             <Transition mode="out-in" enter-active-class="transition duration-300 ease-out"
                 enter-from-class="opacity-0 translate-y-4" enter-to-class="opacity-100 translate-y-0"
                 leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100 translate-y-0"
                 leave-to-class="opacity-0 -translate-y-4">
-                <component :is="CurrentComponent" class="flex-1 h-full" />
+                <component :is="CurrentComponent" class="flex-1 h-full" :headless="true" />
             </Transition>
         </main>
 

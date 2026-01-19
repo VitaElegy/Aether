@@ -35,6 +35,17 @@
                 </div>
             </div>
 
+            <!-- Category -->
+            <div class="section">
+                <label class="section-label">Category</label>
+                <select 
+                    v-model="form.category" 
+                    class="w-full bg-ash/20 border-b border-neutral-200 py-2 text-sm font-sans focus:outline-none focus:border-ink"
+                >
+                    <option v-for="cat in categories" :key="cat" :value="cat">{{ cat }}</option>
+                </select>
+            </div>
+
             <!-- Background Image -->
             <div class="section">
                 <label class="section-label">Cover Image</label>
@@ -107,6 +118,7 @@ const props = defineProps<{
     visible: boolean;
     form: {
         status: string;
+        category?: string; // Added optional
         background: string;
         references: Array<{ title: string; url: string }>;
     };
@@ -117,6 +129,8 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits(['close', 'publish', 'unpublish']);
+
+const categories = ['English Analysis', 'Vocabulary', 'Grammar', 'Reading', 'Journal'];
 
 const statusClass = computed(() => {
     switch(props.form.status) {
@@ -143,25 +157,27 @@ const removeReference = (idx: number) => {
 
 <style scoped>
 .meta-drawer-container {
-    position: fixed;
+    position: absolute;
     top: 0;
     right: 0;
-    height: 100vh;
-    z-index: 2000;
+    height: 100%;
+    z-index: 50;
+
+
 }
 
 .backdrop {
-    position: fixed;
+    position: absolute;
     inset: 0;
     background: rgba(0,0,0,0.2);
     backdrop-filter: blur(2px);
-    z-index: 1999;
+    z-index: 40;
 }
 
 .meta-drawer {
     position: relative;
-    z-index: 2001;
     width: 360px;
+
     height: 100%;
     background: #F9F7F1; /* Warm Ivory (Paper) */
     box-shadow: -5px 0 30px rgba(0,0,0,0.08);;

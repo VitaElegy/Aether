@@ -3,9 +3,10 @@
 import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
 import axios from 'axios';
 import { useDebounceFn } from '@vueuse/core';
-import type { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin } from 'tdesign-vue-next';
 import EnglishArticleAnalyzer from '@/components/english/EnglishArticleAnalyzer.vue';
 import EnglishEditor from '@/components/english/EnglishEditor.vue';
+import AnalysisCard from '@/components/english/AnalysisCard.vue';
 
 const props = defineProps<{
     headless?: boolean;
@@ -45,33 +46,41 @@ const editorForm = ref({
 
 // Reader State
 const currentArticle = ref<EnglishArticle | null>(null);
-const showHistory = ref(false); // Toggle for Git-like history sidebar
-const showComments = ref(false); // Toggle for Comments
+// const showHistory = ref(false); // Removed History for now to focus on layout
+const analysisSelection = ref({
+    word: '',
+    sentence: undefined as any
+});
+
+const handleSelection = (payload: any) => {
+    analysisSelection.value = payload;
+};
+
+// --- API ---
+const authStore = useAuthStore();
 
 // --- API ---
 const fetchArticles = async () => {
     isLoading.value = true;
     try {
-        const res = await axios.get('/api/content', {
-            params: {
-                category: 'English Analysis',
-                limit: 50
-            }
-        });
+        const params: any = {
+            category: 'English Analysis',
+            limit: 50
+        };
+        
+        // If logged in, filter by 'me' to see Drafts and Private items.
+        // Otherwise it defaults to 'Published Only' public feed.
+        if (authStore.user?.id) {
+            params.author_id = authStore.user.id;
+        }
+
+        const res = await axios.get('/api/content', { params });
         
         // Parse the body as JSON
         articles.value = res.data.map((item: any) => {
             let parsedBody: ArticleMeta = { text: '' };
             try {
-                // The API returns body as { Markdown: "string" } or just "string" depending on mapping
-                // Based on backend implementation: `body: ContentBody::Markdown(payload.body)`
-                // API Response `item.body` will be the Enum object `{ "Markdown": "..." }` or similar.
-                // Let's inspect carefully. Backend `ContentBody` serializes as untagged? 
-                // Wait, `#[serde(tag = "type", content = "data")]`.
-                // So it looks like `{ type: "Markdown", data: "..." }`.
-                
                 const rawBody = item.body?.data || ''; 
-                // We stored a JSON string INSIDE the Markdown string.
                 if (rawBody.startsWith('{')) {
                     parsedBody = JSON.parse(rawBody);
                 } else {
@@ -92,15 +101,20 @@ const fetchArticles = async () => {
                 author_name: item.author_name
             };
         });
-    } catch (e) {
+    } catch (e: any) {
         console.error('Failed to fetch articles', e);
+        const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to load English analyses.';
+        MessagePlugin.error(msg);
     } finally {
         isLoading.value = false;
     }
 };
 
 const saveArticle = async () => {
-    if (!editorForm.value.title || !editorForm.value.text) return;
+    if (!editorForm.value.title || !editorForm.value.text) {
+        MessagePlugin.warning('Title and content are required.');
+        return;
+    }
 
     const payload = {
         title: editorForm.value.title,
@@ -117,12 +131,15 @@ const saveArticle = async () => {
 
     try {
         await axios.post('/api/content', payload);
+        MessagePlugin.success('Analysis saved successfully.');
         viewMode.value = 'list';
         fetchArticles();
         // Reset Form
         editorForm.value = { title: '', text: '', background: '', references: [] };
-    } catch (e) {
+    } catch (e: any) {
         console.error('Failed to save article', e);
+        const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to save analysis.';
+        MessagePlugin.error(msg);
     }
 };
 
@@ -130,9 +147,12 @@ const deleteArticle = async (id: string) => {
     if (!confirm('Are you sure you want to delete this analysis?')) return;
     try {
         await axios.delete(`/api/content/${id}`);
+        MessagePlugin.success('Analysis deleted.');
         fetchArticles();
-    } catch (e) {
+    } catch (e: any) {
         console.error('Failed to delete', e);
+        const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to delete analysis.';
+        MessagePlugin.error(msg);
     }
 };
 
@@ -142,30 +162,96 @@ const openArticle = (article: EnglishArticle) => {
 };
 
 const handleEditorSave = async (formData: any) => {
-    const payload = {
-        title: formData.title,
-        body: JSON.stringify({
-            text: formData.text,
-            background: formData.background,
-            references: formData.references
-        }),
-        category: 'English Analysis', 
-        tags: ['english-learning'],
-        visibility: formData.status === 'Published' ? 'Public' : 'Private',
-        status: formData.status
-    };
-
+    console.log('handleEditorSave triggered', formData);
     try {
-        await axios.post('/api/content', payload);
-        viewMode.value = 'list';
-        fetchArticles();
-        editorForm.value = { title: '', text: '', background: '', references: [] };
-    } catch (e) {
-        console.error('Failed to save article', e);
+        let articleId = formData.id;
+
+        // 1. Create Article Shell if new
+        if (!articleId) {
+            console.log('Creating new article shell...');
+            const createPayload = {
+                title: formData.title || 'Untitled Analysis', // Fallback title
+                body: JSON.stringify({ text: '' }), 
+                category: 'English Analysis', 
+                tags: ['english-learning'],
+                visibility: 'Private',
+                status: 'Draft'
+            };
+            const res = await axios.post('/api/content', createPayload);
+            articleId = res.data.id;
+            console.log('Created article:', articleId);
+            (editorForm.value as any).id = articleId; 
+        }
+
+        // 2. Save Draft (Always save to shadow draft first)
+        const draftPayload = {
+            title: formData.title,
+            body: {
+                text: formData.text,
+                background: formData.background,
+                references: formData.references
+            }
+        };
+        console.log('Saving draft to shadow table...');
+        await axios.post(`/api/drafts/${articleId}`, draftPayload);
+
+        // 3. Publish (If requested)
+        if (formData.status === 'Published') {
+            console.log('Publishing draft...');
+            await axios.post(`/api/drafts/${articleId}/publish`);
+            MessagePlugin.success('Analysis published successfully!');
+            console.log('Publish success, redirecting to list...');
+            
+            // Force refresh explicitly
+            await fetchArticles();
+            viewMode.value = 'list'; 
+        } else {
+            console.log('Draft auto-saved active.');
+            // MessagePlugin.success('Draft saved.');
+            // Only refresh list if we want to show 'Draft' badge update? 
+            // Maybe not needed for auto-save to avoid flicker.
+        }
+        
+    } catch (e: any) {
+        console.error('Failed to save/publish article', e);
+        const msg = e.response?.data?.message || e.response?.data?.error || e.message || 'Failed to save analysis.';
+        MessagePlugin.error(`Error: ${msg}`);
     }
 };
 
+const startNewAnalysis = () => {
+    // Reset Form completely to avoid ID collision
+    editorForm.value = {
+        title: '',
+        text: '',
+        background: '',
+        references: []
+    };
+    // Explicitly clear ID and Status to force new creation
+    (editorForm.value as any).id = undefined;
+    (editorForm.value as any).status = 'Draft';
+    
+    viewMode.value = 'editor';
+};
+
+const editArticle = (article: EnglishArticle) => {
+    editorForm.value = {
+        title: article.title,
+        text: article.body.text,
+        background: article.body.background || '',
+        references: article.body.references || []
+    };
+    // Inject ID
+    (editorForm.value as any).id = article.id;
+    (editorForm.value as any).category = article.category;
+    // CRITICAL: Always treat editing as working on a Draft
+    (editorForm.value as any).status = 'Draft'; 
+    
+    viewMode.value = 'editor';
+};
+
 import { useNavigationStore } from '@/stores/navigation';
+import { useAuthStore } from '@/stores/auth';
 
 const navStore = useNavigationStore();
 
@@ -178,18 +264,16 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-    // If headless, we should release it, BUT VocabularyModule handles the parent state.
-    // However, if we switch viewMode in parent, this component might unmount?
-    // Actually in VocabularyModule it is v-if="activeTab === 'articles'".
-    // So when switching back to Vocabulary, this unmounts.
-    // VocabularyModule watcher sets customRight(true) for vocabulary, so we are good.
-    // But if we navigate away entirely? VocabularyModule unmounts and resets.
+    if (props.headless) {
+        navStore.setCustomRight(false);
+    }
 });
 
 // --- Computed ---
 const filteredArticles = computed(() => {
     // Stage 1: Absolute Safety Filter (Client-side Firewall)
     // Even if backend leaks data, we ignore anything that isn't explicitly English Analysis
+    // NOTE: Backend *should* handle this via category param, but we double-check.
     const safeList = articles.value.filter(a => a.category === 'English Analysis');
 
     // Stage 2: Search Query
@@ -201,19 +285,19 @@ const filteredArticles = computed(() => {
 </script>
 
 <template>
-    <div class="w-full h-full flex flex-col relative overflow-hidden">
+    <div class="w-full h-full flex flex-col relative overflow-hidden bg-white">
         
         <!-- TOP NAV (Changes based on view) -->
-        <div v-if="!headless" class="h-16 flex items-center justify-between px-8 border-b border-ink/5 bg-white/80 backdrop-blur z-20">
+        <div v-if="!headless" class="h-16 flex items-center justify-between px-8 border-b border-gray-100 bg-white z-20">
             <div class="flex items-center gap-4">
                 <button 
                     v-if="viewMode !== 'list'" 
                     @click="viewMode = 'list'"
-                    class="w-8 h-8 rounded-full hover:bg-ink/5 flex items-center justify-center transition-colors"
+                    class="w-8 h-8 rounded-full hover:bg-gray-100 flex items-center justify-center transition-colors text-gray-500 hover:text-gray-900"
                 >
-                    <i class="ri-arrow-left-line text-lg text-ink/50"></i>
+                    <i class="ri-arrow-left-line text-lg"></i>
                 </button>
-                <h2 class="font-serif text-xl font-bold text-ink">
+                <h2 class="text-xl font-bold text-gray-900">
                     <span v-if="viewMode === 'list'">My Library</span>
                     <span v-else-if="viewMode === 'editor'">New Analysis</span>
                     <span v-else>{{ currentArticle?.title }}</span>
@@ -224,36 +308,32 @@ const filteredArticles = computed(() => {
                  <!-- Actions rendered inline for standalone -->
                  <div class="flex items-center gap-4">
                      <template v-if="viewMode === 'list'">
-                        <div class="relative">
-                            <i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-ink/30"></i>
+                        <div class="relative group">
+                            <i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-gray-600 transition-colors"></i>
                             <input 
                                 v-model="searchQuery"
-                                class="pl-9 pr-4 py-1.5 bg-ink/5 rounded-full text-sm outline-none focus:ring-1 ring-accent/20 w-64 transition-all"
+                                class="pl-9 pr-4 py-1.5 bg-gray-50 focus:bg-white rounded-full text-sm outline-none border border-transparent focus:border-gray-200 focus:shadow-sm w-64 transition-all"
                                 placeholder="Search articles..."
                             />
                         </div>
+
                         <button 
-                            @click="viewMode = 'editor'"
-                            class="px-4 py-1.5 bg-ink text-white rounded-full text-sm font-bold shadow-lg hover:shadow-xl hover:-translate-y-0.5 transition-all flex items-center gap-2"
+                            @click="startNewAnalysis"
+                            class="px-4 py-1.5 bg-gray-900 text-white rounded-full text-sm font-bold shadow hover:shadow-lg hover:-translate-y-0.5 transition-all flex items-center gap-2"
                         >
                             <i class="ri-add-line"></i> New Analysis
                         </button>
+<!-- ... -->
+
                     </template>
 
                     <template v-if="viewMode === 'reader'">
                         <button 
-                            @click="showHistory = !showHistory"
-                            class="p-2 rounded hover:bg-ink/5 text-ink/40 hover:text-ink transition-colors relative"
-                            title="History / Git Graph"
+                            @click="editArticle(currentArticle!)"
+                            class="p-2 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-900 transition-colors relative mr-2"
+                            title="Edit"
                         >
-                            <i class="ri-git-branch-line text-lg"></i>
-                        </button>
-                        <button 
-                            @click="showComments = !showComments"
-                            class="p-2 rounded hover:bg-ink/5 text-ink/40 hover:text-ink transition-colors"
-                            title="Comments"
-                        >
-                            <i class="ri-chat-1-line text-lg"></i>
+                            <i class="ri-edit-line text-lg"></i>
                         </button>
                     </template>
                  </div>
@@ -266,39 +346,26 @@ const filteredArticles = computed(() => {
                  <template v-if="viewMode === 'list'">
                     <!-- Compact Search for Topbar -->
                     <div class="relative group">
-                        <i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-ink/30 group-focus-within:text-ink transition-colors"></i>
+                        <i class="ri-search-line absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-gray-600 transition-colors"></i>
                         <input 
                             v-model="searchQuery"
-                            class="pl-9 pr-4 py-1.5 bg-ink/5 focus:bg-white rounded-full text-xs font-medium outline-none border border-transparent focus:border-ink/10 focus:shadow-sm w-48 transition-all"
+                            class="pl-9 pr-4 py-1.5 bg-gray-50 focus:bg-white rounded-full text-xs font-medium outline-none border border-transparent focus:border-gray-200 w-48 transition-all"
                             placeholder="Search..."
                         />
                     </div>
                     <button 
-                        @click="viewMode = 'editor'"
-                        class="text-xs font-bold uppercase tracking-widest text-ink/40 hover:text-ink transition-colors"
+                        @click="startNewAnalysis"
+                        class="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-900 transition-colors"
                     >
                         NEW ANALYSIS
                     </button>
+
                  </template>
 
                  <template v-if="viewMode === 'reader'">
-                     <button @click="viewMode = 'list'" class="text-xs font-bold uppercase tracking-widest text-ink/40 hover:text-ink mr-4">
+                     <button @click="viewMode = 'list'" class="text-xs font-bold uppercase tracking-widest text-gray-400 hover:text-gray-900 mr-4">
                         BACK
                      </button>
-                    <button 
-                        @click="showHistory = !showHistory"
-                        class="text-xs font-bold uppercase tracking-widest transition-colors mr-4"
-                        :class="showHistory ? 'text-ink' : 'text-ink/40 hover:text-ink'"
-                    >
-                        HISTORY
-                    </button>
-                    <button 
-                        @click="showComments = !showComments"
-                        class="text-xs font-bold uppercase tracking-widest transition-colors"
-                        :class="showComments ? 'text-ink' : 'text-ink/40 hover:text-ink'"
-                    >
-                        COMMENTS
-                    </button>
                 </template>
              </div>
         </Teleport>
@@ -309,47 +376,56 @@ const filteredArticles = computed(() => {
             <!-- VIEW: LIST -->
             <div v-if="viewMode === 'list'" class="w-full h-full overflow-y-auto p-8 custom-scrollbar">
                 <div v-if="isLoading" class="flex justify-center pt-20">
-                    <i class="ri-loader-4-line animate-spin text-3xl text-ink/20"></i>
+                    <i class="ri-loader-4-line animate-spin text-3xl text-gray-300"></i>
                 </div>
                 
-                <div v-else-if="filteredArticles.length === 0" class="flex flex-col items-center justify-center h-full text-ink/30 gap-4">
-                    <div class="w-20 h-20 rounded-full bg-ink/5 flex items-center justify-center">
+                <div v-else-if="filteredArticles.length === 0" class="flex flex-col items-center justify-center h-full text-gray-400 gap-4">
+                    <div class="w-20 h-20 rounded-full bg-gray-50 flex items-center justify-center">
                         <i class="ri-book-open-line text-4xl"></i>
                     </div>
-                    <p class="font-serif italic">No analysis found. Start your first journey.</p>
+                    <p class="font-medium">No analysis found. Start your first journey.</p>
                 </div>
 
                 <div v-else class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 max-w-7xl mx-auto">
                     <div 
                         v-for="article in filteredArticles" 
                         :key="article.id"
-                        class="group relative aspect-[4/3] bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-500 overflow-hidden border border-ink/5 cursor-pointer"
+                        class="group relative aspect-[4/3] bg-white rounded-2xl shadow-sm hover:shadow-xl transition-all duration-300 overflow-hidden border border-gray-100 cursor-pointer"
                         @click="openArticle(article)"
                     >
                         <!-- Background -->
-                        <div class="absolute inset-0 bg-ink/5">
+                        <div class="absolute inset-0 bg-gray-50">
                             <img 
                                 v-if="article.body.background" 
                                 :src="article.body.background" 
-                                class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                                class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                loading="lazy"
                             />
-                            <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent opacity-60 group-hover:opacity-80 transition-opacity"></div>
+                            <!-- Elegant Fallback Gradient if no image -->
+                            <div v-else class="w-full h-full bg-gradient-to-br from-slate-800 to-slate-900 group-hover:scale-105 transition-transform duration-700 relative">
+                                <!-- Abstract Pattern (CSS based) -->
+                                <div class="absolute inset-0 opacity-10" style="background-image: radial-gradient(circle at 2px 2px, white 1px, transparent 0); background-size: 20px 20px;"></div>
+                            </div>
+                            
+                            <!-- Overlay -->
+                            <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent opacity-80 group-hover:opacity-90 transition-opacity"></div>
                         </div>
 
                         <!-- Content -->
                         <div class="absolute inset-0 p-6 flex flex-col justify-end text-white">
-                            <h3 class="text-2xl font-serif font-bold leading-tight mb-2 drop-shadow-md">{{ article.title }}</h3>
-                            <div class="flex items-center justify-between text-white/60 text-xs font-medium uppercase tracking-wider">
+                            <h3 class="text-xl font-bold leading-tight mb-2 drop-shadow-md line-clamp-2 text-white">{{ article.title }}</h3>
+                            <div class="flex items-center justify-between text-white/80 text-xs font-medium uppercase tracking-wider">
                                 <span>{{ new Date(article.created_at).toLocaleDateString() }}</span>
-                                <span v-if="article.status === 'Draft'" class="bg-yellow-500/20 px-2 py-0.5 rounded text-yellow-200">Analyzing</span>
-                                <span v-else class="bg-green-500/20 px-2 py-0.5 rounded text-green-200">Done</span>
+                                <span v-if="article.status === 'Draft'" class="bg-yellow-500/30 backdrop-blur px-2 py-0.5 rounded text-yellow-100 border border-yellow-500/20">Draft</span>
+                                <span v-else class="bg-green-500/30 backdrop-blur px-2 py-0.5 rounded text-green-100 border border-green-500/20">Published</span>
                             </div>
                         </div>
                         
                         <!-- Delete Action (Hover) -->
                         <button 
                             @click.stop="deleteArticle(article.id)"
-                            class="absolute top-4 right-4 p-2 bg-black/20 backdrop-blur rounded-full text-white/50 hover:bg-black/40 hover:text-red-400 transition-all opacity-0 group-hover:opacity-100"
+                            class="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur rounded-full text-white/70 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 transform translate-y-[-10px] group-hover:translate-y-0"
+                            title="Delete Analysis"
                         >
                             <i class="ri-delete-bin-line"></i>
                         </button>
@@ -361,11 +437,13 @@ const filteredArticles = computed(() => {
             <div v-else-if="viewMode === 'editor'" class="w-full h-full overflow-hidden relative">
                 <EnglishEditor 
                     :initial-data="{
+                        id: (editorForm as any).id,
                         title: editorForm.title,
                         text: editorForm.text,
                         background: editorForm.background,
+                        category: (editorForm as any).category || 'English Analysis',
                         references: editorForm.references,
-                        status: 'Draft'
+                        status: (editorForm as any).status || 'Draft'
                     }"
                     @save="handleEditorSave"
                     @cancel="viewMode = 'list'"
@@ -373,50 +451,24 @@ const filteredArticles = computed(() => {
             </div>
 
             <!-- VIEW: READER (Analysis) -->
-            <div v-else-if="viewMode === 'reader' && currentArticle" class="w-full h-full flex">
-                <!-- Main Reader -->
-                <div class="flex-1 h-full overflow-y-auto custom-scrollbar relative bg-[#F9F7F1]">
-                    <EnglishArticleAnalyzer :article="currentArticle" />
+            <div v-else-if="viewMode === 'reader' && currentArticle" class="w-full h-full flex bg-gray-50/50">
+                <!-- Main Content (Centered) -->
+                <div class="flex-1 h-full overflow-y-auto custom-scrollbar relative">
+                    <div class="max-w-4xl mx-auto bg-white min-h-full shadow-sm border-x border-gray-100/50">
+                        <EnglishArticleAnalyzer 
+                            :article="currentArticle" 
+                            @selection="handleSelection"
+                        />
+                    </div>
                 </div>
 
-                 <!-- Right Sidebar (History / Comments) -->
-                 <aside 
-                    v-if="showHistory || showComments" 
-                    class="w-96 border-l border-ink/5 bg-gray-50/50 backdrop-blur h-full overflow-y-auto flex flex-col"
-                 >
-                    <div class="p-4 border-b border-ink/5 font-bold uppercase tracking-wider text-xs text-ink/40">
-                        {{ showHistory ? 'Version History' : 'Comments' }}
-                    </div>
-                    
-                    <!-- History Content (Placeholder for Git-Graph) -->
-                    <div v-if="showHistory" class="p-6 space-y-6">
-                        <div class="relative pl-6 border-l-2 border-indigo-500/20 space-y-8">
-                            <!-- Mock Data for visual -->
-                            <div class="relative">
-                                <div class="absolute -left-[31px] w-4 h-4 rounded-full bg-indigo-500 ring-4 ring-white"></div>
-                                <div class="text-sm font-bold text-ink">Version 3 (Current)</div>
-                                <div class="text-xs text-ink/50 mt-1">Updated just now</div>
-                            </div>
-                            <div class="relative opacity-50">
-                                <div class="absolute -left-[31px] w-4 h-4 rounded-full bg-gray-300 ring-4 ring-white"></div>
-                                <div class="text-sm font-bold text-ink">Version 2</div>
-                                <div class="text-xs text-ink/50 mt-1">2 hours ago</div>
-                            </div>
-                        </div>
-                        <div class="text-center text-xs text-ink/30 italic mt-8">
-                            Git-like history graph will be rendered here.
-                        </div>
-                    </div>
-                    
-                    <!-- Comments Content -->
-                    <div v-if="showComments" class="flex-1 flex flex-col">
-                        <div class="flex-1 p-4 flex items-center justify-center text-ink/30 italic">
-                            No comments yet.
-                        </div>
-                        <div class="p-4 border-t border-ink/5 bg-white">
-                            <textarea class="w-full bg-gray-50 rounded p-2 text-sm outline-none resize-none" rows="3" placeholder="Add a comment..."></textarea>
-                            <button class="w-full mt-2 py-1 bg-ink text-white rounded text-xs font-bold">Post</button>
-                        </div>
+                 <!-- Right Sidebar (Analysis Card) -->
+                 <aside class="w-96 border-l border-gray-200 bg-white h-full hidden xl:block relative z-30">
+                    <div class="absolute inset-0 overflow-y-auto p-6">
+                        <AnalysisCard 
+                            :word="analysisSelection.word"
+                            :sentence="analysisSelection.sentence"
+                        />
                     </div>
                  </aside>
             </div>
@@ -425,9 +477,6 @@ const filteredArticles = computed(() => {
 </template>
 
 <style scoped>
-.prose-scholar {
-    font-family: 'Noto Serif', serif;
-}
 .custom-scrollbar::-webkit-scrollbar {
     width: 6px;
     height: 6px;

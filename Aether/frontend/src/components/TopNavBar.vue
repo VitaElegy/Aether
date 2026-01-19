@@ -1,5 +1,5 @@
 <template>
-  <nav class="h-16 w-full flex-shrink-0 flex items-center justify-between px-6 bg-paper/95 backdrop-blur z-50 sticky top-0 transition-all duration-200">
+  <nav class="h-16 w-full flex-shrink-0 flex items-center justify-between px-6 bg-paper/95 backdrop-blur z-[100] absolute top-0 left-0 transition-all duration-200 border-b border-ink/5">
     <!-- Left: Page Identity / Title -->
     <div class="flex items-center gap-4 flex-1 justify-start min-w-0">
       <GlobalBeacon />
