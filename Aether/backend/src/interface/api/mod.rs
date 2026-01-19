@@ -9,7 +9,7 @@ pub mod tags;
 pub mod vocabulary;
 pub mod dictionary;
 pub mod knowledge_base;
-pub mod draft;
+// pub mod draft; // Removed legacy
 pub mod permission;
 pub mod user;
 pub mod system;

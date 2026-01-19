@@ -240,7 +240,7 @@ impl ArticleRepository for PostgresRepository {
         let mut query = node::Entity::find()
             .find_also_related(article_detail::Entity);
 
-        if let Some(uid) = author_id {
+        if let Some(ref uid) = author_id {
             query = query.filter(node::Column::AuthorId.eq(uid.0));
         }
         
@@ -515,6 +515,57 @@ impl ArticleRepository for PostgresRepository {
             new_version: v2.to_string(),
             changes,
         })
+    }
+
+    async fn find_drafts_by_article_ids(&self, article_ids: Vec<Uuid>) -> Result<Vec<(Uuid, String, serde_json::Value, chrono::DateTime<chrono::Utc>)>, RepositoryError> {
+        use crate::infrastructure::persistence::entities::draft;
+        
+        let drafts = draft::Entity::find()
+            .filter(draft::Column::ArticleId.is_in(article_ids))
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(drafts.into_iter().map(|d| (
+            d.article_id,
+            d.title,
+            d.body,
+            d.updated_at.with_timezone(&Utc)
+        )).collect())
+    }
+
+    async fn find_draft_by_id(&self, article_id: &Uuid) -> Result<Option<(String, serde_json::Value)>, RepositoryError> {
+        use crate::infrastructure::persistence::entities::draft;
+        let draft = draft::Entity::find_by_id(*article_id)
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        
+        Ok(draft.map(|d| (d.title, d.body)))
+    }
+
+    async fn save_draft(&self, article_id: Uuid, title: String, body: serde_json::Value) -> Result<(), RepositoryError> {
+        use crate::infrastructure::persistence::entities::draft;
+        
+        // Upsert Logic manually or simple find+update
+        let existing = draft::Entity::find_by_id(article_id).one(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        
+        if let Some(d) = existing {
+            let mut active: draft::ActiveModel = d.into();
+            active.title = Set(title);
+            active.body = Set(body);
+            active.updated_at = Set(chrono::Utc::now().into());
+            active.update(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        } else {
+            let active = draft::ActiveModel {
+                article_id: Set(article_id),
+                title: Set(title),
+                body: Set(body),
+                updated_at: Set(chrono::Utc::now().into()),
+            };
+            active.insert(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        }
+        Ok(())
     }
 }
 

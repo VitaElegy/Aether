@@ -73,6 +73,10 @@ pub trait ArticleRepository: Send + Sync {
     async fn get_diff(&self, id: &Uuid, v1: &str, v2: &str) -> Result<ContentDiff, RepositoryError>;
     async fn search(&self, query: &str) -> Result<Vec<Article>, RepositoryError>;
     async fn delete_recursive(&self, id: &Uuid) -> Result<(), RepositoryError>;
+    // Draft System
+    async fn find_drafts_by_article_ids(&self, article_ids: Vec<Uuid>) -> Result<Vec<(Uuid, String, serde_json::Value, chrono::DateTime<chrono::Utc>)>, RepositoryError>;
+    async fn find_draft_by_id(&self, article_id: &Uuid) -> Result<Option<(String, serde_json::Value)>, RepositoryError>;
+    async fn save_draft(&self, article_id: Uuid, title: String, body: serde_json::Value) -> Result<(), RepositoryError>;
 }
 
 #[async_trait]

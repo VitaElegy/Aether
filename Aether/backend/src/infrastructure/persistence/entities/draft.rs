@@ -1,36 +1,31 @@
 use sea_orm::entity::prelude::*;
+use serde::{Deserialize, Serialize};
 
-
-#[derive(Clone, Debug, PartialEq, DeriveEntityModel)]
-#[sea_orm(table_name = "user_drafts")]
+#[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
+#[sea_orm(table_name = "drafts")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
-    pub user_id: Uuid,
-    pub target_article_id: Option<Uuid>,
-    pub title: Option<String>,
-    pub body: Option<String>,
-    pub tags: Option<String>, // Serialized JSON
-    pub category: Option<String>,
-    pub knowledge_base_id: Option<Uuid>,
-    pub parent_id: Option<Uuid>,
+    pub article_id: Uuid, // One-to-One with Article
+    pub title: String,
+    pub body: Json, // Flexible JSON storage for WIP
     pub updated_at: DateTimeWithTimeZone,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
     #[sea_orm(
-        belongs_to = "super::user::Entity",
-        from = "Column::UserId",
-        to = "super::user::Column::Id",
-        on_update = "NoAction",
+        belongs_to = "super::node::Entity",
+        from = "Column::ArticleId",
+        to = "super::node::Column::Id",
+        on_update = "Cascade",
         on_delete = "Cascade"
     )]
-    User,
+    Node,
 }
 
-impl Related<super::user::Entity> for Entity {
+impl Related<super::node::Entity> for Entity {
     fn to() -> RelationDef {
-        Relation::User.def()
+        Relation::Node.def()
     }
 }
 
