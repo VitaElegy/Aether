@@ -23,7 +23,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, draft, permission, user, system
+    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, permission, user, system
 };
 
 
@@ -66,6 +66,7 @@ async fn main() {
             bio TEXT,
             avatar_url TEXT,
             permissions BIGINT NOT NULL,
+            experience JSONB DEFAULT '[]', -- Added directly
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
@@ -93,15 +94,29 @@ async fn main() {
         CREATE INDEX IF NOT EXISTS idx_rels_subject ON relationships(subject_type, subject_id, relation);
     ").await.expect("Failed to initialize users table");
 
-
-
     let _ = db.execute_unprepared("
+        -- Knowledge Bases (Independent, but can contain Nodes)
+        CREATE TABLE IF NOT EXISTS knowledge_bases (
+            id UUID PRIMARY KEY,
+            author_id UUID NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT,
+            tags JSONB NOT NULL DEFAULT '[]',
+            cover_image TEXT,
+            cover_offset_y INT NOT NULL DEFAULT 50, -- Added directly
+            renderer_id TEXT, -- Added directly
+            visibility TEXT NOT NULL DEFAULT 'Private',
+            created_at TIMESTAMPTZ NOT NULL,
+            updated_at TIMESTAMPTZ NOT NULL,
+            FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
         -- The Kernel (Base Node)
         CREATE TABLE IF NOT EXISTS nodes (
             id UUID PRIMARY KEY,
             parent_id UUID,
             author_id UUID NOT NULL,
-            knowledge_base_id UUID,
+            knowledge_base_id UUID, -- Added directly
             type TEXT NOT NULL, -- 'article', 'vocabulary', 'memo', 'folder'
             title TEXT NOT NULL, -- Lifted title to generic node for consistent displaying
             permission_mode TEXT NOT NULL DEFAULT 'Public', -- Public/Private/Internal
@@ -109,7 +124,8 @@ async fn main() {
             created_at TIMESTAMPTZ NOT NULL,
             updated_at TIMESTAMPTZ NOT NULL,
             FOREIGN KEY(author_id) REFERENCES users(id),
-            FOREIGN KEY(parent_id) REFERENCES nodes(id) ON DELETE CASCADE
+            FOREIGN KEY(parent_id) REFERENCES nodes(id) ON DELETE CASCADE,
+            FOREIGN KEY(knowledge_base_id) REFERENCES knowledge_bases(id) ON DELETE SET NULL
         );
 
         -- File System Driver: Articles
@@ -120,7 +136,15 @@ async fn main() {
             category TEXT,
             body JSONB NOT NULL,
             tags TEXT NOT NULL,
+            derived_data JSONB, -- Added directly
             FOREIGN KEY(id) REFERENCES nodes(id) ON DELETE CASCADE
+        );
+
+        -- File System Driver: Vocab_Roots
+        CREATE TABLE IF NOT EXISTS vocab_roots (
+            id UUID PRIMARY KEY,
+            root TEXT UNIQUE NOT NULL,
+            meaning TEXT
         );
 
         -- File System Driver: Vocabularies
@@ -132,8 +156,9 @@ async fn main() {
             phonetic TEXT,
             language TEXT NOT NULL DEFAULT 'en',
             status TEXT NOT NULL,
-            query_count INT NOT NULL DEFAULT 0,
-            is_important BOOLEAN NOT NULL DEFAULT FALSE,
+            root_id UUID REFERENCES vocab_roots(id) ON DELETE SET NULL, -- Added directly
+            query_count INT NOT NULL DEFAULT 0, -- Added directly
+            is_important BOOLEAN NOT NULL DEFAULT FALSE, -- Added directly
             FOREIGN KEY(id) REFERENCES nodes(id) ON DELETE CASCADE
         );
         
@@ -171,21 +196,6 @@ async fn main() {
             FOREIGN KEY(target_id) REFERENCES nodes(id) ON DELETE CASCADE
         );
 
-        -- Knowledge Bases (Independent, but can contain Nodes)
-        CREATE TABLE IF NOT EXISTS knowledge_bases (
-            id UUID PRIMARY KEY,
-            author_id UUID NOT NULL,
-            title TEXT NOT NULL,
-            description TEXT,
-            tags JSONB NOT NULL DEFAULT '[]',
-            cover_image TEXT,
-            cover_offset_y INT NOT NULL DEFAULT 50,
-            visibility TEXT NOT NULL DEFAULT 'Private',
-            created_at TIMESTAMPTZ NOT NULL,
-            updated_at TIMESTAMPTZ NOT NULL,
-            FOREIGN KEY(author_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-
         -- User Drafts (Server-Side Single Slot Cache)
         CREATE TABLE IF NOT EXISTS user_drafts (
             user_id UUID PRIMARY KEY,
@@ -195,78 +205,36 @@ async fn main() {
             tags TEXT,
             category TEXT,
             knowledge_base_id UUID,
-            parent_id UUID,
+            parent_id UUID, -- Added directly
             updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
-        );
-    ").await.expect("Failed to initialize Core Node schema");
-
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE nodes ADD COLUMN knowledge_base_id UUID REFERENCES knowledge_bases(id) ON DELETE SET NULL;"
-    )).await.map_err(|e| println!("Migration note (node.kb_id): {}", e));
-
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE knowledge_bases ADD COLUMN cover_offset_y INT NOT NULL DEFAULT 50;"
-    )).await.map_err(|e| println!("Migration note (kb.offset): {}", e));
-
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE knowledge_bases ADD COLUMN renderer_id TEXT;"
-    )).await.map_err(|e| println!("Migration note (kb.renderer_id): {}", e));
-
-
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE users ADD COLUMN experience JSONB DEFAULT '[]';"
-    )).await.map_err(|e| println!("Migration note (user.experience): {}", e));
-
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE user_drafts ADD COLUMN parent_id UUID;"
-    )).await.map_err(|e| println!("Migration note (draft.parent_id): {}", e));
-
-    // Attempt to add Self-Referential FK for Cascade Delete (Postgres Only usually)
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE nodes ADD CONSTRAINT fk_nodes_parent FOREIGN KEY (parent_id) REFERENCES nodes(id) ON DELETE CASCADE;"
-    )).await.map_err(|e| println!("Migration note (nodes.parent_fk): {}", e));
-
-    // --- NEW VOCABULARY SCHEMA ---
-    let _ = db.execute_unprepared("
-        CREATE TABLE IF NOT EXISTS vocab_roots (
-            id UUID PRIMARY KEY,
-            root TEXT UNIQUE NOT NULL,
-            meaning TEXT
         );
 
         CREATE TABLE IF NOT EXISTS vocab_examples (
             id UUID PRIMARY KEY,
-            vocab_id UUID NOT NULL, -- FK to vocab_details.id (which is same as node.id)
+            vocab_id UUID NOT NULL, -- FK to vocab_details.id
             sentence TEXT NOT NULL,
             translation TEXT,
             note TEXT,
             image_url TEXT,
+            article_id UUID, -- Added directly
+            sentence_uuid UUID, -- Added directly
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             FOREIGN KEY (vocab_id) REFERENCES vocab_details(id) ON DELETE CASCADE
         );
-    ").await.map_err(|e| println!("Migration note (vocab_new_tables): {}", e));
+    ").await.expect("Failed to initialize Core Node schema");
 
+    // --- DRAFTS SYSTEM (Shadow Drafts) ---
     let _ = db.execute(sea_orm::Statement::from_string(
         db.get_database_backend(),
-        "ALTER TABLE vocab_details ADD COLUMN root_id UUID REFERENCES vocab_roots(id) ON DELETE SET NULL;"
-    )).await.map_err(|e| println!("Migration note (vocab.root_id): {}", e));
+        "CREATE TABLE IF NOT EXISTS drafts (
+            article_id UUID PRIMARY KEY REFERENCES nodes(id) ON DELETE CASCADE,
+            title TEXT NOT NULL,
+            body JSONB NOT NULL,
+            updated_at TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+        );"
+    )).await.map_err(|e| println!("Migration note (drafts table): {}", e));
 
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE vocab_details ADD COLUMN query_count INT NOT NULL DEFAULT 0;"
-    )).await.map_err(|e| println!("Migration note (vocab.query_count): {}", e));
-
-    let _ = db.execute(sea_orm::Statement::from_string(
-        db.get_database_backend(),
-        "ALTER TABLE vocab_details ADD COLUMN is_important BOOLEAN NOT NULL DEFAULT FALSE;"
-    )).await.map_err(|e| println!("Migration note (vocab.is_important): {}", e));
 
     // --- SEMANTIC INDEX (Math KB V2) ---
     let _ = db.execute_unprepared("
@@ -405,7 +373,7 @@ async fn main() {
         .merge(tags::router())
         .merge(vocabulary::router())
         .merge(dictionary::router())
-        .merge(draft::router())
+        // .merge(draft::router()) // Removed
         .merge(permission::router())
         .merge(user::router())
         .merge(system::router())
