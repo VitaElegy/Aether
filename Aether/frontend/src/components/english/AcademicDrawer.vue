@@ -10,7 +10,7 @@
         <div class="content">
             <!-- Header: Word -->
             <div class="word-header">
-                <h2 class="serif-font">{{ word }}</h2>
+                <h2 class="word">{{ word }}</h2>
                 <span v-if="existingVocab?.phonetic" class="phonetic">{{ existingVocab.phonetic }}</span>
             </div>
             
@@ -28,8 +28,7 @@
                     </div>
                 </div>
                 <div v-else class="new-word-state">
-                    <p>New word found.</p>
-                    <!-- Quick Add Form could go here -->
+                    <p class="text-sm text-gray-500">New word found.</p>
                 </div>
             </div>
 
@@ -37,16 +36,16 @@
 
             <!-- Context Sentence -->
             <div class="section context-section" v-if="sentence">
-                <h3>Context</h3>
+                <h3 class="section-title">Context</h3>
                 <blockquote class="context-quote">
                     "{{ sentence.text }}"
                 </blockquote>
                 
                 <div class="actions">
-                     <button class="action-btn primary serif-font" @click="saveExample" :disabled="saving || !existingVocab">
+                     <button class="action-btn primary" @click="saveExample" :disabled="saving || !existingVocab">
                         {{ saving ? 'Saving...' : 'Save as Example' }}
                      </button>
-                     <button class="action-btn secondary serif-font" v-if="!existingVocab" @click="createNewVocab">
+                     <button class="action-btn secondary" v-if="!existingVocab" @click="createNewVocab">
                         Create Card
                      </button>
                 </div>
@@ -60,7 +59,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, computed } from 'vue';
+import { ref, watch } from 'vue';
 import { useVocabularyStore } from '@/stores/vocabulary';
 
 const props = defineProps<{
@@ -111,7 +110,6 @@ async function saveExample() {
 }
 
 function createNewVocab() {
-    // For MVP, maybe just alert or prompt. Ideally integrate full form.
     alert('Create Card feature coming soon (use main Vocabulary view)');
 }
 
@@ -124,7 +122,7 @@ function createNewVocab() {
     right: 0;
     height: 100vh;
     z-index: 2000;
-    pointer-events: none; /* Let events pass if not visible */
+    pointer-events: none;
 }
 
 .backdrop {
@@ -139,8 +137,8 @@ function createNewVocab() {
     pointer-events: auto;
     width: 400px;
     height: 100%;
-    background: rgba(249, 247, 241, 0.95); /* Warm Ivory match */
-    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(16px);
     box-shadow: -5px 0 30px rgba(0,0,0,0.1);
     position: absolute;
     right: 0;
@@ -162,29 +160,26 @@ function createNewVocab() {
   opacity: 0;
 }
 
-/* Typography */
-.serif-font {
-    font-family: "Playfair Display", "Times New Roman", serif;
-}
-
-.word-header h2 {
+/* Typography & Layout */
+.word-header .word {
     font-size: 2.5rem;
     font-weight: 700;
-    color: #2c2c2c;
+    color: var(--text-primary, #1d1d1d);
     margin: 0;
-    letter-spacing: -0.02em;
+    letter-spacing: -0.01em;
 }
 
 .phonetic {
     font-family: 'Inter', sans-serif;
-    color: #666;
+    color: var(--text-secondary, #888);
     margin-top: 0.5rem;
     display: block;
+    font-size: 0.9rem;
 }
 
 .divider {
     height: 1px;
-    background: rgba(0,0,0,0.1);
+    background: var(--border-level-1, #f0f0f0);
     margin: 1.5rem 0;
 }
 
@@ -196,42 +191,66 @@ function createNewVocab() {
 .definition {
     font-size: 1.1rem;
     line-height: 1.6;
-    color: #333;
-    font-family: 'Crimson Text', serif;
+    color: var(--text-primary, #333);
+}
+
+.translation {
+    font-size: 1rem;
+    color: var(--text-secondary, #666);
+    margin-top: 0.5rem;
+}
+
+.section-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: var(--text-secondary, #888);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.5rem;
 }
 
 .context-quote {
-    border-left: 3px solid #d4af37; /* Gold accent */
+    border-left: 3px solid var(--brand-color, #0052d9);
     padding-left: 1rem;
     margin: 1rem 0;
     font-style: italic;
-    color: #444;
-    font-family: 'Crimson Text', serif;
+    color: var(--text-secondary, #555);
 }
 
+/* Actions */
 .action-btn {
     width: 100%;
     padding: 0.8rem;
     margin-top: 0.5rem;
     border: none;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 0.95rem;
+    font-weight: 500;
     transition: all 0.2s;
-    border-radius: 4px;
+    border-radius: 6px;
 }
 
 .action-btn.primary {
-    background: #2c2c2c;
+    background: var(--brand-color, #2c2c2c);
     color: #fff;
 }
 .action-btn.primary:hover {
-    background: #000;
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+.action-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
 }
 
 .action-btn.secondary {
     background: transparent;
-    border: 1px solid #2c2c2c;
-    color: #2c2c2c;
+    border: 1px solid var(--border-level-2, #ddd);
+    color: var(--text-primary, #2c2c2c);
+}
+.action-btn.secondary:hover {
+    background: rgba(0,0,0,0.02);
 }
 
 .close-btn {
@@ -241,6 +260,10 @@ function createNewVocab() {
     background: none;
     border: none;
     cursor: pointer;
-    color: #666;
+    color: #999;
+    transition: color 0.2s;
+}
+.close-btn:hover {
+    color: #333;
 }
 </style>
