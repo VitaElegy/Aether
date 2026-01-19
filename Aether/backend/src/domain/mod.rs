@@ -4,4 +4,5 @@ pub mod permission_service;
 pub mod graph_service;
 pub mod diff_service;
 pub mod sentence_parser;
-pub mod graph_service;
+pub mod ports;
+

@@ -115,12 +115,15 @@ impl VocabularyRepository for PostgresRepository {
     }
 
     async fn find_by_word(&self, user_id: &UserId, word: &str) -> Result<Option<Vocabulary>, RepositoryError> {
-        let result = vocab_detail::Entity::find()
+        let details = vocab_detail::Entity::find()
             .filter(vocab_detail::Column::Word.eq(word))
-            .find_also_related(node::Entity)
-            .all(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            .all(&self.db).await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        for (d, n_opt) in result {
+        for d in details {
+             let n_opt = node::Entity::find_by_id(d.id).one(&self.db).await
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+             
              if let Some(n) = n_opt {
                  if n.author_id == user_id.0 {
                      // Lazy Load Root and Examples

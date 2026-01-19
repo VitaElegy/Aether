@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use std::collections::HashMap;
 use regex::Regex;
-use md5::{Md5, Digest};
+
 use strsim::levenshtein;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -121,8 +121,7 @@ impl SentenceParser {
     }
 
     fn compute_hash(text: &str) -> String {
-        let mut hasher = Md5::new();
-        hasher.update(text.as_bytes());
-        format!("{:x}", hasher.finalize())
+        let digest = md5::compute(text.as_bytes());
+        format!("{:x}", digest)
     }
 }
