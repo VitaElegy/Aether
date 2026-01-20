@@ -146,47 +146,59 @@
 
                             <div class="grid grid-cols-1 gap-6">
                                 <div v-for="(ex, idx) in formData.examples" :key="idx" 
-                                    class="group relative bg-white border border-ink/5 shadow-sm p-6 sm:p-8 rounded-sm hover:shadow-md transition-shadow"
+                                    class="relative aspect-[21/9] rounded-2xl overflow-hidden group shadow-lg ring-1 ring-black/5 hover:ring-black/20 transition-all bg-white"
                                 >
-                                    <!-- Date/Meta Line (Fake) -->
-                                    <div class="border-b border-ink/5 pb-4 mb-4 flex items-center justify-between">
-                                         <div class="text-[10px] font-bold uppercase tracking-widest text-ink/20">Example {{ idx + 1 }}</div>
-                                         <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                             <label class="cursor-pointer text-ink/20 hover:text-ink" title="Upload Image">
-                                                <i class="ri-image-add-line"></i>
-                                                <input type="file" accept="image/*" class="hidden" @change="(e) => handleImageUpload(e, idx)">
-                                             </label>
-                                             <button @click="removeExample(idx)" class="text-ink/20 hover:text-red-500"><i class="ri-delete-bin-line"></i></button>
-                                         </div>
+                                    <!-- Background Image -->
+                                    <div class="absolute inset-0 bg-ink/90 transition-all duration-700">
+                                         <img v-if="ex.image_url" :src="ex.image_url" class="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-105 transition-transform duration-1000">
+                                         <div v-else class="absolute inset-0 bg-gradient-to-br from-gray-800 to-black opacity-100"></div>
+                                         
+                                         <!-- Gradient Overlay -->
+                                         <div class="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent"></div>
                                     </div>
+                                    
+                                    <!-- Image Upload Trigger (Hidden until hover) -->
+                                    <label class="absolute top-4 right-4 z-20 text-white/20 hover:text-white cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-black/20 backdrop-blur rounded-lg" title="Change Background Image">
+                                        <i class="ri-image-add-line"></i>
+                                        <input type="file" accept="image/*" class="hidden" @change="(e) => handleImageUpload(e, idx)">
+                                    </label>
 
-                                    <div class="flex gap-6">
-                                        <!-- Optional Image Thumbnail -->
-                                        <div v-if="ex.image_url" class="shrink-0 w-24 h-24 bg-gray-100 rounded-sm overflow-hidden border border-ink/5">
-                                            <img :src="ex.image_url" class="w-full h-full object-cover grayscale opacity-80 hover:grayscale-0 hover:opacity-100 transition-all"/>
-                                        </div>
+                                    <!-- Remove -->
+                                     <button @click="removeExample(idx)" class="absolute top-4 left-4 z-20 text-white/20 hover:text-red-400 cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity p-2 bg-black/20 backdrop-blur rounded-lg" title="Remove Example">
+                                        <i class="ri-delete-bin-line"></i>
+                                    </button>
 
-                                        <div class="flex-1 space-y-3">
-                                            <textarea 
-                                                v-model="ex.sentence"
-                                                class="w-full bg-transparent text-xl font-serif text-ink leading-relaxed outline-none resize-none border-0 p-0 placeholder:text-ink/10"
-                                                placeholder="Type example sentence..."
-                                                rows="2"
-                                            ></textarea>
-                                            
-                                            <div class="flex items-center gap-4">
-                                                <input 
-                                                    v-model="ex.translation"
-                                                    class="flex-1 bg-transparent text-sm text-ink/50 italic font-serif outline-none border-0 p-0 placeholder:text-ink/10"
-                                                    placeholder="Translation..."
-                                                />
-                                                <input 
-                                                    v-model="ex.note"
-                                                    class="bg-ink/5 px-2 py-1 rounded text-xs text-ink/60 font-medium outline-none border-0 w-24 text-center placeholder:text-ink/20 focus:w-48 transition-all"
-                                                    placeholder="Note"
-                                                />
-                                            </div>
-                                        </div>
+                                    <!-- Link to Article -->
+                                    <button 
+                                        v-if="ex.article_id"
+                                        @click="navigateToArticle(ex.article_id)"
+                                        class="absolute bottom-4 right-4 z-20 text-white/40 hover:text-white cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity p-2 px-3 bg-black/40 backdrop-blur rounded-full text-xs font-bold uppercase tracking-widest flex items-center gap-2" 
+                                        title="View Source Article"
+                                    >
+                                        <i class="ri-article-line"></i> {{ ex.article_title || 'Source' }}
+                                    </button>
+
+                                    <!-- Content Overlay -->
+                                    <div class="absolute inset-0 z-10 flex flex-col justify-end p-8 text-center items-center">
+                                        <textarea 
+                                             v-model="ex.sentence"
+                                             class="w-full bg-transparent border-none text-2xl font-serif font-medium text-white placeholder:text-white/20 outline-none resize-none p-0 text-center drop-shadow-md leading-relaxed mb-4 focus:scale-105 transition-transform duration-300"
+                                             placeholder="Type example sentence..."
+                                             rows="2"
+                                         ></textarea>
+                                         
+                                         <div class="h-auto w-full flex flex-col items-center gap-2 opacity-80 group-hover:opacity-100 transition-opacity duration-300">
+                                             <input 
+                                                v-model="ex.translation"
+                                                class="w-full bg-transparent text-center text-sm text-white/60 placeholder:text-white/20 outline-none font-light tracking-wide focus:text-white transition-colors"
+                                                placeholder="Translation..."
+                                             />
+                                             <input 
+                                                v-model="ex.note"
+                                                class="bg-black/40 px-3 py-1 rounded-full backdrop-blur-sm border border-white/10 text-center text-[10px] text-white/80 font-bold uppercase tracking-widest placeholder:text-white/10 outline-none w-auto min-w-[80px] hover:bg-black/60 transition-colors focus:border-white/30"
+                                                placeholder="NOTE"
+                                             />
+                                         </div>
                                     </div>
                                 </div>
                             </div>
@@ -204,6 +216,7 @@ import { ref, reactive, watch, computed } from 'vue';
 import { useVocabularyStore } from '@/stores/vocabulary';
 import { dictionaryApi } from '@/api/dictionary';
 import { MessagePlugin } from 'tdesign-vue-next';
+import { useRouter } from 'vue-router';
 import axios from 'axios';
 
 const props = defineProps<{
@@ -211,10 +224,12 @@ const props = defineProps<{
     initialWord: string;
     initialSentence?: string;
     initialData?: any;
+    initialContext?: { articleId: string; articleTitle?: string };
 }>();
 
 const emit = defineEmits(['update:visible', 'refresh']);
 const store = useVocabularyStore();
+const currentId = ref('');
 
 // UI State
 const loading = ref(false);
@@ -237,7 +252,7 @@ function selectPos(idx: number, opt: string) {
 // Interfaces
 interface MorphologyItem { type: string; part: string; meaning: string; }
 interface MeaningItem { pos: string; translation: string; definition: string; }
-interface ExampleItem { sentence: string; translation: string; note?: string; image_url?: string; }
+interface ExampleItem { sentence: string; translation: string; note?: string; image_url?: string; article_id?: string; article_title?: string; }
 
 const formData = reactive({
     phonetic: '',
@@ -255,7 +270,6 @@ watch(() => props.visible, async (val) => {
 
 async function init() {
     loading.value = true;
-    existing.value = !!props.initialData;
     
     // Reset
     formData.phonetic = '';
@@ -264,46 +278,56 @@ async function init() {
     formData.examples = [];
 
     try {
-        if (props.initialData) {
+        let dataToLoad = props.initialData;
+        
+        // If not provided, try to find in store first (to enable Edit Mode)
+        if (!dataToLoad) {
+             try {
+                const found = await store.searchWord(props.initialWord);
+                if (found) dataToLoad = found;
+             } catch (err) { /* ignore */ }
+        }
+
+        existing.value = !!dataToLoad;
+
+        if (dataToLoad) {
             // Edit Mode
-            wordInput.value = props.initialData.word;
-            formData.phonetic = props.initialData.phonetic || '';
-            parseMeanings(props.initialData.definition, props.initialData.translation);
+            wordInput.value = dataToLoad.word;
+            formData.phonetic = dataToLoad.phonetic || '';
+            parseMeanings(dataToLoad.definition, dataToLoad.translation);
             
-            if (props.initialData.root) parseRootString(props.initialData.root);
-            formData.examples = props.initialData.examples ? JSON.parse(JSON.stringify(props.initialData.examples)) : [];
+            if (dataToLoad.root) parseRootString(dataToLoad.root);
+            formData.examples = dataToLoad.examples ? JSON.parse(JSON.stringify(dataToLoad.examples)) : [];
+            
+            // If we have an ID, we need to make sure we store it for saving
+            // Since props.initialData might be null now, we need a way to store the ID.
+            // But we use props.initialData.id in save(). 
+            // We should store the ID in a local ref or rely on dataToLoad being available (but it's local var).
+            // Let's store it in a ref.
+            currentId.value = dataToLoad.id;
+
         } else {
             // Create Mode - Dictionary Lookup
+            currentId.value = '';
             const dictData = await dictionaryApi.lookup(props.initialWord);
             if (dictData) {
                 formData.phonetic = dictData.phonetic || '';
-                formData.meanings = [];
-                
-                if (dictData.meanings && dictData.meanings.length > 0) {
-                     dictData.meanings.forEach((m: any) => {
-                         const def = m.definitions?.[0]?.definition || '';
-                         const ex = m.definitions?.[0]?.example;
-                         
-                         formData.meanings.push({
-                             pos: m.partOfSpeech || 'other',
-                             translation: dictData.translation || '', 
-                             definition: def
-                         });
-                         
-                         if (ex) formData.examples.push({ sentence: ex, translation: '' });
-                     });
-                     
-                     if (formData.meanings.length === 0 && dictData.translation) {
-                          formData.meanings.push({ pos: 'other', translation: dictData.translation, definition: '' });
-                     }
-                } else if (dictData.translation) {
-                     formData.meanings.push({ pos: 'other', translation: dictData.translation, definition: '' });
-                }
-                
-                if (formData.meanings.length === 0) {
-                     formData.meanings.push({ pos: 'n.', translation: '', definition: '' });
-                }
+                formData.meanings = [{ pos: 'n.', translation: '', definition: '' }];
             }
+        }
+            
+        // Auto-add context sentence if new (only in Create Mode or if explicitly requested?)
+        // User wants context. If we are in Create Mode, definitely add.
+        // If Edit Mode? Maybe not auto-add to avoid spam, but "Import Context" button is there.
+        // But if the user clicked "Edit" from a context, they might expect it.
+        // Let's only auto-add for NEW entries to keep it clean, but ensure button is visible.
+        if (!existing.value && props.initialSentence && formData.examples.length === 0) {
+                formData.examples.push({ 
+                sentence: props.initialSentence, 
+                translation: '',
+                article_id: props.initialContext?.articleId,
+                article_title: props.initialContext?.articleTitle
+                });
         }
     } catch (e) {
         console.error("Init failed", e);
@@ -351,7 +375,14 @@ const hasInitialSentence = computed(() => {
 });
 
 function addInitialExample() {
-    if (props.initialSentence) formData.examples.push({ sentence: props.initialSentence, translation: '' });
+    if (props.initialSentence) {
+        formData.examples.push({ 
+            sentence: props.initialSentence, 
+            translation: '',
+            article_id: props.initialContext?.articleId,
+            article_title: props.initialContext?.articleTitle
+        });
+    }
 }
 function addNewExample() { formData.examples.push({ sentence: '', translation: '' }); }
 function removeExample(idx: number) { formData.examples.splice(idx, 1); }
@@ -398,6 +429,13 @@ async function handleImageUpload(e: Event, idx: number) {
     }
 }
 
+const router = useRouter();
+function navigateToArticle(articleId: string) {
+    // Save current work? Maybe prompt? 
+    // for now just go
+    router.push(`/article/${articleId}`);
+}
+
 function close() { emit('update:visible', false); }
 
 async function save() {
@@ -416,15 +454,15 @@ async function save() {
             root: buildRootString() 
         };
 
-        if (existing.value && props.initialData?.id) {
-             await store.saveVocabulary({ ...payload, id: props.initialData.id } as any);
+        if (existing.value && currentId.value) {
+             await store.saveVocabulary({ ...payload, id: currentId.value } as any);
              MessagePlugin.success('Entry updated');
         } else {
              await store.saveVocabulary(payload as any);
              MessagePlugin.success('Entry created');
         }
         
-        emit('refresh');
+        emit('refresh', wordInput.value);
         close();
     } catch (e) {
         console.error(e);
