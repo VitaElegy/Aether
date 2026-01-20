@@ -22,7 +22,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import MarkdownRenderer from '@/components/renderers/MarkdownRenderer.vue'; 
 import { useNavigationStore } from '@/stores/navigation';
 
@@ -49,35 +49,20 @@ const sentenceMap = computed(() => {
 });
 
 // --- Sentence Hydration ---
-let hydrationIdCounter = 0;
+import { generateContentHash } from '@/utils/text-anchoring';
 
 function hydrateSentences() {
     if (!containerRef.value) return;
     const root = containerRef.value;
     
-    // 1. Clean previous hydration if re-running (optional, but good practice)
-    // Actually, Vue re-renders might duplicate, so we rely on MarkdownRenderer changing content to reset DOM.
-    // If MarkdownRenderer doesn't destroy DOM, we might double-wrap. 
-    // Assuming content change triggers full re-render.
+    // Reset counters for collision handling
+    const hashCounts: Record<string, number> = {};
 
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, null);
     const textNodes: Text[] = [];
     while (walker.nextNode()) {
         textNodes.push(walker.currentNode as Text);
     }
-    
-    // We will process text nodes. This is tricky because a sentence might span nodes (e.g. bold).
-    // A robust "Sentence Entity" implementation is hard without semantic info.
-    // Heuristic:
-    // If a text node contains ". " or "? " or "! ", we split IT.
-    // We treat inline tags (b, i) as part of the flow.
-    // But wrapping across tags is hard (need to wrap part of text node, then the whole <b>, then next part).
-    
-    // SIMPLIFIED APPROACH for MVP:
-    // Only hydrate sentences that are purely within a text node or block level text.
-    // OR: Just wrap "segments" and link them via ID.
-
-    let currentSentenceId = `s-${Date.now()}-${hydrationIdCounter++}`;
     
     textNodes.forEach(node => {
         // Skip if already processed or child of article-header
@@ -88,50 +73,79 @@ function hydrateSentences() {
         if (!text.trim()) return; // Skip whitespace nodes
 
         // Regex to split: look for punctuation followed by space or end
-        // Capture the delimiter to keep it
         const parts = text.split(/([.!?]+(?:\s|$))/);
         
         if (parts.length > 1) {
             const fragment = document.createDocumentFragment();
+            let currentSentenceBuffer = '';
+
+            // We need to reconstruct sentences. 
+            // split("Hello. World.") -> ["Hello", ". ", "World", "."]
+            // We want to group "Hello" + ". "
             
-            parts.forEach((part, index) => {
-                if (!part) return;
-                
-                // Create wrapper
-                const span = document.createElement('span');
-                span.className = 'sentence-entity';
-                span.dataset.sid = currentSentenceId;
-                span.textContent = part;
-                span.style.cursor = 'pointer';
-                span.style.transition = 'background 0.2s, color 0.2s';
-                
-                // Add Hover Listeners via JS for "Group Highlight" & Focus Switch
-                span.addEventListener('mouseenter', () => handleEntityHover(span.dataset.sid!));
-                span.addEventListener('mouseleave', () => clearHighlight());
-                
-                fragment.appendChild(span);
-                
-                // If this part ended a sentence, generate new ID for NEXT part
-                if (/[.!?]+(?:\s|$)/.test(part)) {
-                    currentSentenceId = `s-${Date.now()}-${hydrationIdCounter++}`;
+            for (let i = 0; i < parts.length; i++) {
+                const part = parts[i];
+                if (!part) continue;
+
+                currentSentenceBuffer += part;
+
+                // If this part is a delimiter OR it's the last part
+                const isDelimiter = /[.!?]+(?:\s|$)/.test(part);
+                const isLast = i === parts.length - 1;
+
+                if (isDelimiter || isLast) {
+                    // Flush buffer as a sentence
+                    // Only wrap if it has meaningful content (not just a space)
+                    if (currentSentenceBuffer.trim().length > 0) {
+                        const cleanText = currentSentenceBuffer.trim();
+                        const baseHash = generateContentHash(cleanText);
+                        
+                        // Handle collisions (e.g. "Yes." appearing twice)
+                        if (!hashCounts[baseHash]) hashCounts[baseHash] = 0;
+                        const uniqueHash = `${baseHash}-${hashCounts[baseHash]}`;
+                        hashCounts[baseHash]++;
+
+                        const span = document.createElement('span');
+                        span.className = 'sentence-entity';
+                        span.dataset.sid = uniqueHash; // Use Hash as SID
+                        span.dataset.hash = uniqueHash;
+                        span.dataset.text = cleanText; // Store text for recovery
+                        span.textContent = currentSentenceBuffer;
+                        span.style.cursor = 'pointer';
+                        span.style.transition = 'background 0.2s, color 0.2s';
+                        
+                        span.addEventListener('mouseenter', () => handleEntityHover(span.dataset.sid!));
+                        span.addEventListener('mouseleave', () => clearHighlight());
+
+                        fragment.appendChild(span);
+                    } else {
+                        // Just Text (whitespace)
+                        fragment.appendChild(document.createTextNode(currentSentenceBuffer));
+                    }
+                    currentSentenceBuffer = '';
                 }
-            });
+            }
             
             node.parentNode?.replaceChild(fragment, node);
         } else {
-            // No split, just wrap the whole node in current ID?
-            // This assumes we are inside a sentence.
-            // Complex case: "Hello <b>bold</b> world." 
-            // Validating this logic properly takes a full parser.
-            // Fallback: If no split, just text, don't wrap? Or wrap as "fragment"?
-            // Let's wrap as "fragment" extending current sentence.
-             const span = document.createElement('span');
-             span.className = 'sentence-entity';
-             span.dataset.sid = currentSentenceId;
-             span.textContent = text;
-             span.addEventListener('mouseenter', () => handleEntityHover(currentSentenceId));
-             span.addEventListener('mouseleave', () => clearHighlight());
-             node.parentNode?.replaceChild(span, node);
+            // No split, wrap whole node if it looks like content
+            const cleanText = text.trim();
+            if (cleanText.length > 0) {
+                 const baseHash = generateContentHash(cleanText);
+                 if (!hashCounts[baseHash]) hashCounts[baseHash] = 0;
+                 const uniqueHash = `${baseHash}-${hashCounts[baseHash]}`;
+                 hashCounts[baseHash]++;
+
+                 const span = document.createElement('span');
+                 span.className = 'sentence-entity';
+                 span.dataset.sid = uniqueHash;
+                 span.dataset.hash = uniqueHash;
+                 span.dataset.text = cleanText;
+                 span.textContent = text;
+                 span.addEventListener('mouseenter', () => handleEntityHover(uniqueHash));
+                 span.addEventListener('mouseleave', () => clearHighlight());
+                 node.parentNode?.replaceChild(span, node);
+            }
         }
     });
 }
@@ -140,7 +154,7 @@ function highlightGroup(sid: string) {
     if (!containerRef.value) return;
     const group = containerRef.value.querySelectorAll(`[data-sid="${sid}"]`);
     group.forEach(el => {
-        (el as HTMLElement).style.backgroundColor = 'rgba(0, 82, 217, 0.1)'; // Brand color hint
+        (el as HTMLElement).style.backgroundColor = 'rgba(0, 82, 217, 0.1)'; 
         (el as HTMLElement).style.borderRadius = '2px';
     });
 }
@@ -153,15 +167,17 @@ function clearHighlight() {
     });
 }
 
-// Watch for content to hydrate
-import { nextTick, watch } from 'vue';
-watch(() => props.article?.body, async () => {
+const currentSelectionSids = ref<Set<string>>(new Set());
+const currentSelectedWord = ref<string>('');
+
+// Watch for content to hydrate and reset selection
+watch(() => props.article, async () => {
+    currentSelectionSids.value.clear();
+    currentSelectedWord.value = '';
+    emit('selection', { word: '', sentences: [] });
     await nextTick();
     hydrateSentences();
 }, { immediate: true, deep: true });
-
-
-const currentSelectionSids = ref<Set<string>>(new Set());
 
 function handleSelectionEvent(event: Event) {
     const selection = window.getSelection();
@@ -198,6 +214,7 @@ function handleSelectionEvent(event: Event) {
 
         if (sentences.length > 0) {
             currentSelectionSids.value = uniqueSids;
+            currentSelectedWord.value = '';
             // Detect if a single word is selected separately? 
             // If dragging across sentences, 'word' is usually N/A.
             emit('selection', { word: '', sentences });
@@ -210,6 +227,7 @@ function handleSelectionEvent(event: Event) {
             const sentence = identifySentence(event.target as HTMLElement, text, true);
             emit('selection', { word: '', sentences: [sentence] });
             currentSelectionSids.value.clear(); 
+            currentSelectedWord.value = '';
             return;
         }
     }
@@ -234,15 +252,28 @@ function handleSelectionEvent(event: Event) {
                 word = s.toString().trim();
              }
              
+             const detectedWord = (word && /^[a-zA-Z\-'’]+$/.test(word)) ? word : '';
+
+             // TOGGLE LOGIC: If same word and same sentence, clear.
+             if (detectedWord && detectedWord === currentSelectedWord.value && currentSelectionSids.value.has(sid)) {
+                 currentSelectionSids.value.clear();
+                 currentSelectedWord.value = '';
+                 emit('selection', { word: '', sentences: [] });
+                 // Clear browser selection to remove blue highlight
+                 selection.removeAllRanges();
+                 return;
+             }
+
              const sentenceFn = identifySentence(target, fullText, true);
              const sentenceObj = { ...sentenceFn, sid };
 
              emit('selection', { 
-                 word: (word && /^[a-zA-Z\-'’]+$/.test(word)) ? word : '', 
+                 word: detectedWord, 
                  sentences: [sentenceObj]
              });
              
              currentSelectionSids.value = new Set([sid]);
+             currentSelectedWord.value = detectedWord;
              return;
         }
     }
@@ -250,6 +281,7 @@ function handleSelectionEvent(event: Event) {
     // Clear state if clicking empty space
     if (selection.isCollapsed && !entity) {
         currentSelectionSids.value.clear();
+        currentSelectedWord.value = '';
         emit('selection', { word: '', sentences: [] });
     }
 }
