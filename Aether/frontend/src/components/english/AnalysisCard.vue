@@ -159,10 +159,72 @@
                     </div>
                 </div>
 
-                <!-- Case C: No Word Selected (Sentence Only) -->
-                <div v-else-if="!displayWord && activeSentence" class="text-center py-8 opacity-50">
-                    <i class="ri-hand-coin-line text-4xl mb-2 block"></i>
-                    <p class="text-sm">Click any word in the sentence above to analyze it.</p>
+                <!-- Case C: No Word Selected (Sentence Only) or Shared Sentence Context -->
+                <div v-if="activeSentence" class="space-y-6 pt-4 border-t border-gray-100 animate-fade-in-up">
+                    
+                    <!-- Header -->
+                    <div class="flex items-center justify-between">
+                         <div class="text-xs font-bold uppercase tracking-widest text-gray-400">Sentence Analysis</div>
+                         <button 
+                            @click="toggleEditMode" 
+                            class="text-xs font-bold uppercase tracking-widest transition-colors"
+                            :class="isEditMode ? 'text-red-500 hover:text-red-700' : 'text-gray-400 hover:text-indigo-600'"
+                         >
+                            <i :class="isEditMode ? 'ri-close-line' : 'ri-edit-2-line'"></i> {{ isEditMode ? 'Cancel Edit' : 'Edit Text' }}
+                         </button>
+                    </div>
+
+                    <!-- SMART EDIT MODE -->
+                    <div v-if="isEditMode" class="bg-red-50 p-4 rounded-lg border border-red-100 space-y-3">
+                        <div class="flex items-center gap-2 text-red-600 text-xs font-bold uppercase tracking-wider">
+                            <i class="ri-alert-line"></i> Careful: Changing text migrates comments
+                        </div>
+                        <textarea 
+                            v-model="editModeText"
+                            class="w-full text-lg p-3 bg-white border border-red-200 rounded-lg text-gray-900 focus:outline-none focus:border-red-400 resize-none font-serif leading-relaxed"
+                            rows="4"
+                        ></textarea>
+                        <button 
+                            @click="saveSmartEdit"
+                            :disabled="saving"
+                            class="w-full py-2 bg-red-600 text-white rounded-lg text-sm font-bold hover:bg-red-700 transition-all shadow-sm"
+                        >
+                            Confirm Text Change
+                        </button>
+                    </div>
+
+                    <!-- ANNOTATION MODE (Normal) -->
+                    <div v-else class="space-y-4">
+                        <!-- Translation -->
+                        <div class="space-y-1">
+                            <label class="text-xs text-gray-400 font-medium ml-1">Translation</label>
+                            <div class="relative group">
+                                <textarea 
+                                    v-model="localTranslation"
+                                    class="w-full text-base p-3 bg-gray-50 border border-transparent hover:bg-white hover:border-gray-200 focus:bg-white focus:border-indigo-300 rounded-lg text-gray-800 focus:outline-none resize-none transition-all"
+                                    rows="2"
+                                    placeholder="Add translation..."
+                                    @blur="autoSaveAnnotation"
+                                ></textarea>
+                                <div class="absolute right-2 bottom-2 text-xs text-gray-300 pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity">
+                                    Auto-saves on blur
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Note -->
+                        <div class="space-y-1">
+                            <label class="text-xs text-gray-400 font-medium ml-1">Notes</label>
+                            <textarea 
+                                v-model="localNote"
+                                class="w-full text-sm p-3 bg-gray-50 border border-transparent hover:bg-white hover:border-gray-200 focus:bg-white focus:border-indigo-300 rounded-lg text-gray-600 focus:outline-none resize-none transition-all"
+                                rows="3"
+                                placeholder="Add grammar notes or comments..."
+                                @blur="autoSaveAnnotation"
+                            ></textarea>
+                        </div>
+                    </div>
+
                 </div>
 
             </div>
@@ -179,9 +241,11 @@ import { MessagePlugin } from 'tdesign-vue-next';
 
 interface SentenceItem {
     text: string;
-    uuid: string; // Backend UUID
+    uuid: string; // Backend UUID or Hash
     articleId: string;
-    sid?: string; // DOM ID
+    sid?: string; // DOM ID (Hash)
+    translation?: string;
+    note?: string;
 }
 
 const props = defineProps<{
@@ -190,16 +254,22 @@ const props = defineProps<{
     focusSid?: string | null;
 }>();
 
-const emit = defineEmits(['view-details', 'update-word']);
+const emit = defineEmits(['view-details', 'update-word', 'save-annotation', 'update-text']);
 
 const store = useVocabularyStore();
 const existingVocab = ref<any>(null);
 const loading = ref(false);
 const saving = ref(false);
 
-// Local Example Editing State
+// Local Example Editing State (For Word-Sentence Link)
 const exampleTranslation = ref('');
 const exampleNote = ref('');
+
+// Local Sentence Annotation State (For Sentence Itself)
+const localTranslation = ref('');
+const localNote = ref('');
+const isEditMode = ref(false);
+const editModeText = ref('');
 
 // Carousel State
 const activeIndex = ref(0);
@@ -227,6 +297,21 @@ watch(() => props.sentences, (newVal, oldVal) => {
     }
 }, { deep: true });
 
+const activeSentence = computed(() => {
+    if (!props.sentences || props.sentences.length === 0) return null;
+    return props.sentences[activeIndex.value];
+});
+
+// Watch activeSentence to hydrate annotation inputs
+watch(activeSentence, (newVal) => {
+    if (newVal) {
+        localTranslation.value = newVal.translation || '';
+        localNote.value = newVal.note || '';
+        editModeText.value = newVal.text || '';
+        isEditMode.value = false; // Reset edit mode on switch
+    }
+}, { immediate: true });
+
 // Check if current sentence is already an example
 const currentExample = computed(() => {
     if (!existingVocab.value || !activeSentence.value) return null;
@@ -250,36 +335,24 @@ const exampleChanged = computed(() => {
            exampleNote.value !== (currentExample.value.note || '');
 });
 
-const activeSentence = computed(() => {
-    if (!props.sentences || props.sentences.length === 0) return null;
-    return props.sentences[activeIndex.value];
-});
-
 const activeTotal = computed(() => props.sentences?.length || 0);
 
 // Simple Tokenizer for Interactive Sentence
 const interactiveTokens = computed(() => {
     if (!activeSentence.value) return [];
-    // Split by spaces but keep punctuation attached visually or split?
-    // Easiest for "Word Click" is to split by whitespace types.
     const raw = activeSentence.value.text.split(' ');
-    // Better tokenizer might be needed eventually, but split(' ') is okay for MVP.
     return raw.map(t => {
-        // Strip punctuation for "clean" word
         const clean = t.replace(/^[^\w]+|[^\w]+$/g, '');
         return {
-            raw: t, // "hello,"
-            clean: clean // "hello"
+            raw: t, 
+            clean: clean
         };
     });
 });
 
 function handleWordClick(clickedWord: string) {
     if (!clickedWord) return;
-    // Update local word -> Triggers fetch
     localWord.value = clickedWord;
-    // Tell parent to update the "Word" prop or just use local? 
-    // Emitting allows parent to sync if needed (e.g. highlights)
     emit('update-word', clickedWord);
 }
 
@@ -291,7 +364,7 @@ watch(displayWord, (newWord) => {
 
 // Also watch prop word changes to reset local override
 watch(() => props.word, (val) => {
-    if (val) localWord.value = ''; // Reset local selection when parent selection changes
+    if (val) localWord.value = ''; 
 });
 
 function nextSlide() {
@@ -311,7 +384,6 @@ const fetchData = async (w: string) => {
     try {
         existingVocab.value = await store.searchWord(w);
     } catch (e) {
-        // console.error(e);
         existingVocab.value = null;
     } finally {
         loading.value = false;
@@ -328,7 +400,6 @@ async function saveExample() {
             article_id: activeSentence.value.articleId,
             sentence_uuid: activeSentence.value.uuid
         });
-        // Refresh local data to show 'Saved' state
         await fetchData(displayWord.value); 
         MessagePlugin.success('Example added to vocabulary!');
     } catch (e) {
@@ -344,20 +415,12 @@ async function updateExampleDetails() {
 
     saving.value = true;
     try {
-        // Clone the vocab object
         const updatedVocab = JSON.parse(JSON.stringify(existingVocab.value));
-        
-        // Find existing example index
         const idx = updatedVocab.examples.findIndex((e: any) => e.id === currentExample.value.id);
         if (idx !== -1) {
-            // Update fields
             updatedVocab.examples[idx].translation = exampleTranslation.value;
             updatedVocab.examples[idx].note = exampleNote.value;
-            
-            // Save Full Vocab
             await store.saveVocabulary(updatedVocab);
-            
-            // Refresh
             await fetchData(displayWord.value);
             MessagePlugin.success('Example updated!');
         }
@@ -370,7 +433,6 @@ async function updateExampleDetails() {
 }
 
 function createNewVocab() {
-    // Open Modal in Create Mode (pass word)
     emit('view-details', { 
         word: displayWord.value, 
         initialSentence: activeSentence.value?.text,
@@ -380,12 +442,50 @@ function createNewVocab() {
 
 function refresh(newWord?: string) {
     if (newWord) {
-        // Force update local word to match what was saved
-        console.log('[AnalysisCard] Refreshing with new word:', newWord);
         handleWordClick(newWord);
     } else {
         if (displayWord.value) fetchData(displayWord.value);
     }
+}
+
+// --- Sentence Annotation Logic ---
+
+function autoSaveAnnotation() {
+    if (!activeSentence.value) return;
+    // Check if changed
+    if (localTranslation.value === activeSentence.value.translation && 
+        localNote.value === activeSentence.value.note) {
+        return;
+    }
+
+    emit('save-annotation', {
+        sid: activeSentence.value.sid,
+        hash: activeSentence.value.sid, // SID is Hash now
+        translation: localTranslation.value,
+        note: localNote.value
+    });
+}
+
+function toggleEditMode() {
+    isEditMode.value = !isEditMode.value;
+    if (isEditMode.value && activeSentence.value) {
+        editModeText.value = activeSentence.value.text;
+    }
+}
+
+function saveSmartEdit() {
+    if (!activeSentence.value) return;
+    if (!editModeText.value.trim()) {
+        MessagePlugin.warning("Text cannot be empty");
+        return;
+    }
+    
+    emit('update-text', {
+        oldText: activeSentence.value.text,
+        newText: editModeText.value,
+        oldHash: activeSentence.value.sid // SID is old Hash
+    });
+    isEditMode.value = false;
 }
 
 defineExpose({ refresh });
@@ -412,4 +512,5 @@ defineExpose({ refresh });
     animation: fadeInUp 0.3s ease-out forwards;
 }
 </style>
+
 
