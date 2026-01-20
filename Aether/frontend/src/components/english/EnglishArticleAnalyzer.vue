@@ -30,7 +30,7 @@ const props = defineProps<{
     article: any; 
 }>();
 
-const emit = defineEmits(['selection']);
+const emit = defineEmits(['selection', 'focus-change']);
 
 const navStore = useNavigationStore();
 const containerRef = ref<HTMLElement | null>(null);
@@ -105,8 +105,8 @@ function hydrateSentences() {
                 span.style.cursor = 'pointer';
                 span.style.transition = 'background 0.2s, color 0.2s';
                 
-                // Add Hover Listeners via JS for "Group Highlight"
-                span.addEventListener('mouseenter', () => highlightGroup(span.dataset.sid!));
+                // Add Hover Listeners via JS for "Group Highlight" & Focus Switch
+                span.addEventListener('mouseenter', () => handleEntityHover(span.dataset.sid!));
                 span.addEventListener('mouseleave', () => clearHighlight());
                 
                 fragment.appendChild(span);
@@ -129,7 +129,7 @@ function hydrateSentences() {
              span.className = 'sentence-entity';
              span.dataset.sid = currentSentenceId;
              span.textContent = text;
-             span.addEventListener('mouseenter', () => highlightGroup(span.dataset.sid!));
+             span.addEventListener('mouseenter', () => handleEntityHover(currentSentenceId));
              span.addEventListener('mouseleave', () => clearHighlight());
              node.parentNode?.replaceChild(span, node);
         }
@@ -161,34 +161,66 @@ watch(() => props.article?.body, async () => {
 }, { immediate: true, deep: true });
 
 
-function handleSelectionEvent(event: Event) {
-    console.log('handleSelectionEvent triggered on:', event.target);
-    const selection = window.getSelection();
-    if (!selection) {
-        console.log('No selection object found');
-        return;
-    }
-    console.log('Selection:', selection.toString(), 'Collapsed:', selection.isCollapsed);
+const currentSelectionSids = ref<Set<string>>(new Set());
 
-    // A. Explicit Selection (Drag) - Preserved
+function handleSelectionEvent(event: Event) {
+    const selection = window.getSelection();
+    if (!selection) return;
+
+    // A. Explicit Selection (Range)
     if (!selection.isCollapsed) {
+        const range = selection.getRangeAt(0);
+        const container = containerRef.value;
+        if (!container) return;
+
+        // Find all sentence entities in container that are touched by selection
+        const entities = Array.from(container.querySelectorAll('.sentence-entity'));
+        const selectedEntities = entities.filter(entity => selection.containsNode(entity, true));
+
+        const uniqueSids = new Set<string>();
+        const sentences: any[] = [];
+
+        selectedEntities.forEach(entity => {
+            const el = entity as HTMLElement;
+            const sid = el.dataset.sid;
+            if (sid && !uniqueSids.has(sid)) {
+                uniqueSids.add(sid);
+                const group = container.querySelectorAll(`[data-sid="${sid}"]`);
+                let fullText = '';
+                group.forEach(g => fullText += g.textContent);
+                
+                const sentenceData = identifySentence(el, fullText, true);
+                if (sentenceData) {
+                    sentences.push({ ...sentenceData, sid }); // Attach SID for focus matching
+                }
+            }
+        });
+
+        if (sentences.length > 0) {
+            currentSelectionSids.value = uniqueSids;
+            // Detect if a single word is selected separately? 
+            // If dragging across sentences, 'word' is usually N/A.
+            emit('selection', { word: '', sentences });
+            return;
+        }
+        
+        // Fallback for non-entity text selection
         const text = selection.toString().trim();
         if (text.length > 0) {
             const sentence = identifySentence(event.target as HTMLElement, text, true);
-            emit('selection', { word: '', sentence }); 
+            emit('selection', { word: '', sentences: [sentence] });
+            currentSelectionSids.value.clear(); 
             return;
         }
     }
 
-    // B. Entity Click (Preferred)
+    // B. Entity Click (Collapsed) - Single Sentence Focus
     const target = event.target as HTMLElement;
     const entity = target.closest('.sentence-entity') as HTMLElement;
     
     if (entity && selection.isCollapsed) {
-        // User clicked a sentence entity
         const sid = entity.dataset.sid;
         if (sid) {
-            // Collect full text of this sentence group
              const group = containerRef.value?.querySelectorAll(`[data-sid="${sid}"]`);
              let fullText = '';
              group?.forEach(el => fullText += el.textContent);
@@ -197,31 +229,39 @@ function handleSelectionEvent(event: Event) {
              let word = '';
              const s = window.getSelection();
              if (s && s.modify) {
-                // Expand selection to word boundary to capture the clicked word
                 s.modify('move', 'backward', 'word');
                 s.modify('extend', 'forward', 'word');
                 word = s.toString().trim();
              }
              
-             const sentenceFn = identifySentence(target, fullText, true); // Use full sentence text
+             const sentenceFn = identifySentence(target, fullText, true);
+             const sentenceObj = { ...sentenceFn, sid };
+
+             emit('selection', { 
+                 word: (word && /^[a-zA-Z\-'’]+$/.test(word)) ? word : '', 
+                 sentences: [sentenceObj]
+             });
              
-             // Emit based on what we found
-             console.log('Emitting selection:', { word, sentence: sentenceFn });
-             // If valid word, emit word AND sentence
-             if (word && /^[a-zA-Z\-'’]+$/.test(word)) {
-                 emit('selection', { word, sentence: sentenceFn });
-             } else {
-                 // Just sentence (clicked whitespace in sentence)
-                 emit('selection', { word: '', sentence: sentenceFn });
-             }
+             currentSelectionSids.value = new Set([sid]);
              return;
-        } else {
-             console.log('No data-sid on entity');
         }
-    } else {
-        console.log('Not an entity click or selection not collapsed');
+    }
+    
+    // Clear state if clicking empty space
+    if (selection.isCollapsed && !entity) {
+        currentSelectionSids.value.clear();
+        emit('selection', { word: '', sentences: [] });
     }
 }
+
+// Hover Handling for Focus Switch
+// We attach this to the hydrator
+const handleEntityHover = (sid: string) => {
+    if (currentSelectionSids.value.has(sid)) {
+        emit('focus-change', sid);
+    }
+    highlightGroup(sid);
+};
 
 function identifySentence(target: HTMLElement, textToMatch: string, isDirectSelection = false) {
     // Simplest: Just use the paragraph text
