@@ -11,10 +11,13 @@ pub struct SentenceData {
     pub hash: String,
     pub text: String,
     pub start_idx: usize,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SentenceMap {
+    #[serde(rename = "sentence_map")]
     pub map: HashMap<Uuid, SentenceData>,
 }
 
@@ -27,11 +30,16 @@ impl SentenceParser {
         
         let mut old_hashes: HashMap<String, Uuid> = HashMap::new();
         let mut old_texts: Vec<(Uuid, String)> = Vec::new();
+        // Lookup for metadata preservation
+        let mut old_data_map: HashMap<Uuid, serde_json::Value> = HashMap::new();
 
         if let Some(om) = old_map {
             for (uuid, data) in &om.map {
                 old_hashes.insert(data.hash.clone(), *uuid);
                 old_texts.push((*uuid, data.text.clone()));
+                if let Some(meta) = &data.metadata {
+                    old_data_map.insert(*uuid, meta.clone());
+                }
             }
         }
 
@@ -45,6 +53,7 @@ impl SentenceParser {
                     hash: hash.clone(),
                     text: sentence_text,
                     start_idx,
+                    metadata: old_data_map.get(uuid).cloned(),
                 });
                 continue;
             }
@@ -78,11 +87,18 @@ impl SentenceParser {
                 Uuid::new_v4()
             };
 
+            let metadata = if let Some(uuid) = best_match_uuid {
+                old_data_map.get(&uuid).cloned()
+            } else {
+                None
+            };
+
             new_map.insert(final_uuid, SentenceData {
                 uuid: final_uuid,
                 hash,
                 text: sentence_text,
                 start_idx,
+                metadata,
             });
         }
 
