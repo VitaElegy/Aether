@@ -5,6 +5,7 @@ import { useDebounceFn } from '@vueuse/core';
 import { dictionaryApi, type DictionaryEntry } from '@/api/dictionary';
 import axios from 'axios';
 import ArticleAnalysisModule from './ArticleAnalysisModule.vue';
+import VocabDetailModal from './VocabDetailModal.vue';
 
 interface VocabularyExample {
     id?: string;
@@ -595,6 +596,17 @@ const goBack = () => {
     history.back();
 };
 
+// --- Detail Modal Logic ---
+const detailModalVisible = ref(false);
+const detailModalWord = ref('');
+const detailModalData = ref<any>(null);
+
+const handleViewDetailsFromArticle = (payload: any) => {
+    console.log("Opening Modal with:", payload);
+    detailModalWord.value = payload.word;
+    detailModalData.value = payload; // Can contain initialSentence or full vocab object
+    detailModalVisible.value = true;
+};
 </script>
 
 <template>
@@ -1211,6 +1223,14 @@ const goBack = () => {
         </Transition>
 
 
+    <!-- Restored Detail Modal -->
+    <VocabDetailModal
+        v-model:visible="detailModalVisible"
+        :initial-word="detailModalWord"
+        :initial-sentence="detailModalData?.initialSentence"
+        :initial-data="detailModalData"
+        @refresh="fetchVocabularyList"
+    />
     </div>
 </template>
 

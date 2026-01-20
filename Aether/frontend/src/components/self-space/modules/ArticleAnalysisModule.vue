@@ -1,12 +1,12 @@
-
 <script setup lang="ts">
-import { ref, onMounted, computed, watch, onUnmounted } from 'vue';
+import { ref, onMounted, computed, watch, onUnmounted, reactive } from 'vue';
 import axios from 'axios';
 import { useDebounceFn } from '@vueuse/core';
 import { MessagePlugin } from 'tdesign-vue-next';
 import EnglishArticleAnalyzer from '@/components/english/EnglishArticleAnalyzer.vue';
 import EnglishEditor from '@/components/english/EnglishEditor.vue';
 import AnalysisCard from '@/components/english/AnalysisCard.vue';
+import VocabDetailModal from '@/components/self-space/modules/VocabDetailModal.vue';
 
 const props = defineProps<{
     headless?: boolean;
@@ -47,14 +47,49 @@ const editorForm = ref({
 // Reader State
 const currentArticle = ref<EnglishArticle | null>(null);
 // const showHistory = ref(false); // Removed History for now to focus on layout
-const analysisSelection = ref({
+const analysisSelection = reactive({
     word: '',
-    sentence: undefined as any
+    sentences: [] as any[],
+    focusSid: null as string | null
 });
 
-const handleSelection = (payload: any) => {
-    analysisSelection.value = payload;
-};
+// Vocab Modal State
+const showVocabModal = ref(false);
+const modalWord = ref('');
+const modalSentence = ref('');
+
+function handleSelection(data: { word: string, sentences: any[] }) {
+    console.log('Selection Update:', data);
+    analysisSelection.word = data.word;
+    analysisSelection.sentences = data.sentences || [];
+    // Default focus to first sentence if list changes
+    if (analysisSelection.sentences.length > 0) {
+        analysisSelection.focusSid = analysisSelection.sentences[0].sid;
+    } else {
+        analysisSelection.focusSid = null;
+    }
+}
+
+function handleFocusChange(sid: string) {
+    if (analysisSelection.sentences.some((s: any) => s.sid === sid)) {
+        analysisSelection.focusSid = sid;
+    }
+}
+
+function handleViewDetails(payload: any) {
+    // Open Modal logic
+    modalWord.value = payload.word;
+    modalSentence.value = payload.initialSentence || '';
+    showVocabModal.value = true;
+}
+
+function handleWordUpdate(word: string) {
+    // Sync local word up to parent if needed, for instance if we want to show 
+    // it in standard layout or just to keep state clean.
+    // This allows the Card's internal click to act almost like a main text selection
+    // without resetting the whole selection state (sentences stay active).
+    analysisSelection.word = word;
+}
 
 // --- API ---
 const authStore = useAuthStore();
@@ -465,6 +500,7 @@ const filteredArticles = computed(() => {
                         <EnglishArticleAnalyzer 
                             :article="currentArticle" 
                             @selection="handleSelection"
+                            @focus-change="handleFocusChange"
                         />
                     </div>
                 </div>
@@ -474,11 +510,22 @@ const filteredArticles = computed(() => {
                     <div class="absolute inset-0 overflow-y-auto p-6">
                         <AnalysisCard 
                             :word="analysisSelection.word"
-                            :sentence="analysisSelection.sentence"
+                            :sentences="analysisSelection.sentences"
+                            :focus-sid="analysisSelection.focusSid"
+                            @view-details="handleViewDetails"
+                            @update-word="handleWordUpdate"
                         />
                     </div>
                  </aside>
             </div>
+            
+            <!-- Vocab Modal -->
+            <VocabDetailModal 
+                v-model:visible="showVocabModal"
+                :initial-word="modalWord"
+                :initial-sentence="modalSentence"
+                @refresh="() => {}" 
+            />
         </div>
     </div>
 </template>
