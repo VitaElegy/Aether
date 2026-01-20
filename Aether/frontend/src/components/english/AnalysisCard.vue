@@ -80,6 +80,9 @@
                         <span v-if="existingVocab.query_count > 0" class="px-2 py-0.5 rounded bg-amber-50 text-amber-600 text-xs font-medium border border-amber-100 flex items-center gap-1">
                             <i class="ri-fire-line"></i> {{ existingVocab.query_count }}
                         </span>
+                        <button @click="createNewVocab" class="ml-auto px-2 py-1 rounded hover:bg-gray-100 text-gray-400 hover:text-indigo-600 transition-colors text-xs uppercase font-bold tracking-wider" title="Edit Entry">
+                            <i class="ri-edit-line"></i> Edit
+                        </button>
                     </div>
 
                     <!-- Connect Sentence Action / Editor -->
@@ -370,9 +373,22 @@ function createNewVocab() {
     // Open Modal in Create Mode (pass word)
     emit('view-details', { 
         word: displayWord.value, 
-        initialSentence: activeSentence.value?.text 
+        initialSentence: activeSentence.value?.text,
+        articleId: activeSentence.value?.articleId
     });
 }
+
+function refresh(newWord?: string) {
+    if (newWord) {
+        // Force update local word to match what was saved
+        console.log('[AnalysisCard] Refreshing with new word:', newWord);
+        handleWordClick(newWord);
+    } else {
+        if (displayWord.value) fetchData(displayWord.value);
+    }
+}
+
+defineExpose({ refresh });
 </script>
 
 <style scoped>
