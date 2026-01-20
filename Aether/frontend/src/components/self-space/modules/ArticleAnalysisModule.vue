@@ -28,6 +28,7 @@ interface EnglishArticle {
     category: string;
     body: ArticleMeta; // We store JSON in the body string
     author_name?: string;
+    derived_data?: any;
 }
 
 // --- State ---
@@ -57,18 +58,6 @@ const analysisSelection = reactive({
 const showVocabModal = ref(false);
 const modalWord = ref('');
 const modalSentence = ref('');
-
-function handleSelection(data: { word: string, sentences: any[] }) {
-    console.log('Selection Update:', data);
-    analysisSelection.word = data.word;
-    analysisSelection.sentences = data.sentences || [];
-    // Default focus to first sentence if list changes
-    if (analysisSelection.sentences.length > 0) {
-        analysisSelection.focusSid = analysisSelection.sentences[0].sid;
-    } else {
-        analysisSelection.focusSid = null;
-    }
-}
 
 function handleFocusChange(sid: string) {
     if (analysisSelection.sentences.some((s: any) => s.sid === sid)) {
@@ -300,8 +289,159 @@ const editArticle = (article: EnglishArticle) => {
 
 import { useNavigationStore } from '@/stores/navigation';
 import { useAuthStore } from '@/stores/auth';
+import { generateContentHash, migrateSentenceMap } from '@/utils/text-anchoring';
 
 const navStore = useNavigationStore();
+
+
+const handleSelection = (data: { word: string, sentences: any[] }) => {
+    // console.log('Selection Update:', data);
+    
+    // Backend returns { sentence_map: { ... } } inside derived_data
+    const map = currentArticle.value?.derived_data?.sentence_map || {};
+    
+    const enrichedSentences = data.sentences.map(s => {
+        const sid = s.sid || '';
+        const baseHash = sid.split('-')[0];
+        
+        // Find entry with this hash
+        let annotation = null;
+        for (const key in map) {
+            if (map[key].hash === baseHash) {
+                const meta = map[key].metadata || {};
+                annotation = {
+                    translation: meta.translation,
+                    note: meta.note
+                };
+                break;
+            }
+        }
+        
+        if (annotation) {
+            return {
+                ...s,
+                translation: annotation.translation,
+                note: annotation.note
+            };
+        }
+        return s;
+    });
+
+    analysisSelection.word = data.word;
+    analysisSelection.sentences = enrichedSentences || [];
+    
+    if (analysisSelection.sentences.length > 0) {
+        analysisSelection.focusSid = analysisSelection.sentences[0].sid;
+    } else {
+        analysisSelection.focusSid = null;
+    }
+};
+
+const handleSaveAnnotation = async (payload: any) => {
+    if (!currentArticle.value) return;
+
+    const article = currentArticle.value;
+    // Ensure structure
+    if (!article.derived_data) article.derived_data = {};
+    if (!article.derived_data.sentence_map) article.derived_data.sentence_map = {};
+
+    const baseHash = payload.sid.split('-')[0];
+    const map = article.derived_data.sentence_map;
+    
+    // Find UUID for this Hash
+    let targetUuid = null;
+    let targetEntry = null;
+    
+    for (const key in map) {
+         if (map[key].hash === baseHash) {
+             targetUuid = key;
+             targetEntry = map[key];
+             break;
+         }
+    }
+    
+    if (targetUuid && targetEntry) {
+        // Update metadata
+        targetEntry.metadata = {
+            ...(targetEntry.metadata || {}),
+            translation: payload.translation,
+            note: payload.note,
+            updated_at: new Date().toISOString()
+        };
+        map[targetUuid] = targetEntry;
+    } else {
+        console.warn('Sentence UUID not found for hash:', baseHash);
+    }
+
+    // Auto-Save Draft
+    try {
+        await axios.post(`/api/drafts/${article.id}`, {
+            title: article.title,
+            body: article.body,
+            derived_data: article.derived_data
+        });
+    } catch (e) {
+        console.error('[ArticleAnalysis] Failed to save annotation', e);
+        MessagePlugin.error('Failed to save annotation');
+    }
+};
+
+const handleUpdateText = async (payload: any) => {
+    const { oldText, newText, oldHash } = payload;
+    if (!currentArticle.value) return;
+    
+    const article = currentArticle.value;
+    const currentText = article.body.text;
+    
+    // 1. Locate and Replace Text
+    let occurrence = 0;
+    if (oldHash && oldHash.includes('-')) {
+        const parts = oldHash.split('-');
+        const possibleIdx = parseInt(parts[parts.length - 1], 10);
+        if (!isNaN(possibleIdx)) occurrence = possibleIdx;
+    }
+
+    let pos = -1;
+    for (let i = 0; i <= occurrence; i++) {
+        pos = currentText.indexOf(oldText, pos + 1);
+        if (pos === -1) break; 
+    }
+    
+    if (pos === -1) {
+        pos = currentText.indexOf(oldText);
+    }
+
+    if (pos !== -1) {
+        const pre = currentText.substring(0, pos);
+        const post = currentText.substring(pos + oldText.length);
+        const newBodyText = pre + newText + post;
+        
+        article.body.text = newBodyText;
+        
+        // 2. Metadata Migration relies on Backend Fuzzy Match now!
+        // We only update the body and let Backend handle metadata migration.
+        
+        // 3. Save
+        try {
+            await axios.post(`/api/drafts/${article.id}`, {
+                title: article.title,
+                body: article.body,
+                derived_data: article.derived_data // Pass current data so backend has old_map
+            });
+            MessagePlugin.success('Text updated');
+            
+            // Clean selection
+            analysisSelection.sentences = [];
+            analysisSelection.word = '';
+            
+        } catch (e) {
+            console.error('[ArticleAnalysis] Failed to save text update', e);
+            MessagePlugin.error('Failed to update text');
+        }
+    } else {
+        MessagePlugin.error('Could not find original text to replace. It may have changed.');
+    }
+};
 
 // --- Lifecycle ---
 onMounted(() => {
@@ -527,6 +667,8 @@ const filteredArticles = computed(() => {
                             :focus-sid="analysisSelection.focusSid"
                             @view-details="handleViewDetails"
                             @update-word="handleWordUpdate"
+                            @save-annotation="handleSaveAnnotation"
+                            @update-text="handleUpdateText"
                         />
                     </div>
                  </aside>
