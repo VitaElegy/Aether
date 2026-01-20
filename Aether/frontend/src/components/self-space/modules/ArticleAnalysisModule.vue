@@ -76,20 +76,32 @@ function handleFocusChange(sid: string) {
     }
 }
 
+const modalContext = ref<any>(null);
+
 function handleViewDetails(payload: any) {
     // Open Modal logic
     modalWord.value = payload.word;
     modalSentence.value = payload.initialSentence || '';
+    
+    // Pass context (Article ID/Title)
+    modalContext.value = {
+        articleId: payload.articleId || currentArticle.value?.id,
+        articleTitle: currentArticle.value?.title
+    };
+    
     showVocabModal.value = true;
 }
 
 function handleWordUpdate(word: string) {
-    // Sync local word up to parent if needed, for instance if we want to show 
-    // it in standard layout or just to keep state clean.
-    // This allows the Card's internal click to act almost like a main text selection
-    // without resetting the whole selection state (sentences stay active).
     analysisSelection.word = word;
 }
+
+// Refresh child card when modal saves
+const analysisCardRef = ref<any>(null);
+const handleVocabRefresh = (newWord?: string) => {
+    console.log("Refreshing Analysis Card with:", newWord);
+    analysisCardRef.value?.refresh(newWord);
+};
 
 // --- API ---
 const authStore = useAuthStore();
@@ -509,6 +521,7 @@ const filteredArticles = computed(() => {
                  <aside class="w-96 border-l border-gray-200 bg-white h-full relative z-30 flex-shrink-0">
                     <div class="absolute inset-0 overflow-y-auto p-6">
                         <AnalysisCard 
+                            ref="analysisCardRef"
                             :word="analysisSelection.word"
                             :sentences="analysisSelection.sentences"
                             :focus-sid="analysisSelection.focusSid"
@@ -524,7 +537,8 @@ const filteredArticles = computed(() => {
                 v-model:visible="showVocabModal"
                 :initial-word="modalWord"
                 :initial-sentence="modalSentence"
-                @refresh="() => {}" 
+                :initial-context="modalContext"
+                @refresh="handleVocabRefresh" 
             />
         </div>
     </div>
