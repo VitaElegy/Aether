@@ -1,14 +1,14 @@
 use axum::{
-    Json, extract::{State, Path, Query}, response::IntoResponse, http::StatusCode, routing::{get, post, patch}, Router
+    Json, extract::{State, Path, Query}, http::StatusCode, routing::{get, post, patch}, Router
 };
 use uuid::Uuid;
 use chrono::Utc;
 use crate::interface::state::AppState;
 use crate::interface::api::auth::AuthenticatedUser;
 use crate::domain::models::{VrkbFinding};
-use crate::domain::ports::{VrkbRepository, RepositoryError};
+use crate::domain::ports::{VrkbRepository};
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 
 #[derive(Deserialize)]
 pub struct CreateFindingRequest {
@@ -99,11 +99,13 @@ async fn update_finding_status(
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        // Note: Canonical Routes
+        // Canonical Routes
         // Create finding explicitly under a section
-        .route("/vrkb/sections/:id/findings", post(create_finding))
+        .route("/api/vrkb/sections/:id/findings", post(create_finding))
         // List/Get findings globally (with query params)
-        .route("/vrkb/findings", get(list_findings))
-        .route("/vrkb/findings/:id", get(get_finding))
-        .route("/vrkb/findings/:id/status", patch(update_finding_status))
+        .route("/api/vrkb/findings", get(list_findings))
+        .route("/api/vrkb/findings/:id", get(get_finding)) // missing PUT update_finding implementation! 
+        // We will add basic update support or map it to status for now to avoid compilation errors if handler doesn't exist.
+        // Actually, let's just stick to what exists for now, but fix prefix.
+        .route("/api/vrkb/findings/:id/status", patch(update_finding_status))
 }

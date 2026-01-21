@@ -1,14 +1,14 @@
 use axum::{
-    Json, extract::{State, Path}, response::IntoResponse, http::StatusCode, routing::{get, post}, Router
+    Json, extract::{State, Path}, http::StatusCode, routing::{get}, Router
 };
 use uuid::Uuid;
 use chrono::Utc;
 use crate::interface::state::AppState;
 use crate::interface::api::auth::AuthenticatedUser;
 use crate::domain::models::{VrkbProject, VrkbSection};
-use crate::domain::ports::{VrkbRepository, RepositoryError};
+use crate::domain::ports::{VrkbRepository};
 use std::sync::Arc;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize};
 
 #[derive(Deserialize)]
 pub struct CreateProjectRequest {
@@ -110,7 +110,7 @@ async fn create_section(
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/vrkb/projects", get(list_projects).post(create_project))
-        .route("/vrkb/projects/:id", get(get_project))
-        .route("/vrkb/projects/:id/sections", get(list_sections).post(create_section))
+        .route("/api/vrkb/projects", get(list_projects).post(create_project))
+        .route("/api/vrkb/projects/:id", get(get_project))
+        .route("/api/vrkb/projects/:id/sections", get(list_sections).post(create_section))
 }

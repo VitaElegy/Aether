@@ -1,14 +1,14 @@
 use axum::{
     extract::{Multipart, State},
     http::StatusCode,
-    response::{IntoResponse, Json},
+    response::{Json},
     routing::post,
     Router,
 };
 use crate::interface::state::AppState;
 use crate::interface::api::auth::AuthenticatedUser;
 use crate::domain::models::VrkbAsset;
-use std::sync::Arc;
+
 
 async fn upload_asset(
     State(state): State<AppState>,
@@ -37,5 +37,5 @@ async fn upload_asset(
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/vrkb/assets", post(upload_asset))
+        .route("/api/vrkb/assets", post(upload_asset))
 }
