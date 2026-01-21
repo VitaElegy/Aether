@@ -1,7 +1,7 @@
 <template>
     <div class="h-full flex flex-col bg-paper">
         <!-- Top Toolbar / Navigation -->
-        <div class="flex items-center justify-between px-6 py-3 border-b border-ink/10 bg-ash/30 backdrop-blur-sm sticky top-0 z-10">
+        <div class="flex items-center justify-between px-6 py-3 border-b border-ink/10 bg-ash/30 backdrop-blur-sm sticky top-0 z-50">
             <div class="flex items-center gap-4">
                 <div class="flex items-center gap-2 text-ink/60 hover:text-ink cursor-pointer transition-colors">
                     <i class="ri-shield-keyhole-line text-lg"></i>
@@ -45,12 +45,16 @@ import { ref, computed } from 'vue';
 import ProjectList from './ProjectList.vue';
 import VulnerabilityKanban from './VulnerabilityKanban.vue';
 import VirtualFinder from './VirtualFinder.vue';
+import { useVrkbStore } from '@/stores/vrkb';
 
-const tabs = [
-    { id: 'projects', label: 'Projects' },
-    { id: 'dashboard', label: 'Dashboard' },
+const store = useVrkbStore();
+const currentProject = computed(() => store.currentProject);
+
+const tabs = computed(() => [
+    { id: 'projects', label: 'All Projects' },
+    { id: 'dashboard', label: currentProject.value ? currentProject.value.name : 'Dashboard' },
     { id: 'finder', label: 'Assets' }
-];
+]);
 
 const currentTab = ref('projects');
 

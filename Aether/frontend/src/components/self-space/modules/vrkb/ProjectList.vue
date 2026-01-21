@@ -55,33 +55,44 @@
         </div>
 
         <!-- Create Modal -->
-        <div v-if="showCreateModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
-            <div class="bg-paper-1 rounded-xl shadow-2xl w-full max-w-md p-6 border border-ink-border">
-                <h3 class="text-xl font-bold font-serif mb-4">Create Project</h3>
-                
-                <div class="space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-ink/70 mb-1">Project Name</label>
-                        <input v-model="newProjectName" type="text" class="w-full bg-paper/50 border border-ink/20 rounded-md px-3 py-2 text-ink focus:outline-none focus:border-accent transition-colors" placeholder="e.g. Linux Kernel Analysis" />
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-ink/70 mb-1">Repository URL (Optional)</label>
-                        <input v-model="newProjectRepo" type="text" class="w-full bg-paper/50 border border-ink/20 rounded-md px-3 py-2 text-ink focus:outline-none focus:border-accent transition-colors" placeholder="https://github.com/..." />
-                    </div>
-                </div>
+        <Transition name="fade">
+            <div v-if="showCreateModal" class="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 backdrop-blur-[4px]" @click.self="showCreateModal = false">
+                <Transition name="slide-up">
+                    <div class="bg-paper shadow-2xl w-full max-w-md border border-ash/20 rounded-xl overflow-hidden relative" v-if="showCreateModal">
+                         <!-- Close Button -->
+                        <button @click="showCreateModal = false" class="absolute top-4 right-4 p-2 text-ink/40 hover:text-ink transition-colors z-10 rounded-full hover:bg-black/5">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
 
-                <div class="flex justify-end gap-3 mt-8">
-                    <button @click="showCreateModal = false" class="text-ink/60 hover:text-ink px-4 py-2 hover:bg-paper/50 rounded-md transition-colors">Cancel</button>
-                    <button 
-                        @click="handleCreate" 
-                        :disabled="!newProjectName || creating"
-                        class="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90 transition-colors font-medium"
-                    >
-                        {{ creating ? 'Creating...' : 'Create Project' }}
-                    </button>
-                </div>
+                        <div class="p-8">
+                            <h3 class="text-2xl font-black font-serif text-ink tracking-tight mb-6">Create Project</h3>
+                            
+                            <div class="space-y-6">
+                                <div>
+                                    <label class="block text-[10px] font-black uppercase tracking-widest text-ink/40 mb-2">Project Name</label>
+                                    <input v-model="newProjectName" type="text" class="w-full bg-surface border border-ash/20 rounded-lg px-4 py-3 text-ink font-serif text-lg focus:outline-none focus:border-accent transition-colors placeholder-ink/20" placeholder="e.g. Linux Kernel Analysis" />
+                                </div>
+                                <div>
+                                    <label class="block text-[10px] font-black uppercase tracking-widest text-ink/40 mb-2">Repository URL <span class="text-ink/20">(Optional)</span></label>
+                                    <input v-model="newProjectRepo" type="text" class="w-full bg-surface border border-ash/20 rounded-lg px-4 py-3 text-ink font-mono text-sm focus:outline-none focus:border-accent transition-colors placeholder-ink/20" placeholder="https://github.com/..." />
+                                </div>
+                            </div>
+
+                            <div class="flex justify-end gap-3 mt-10 pt-6 border-t border-ash/10">
+                                <button @click="showCreateModal = false" class="text-ink/60 hover:text-ink px-4 py-2 hover:bg-surface rounded-lg transition-colors text-xs font-bold uppercase tracking-wider">Cancel</button>
+                                <button 
+                                    @click="handleCreate" 
+                                    :disabled="!newProjectName || creating"
+                                    class="bg-accent text-white px-6 py-2 rounded-lg shadow-lg shadow-accent/20 hover:shadow-accent/40 hover:-translate-y-0.5 transition-all font-bold text-xs uppercase tracking-wider disabled:opacity-50 disabled:translate-y-0"
+                                >
+                                    {{ creating ? 'Creating...' : 'Create Project' }}
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </Transition>
             </div>
-        </div>
+        </Transition>
     </div>
 </template>
 
@@ -105,8 +116,13 @@ onMounted(() => {
 });
 
 const openProject = async (id: string) => {
-    await store.selectProject(id);
-    switchTab('dashboard');
+    try {
+        await store.selectProject(id);
+        switchTab('dashboard');
+    } catch (e: any) {
+        console.error(e);
+        alert("Failed to open project: " + (e.response?.data?.message || e.message));
+    }
 };
 
 const handleCreate = async () => {
@@ -117,8 +133,9 @@ const handleCreate = async () => {
         showCreateModal.value = false;
         newProjectName.value = '';
         newProjectRepo.value = '';
-    } catch (e) {
+    } catch (e: any) {
         console.error(e);
+        alert("Failed to create project: " + (e.response?.data?.message || e.message));
     } finally {
         creating.value = false;
     }
@@ -138,4 +155,22 @@ const formatBytes = (bytes: number) => {
 </script>
 
 <style scoped>
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.2s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
+}
+
+.slide-up-enter-active,
+.slide-up-leave-active {
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.slide-up-enter-from,
+.slide-up-leave-to {
+  opacity: 0;
+  transform: translateY(20px) scale(0.98);
+}
 </style>
