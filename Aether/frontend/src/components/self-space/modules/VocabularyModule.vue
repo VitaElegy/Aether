@@ -48,31 +48,57 @@ const sortOrder = ref('desc');
 import { useNavigationStore } from '@/stores/navigation';
 
 const navStore = useNavigationStore();
+const isActive = ref(false); // [HOISTED]
 
 // Tab State
 const activeTab = ref<'vocabulary' | 'articles'>('vocabulary');
 
 // Sync Navigation Bar State
-watch(activeTab, (newTab) => {
-    // Center is always hijacked by the Tab Switcher
+// Sync Navigation Bar State
+import { onActivated, onDeactivated } from 'vue';
+
+// Lifecycle: Manage Navigation Bar State
+const setNavState = () => {
+    console.log('[Vocab] setNavState');
+    isActive.value = true;
     navStore.setCustomCenter(true);
-    
-    // Right is hijacked by Dictionary Library Toggle ONLY in vocabulary mode
-    // In 'articles' mode, let the ArticleAnalysisModule handle it (it sets right in Reader mode)
-    if (newTab === 'vocabulary') {
-        navStore.setCustomRight(true);
-    } else {
-        navStore.setCustomRight(false);
-    }
-}, { immediate: true });
+    navStore.setCustomRight(activeTab.value === 'vocabulary');
+};
+
+const clearNavState = () => {
+    console.log('[Vocab] clearNavState');
+    isActive.value = false;
+    navStore.reset();
+};
 
 onMounted(() => {
-    navStore.setCustomCenter(true);
-    if (activeTab.value === 'vocabulary') navStore.setCustomRight(true);
+    // Sync call for first mount
+    setNavState();
+});
+
+onActivated(() => {
+    nextTick(() => {
+        setNavState();
+        window.addEventListener('popstate', handlePopState);
+    });
+});
+
+onDeactivated(() => {
+    clearNavState();
+    window.removeEventListener('popstate', handlePopState);
 });
 
 onUnmounted(() => {
-    navStore.reset();
+    clearNavState();
+    window.removeEventListener('popstate', handlePopState);
+});
+
+// Watch activeTab to update state WHILE active
+watch(activeTab, (newTab) => {
+    if (!isActive.value) return;
+    navStore.setCustomCenter(true);
+    // Only update right portal flag if we are active
+    navStore.setCustomRight(newTab === 'vocabulary');
 });
 
 // Batch Selection State
@@ -586,10 +612,18 @@ watch(isDetailView, (val) => {
     }
 });
 
-window.addEventListener('popstate', () => {
+const handlePopState = () => {
     if (isDetailView.value) {
         isDetailView.value = false;
     }
+};
+
+onMounted(() => {
+    window.addEventListener('popstate', handlePopState);
+});
+
+onUnmounted(() => {
+    window.removeEventListener('popstate', handlePopState);
 });
 
 const goBack = () => {
@@ -616,7 +650,7 @@ const handleViewDetailsFromArticle = (payload: any) => {
         <!-- Implicit Library Toggle (Top Right) -->
         <!-- Navigation Teleports -->
         <Teleport to="#nav-center-portal">
-             <div class="flex items-center gap-3 font-serif text-sm pointer-events-auto">
+             <div v-if="isActive" class="flex items-center gap-3 font-serif text-sm pointer-events-auto">
                 <button 
                     @click="activeTab = 'vocabulary'"
                     class="transition-all duration-300 relative group"
@@ -645,8 +679,9 @@ const handleViewDetailsFromArticle = (payload: any) => {
 
         <Teleport to="#nav-right-portal">
             <!-- Library Toggle (Only for Vocab Tab) -->
-            <button 
-                v-if="activeTab === 'vocabulary'"
+            <template v-if="isActive">
+                <button 
+                    v-if="activeTab === 'vocabulary'"
                 @click="showLibrary = !showLibrary"
                 class="w-8 h-8 rounded-full flex items-center justify-center transition-all duration-300 group ml-2"
                 :class="showLibrary ? 'bg-ink text-white shadow-xl rotate-90' : 'text-ink/40 hover:bg-ink/5 hover:text-ink'"
@@ -654,6 +689,7 @@ const handleViewDetailsFromArticle = (payload: any) => {
             >
                 <i :class="showLibrary ? 'ri-close-line' : 'ri-book-3-line'" class="text-xl"></i>
             </button>
+            </template>
         </Teleport>
 
         <!-- content: ARTICLES TAB -->

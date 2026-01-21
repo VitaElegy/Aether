@@ -22,11 +22,13 @@ import { ArticlesPlugin } from './plugins/articles'
 import { KnowledgePlugin } from './plugins/knowledge'
 import { MemosPlugin } from './plugins/memos'
 import { VocabularyPlugin } from './plugins/vocabulary'
+import { VrkbPlugin } from './plugins/vrkb'
 
 const pluginStore = usePluginStore()
 pluginStore.registerPlugin(ArticlesPlugin)
 pluginStore.registerPlugin(KnowledgePlugin)
 pluginStore.registerPlugin(MemosPlugin)
 pluginStore.registerPlugin(VocabularyPlugin)
+pluginStore.registerPlugin(VrkbPlugin)
 
 app.mount('#app')

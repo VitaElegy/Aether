@@ -23,13 +23,13 @@ const router = useRouter();
             <button v-for="mod in modules" :key="mod.id" @click="emit('switch', mod.id)"
                 class="relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group"
                 :class="activeModule === mod.id ? 'bg-ink text-paper' : 'hover:bg-ash/50 text-ink/50 hover:text-ink'"
-                :title="mod.label">
-                <i :class="[mod.icon, 'text-xl']"></i>
+                :title="mod.dock.label">
+                <i :class="[mod.dock.icon, 'text-xl']"></i>
 
                 <!-- Tooltip -->
                 <span
                     class="absolute -top-10 left-1/2 -translate-x-1/2 bg-ink text-paper text-[10px] uppercase font-bold tracking-widest px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
-                    {{ mod.label }}
+                    {{ mod.dock.label }}
                 </span>
             </button>
 

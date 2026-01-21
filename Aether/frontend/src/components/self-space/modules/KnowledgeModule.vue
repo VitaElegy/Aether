@@ -6,15 +6,18 @@ import { contentApi, type Content } from '../../../api/content';
 import { uploadApi } from '../../../api/upload';
 import TagInput from '../../common/TagInput.vue';
 import UserSelect from '../../common/UserSelect.vue';
+import BlockRenderer from '../renderer/BlockRenderer.vue'; // [FIXED]
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 
 // -- State --
 const router = useRouter();
-const viewMode = ref<'list' | 'detail' | 'settings'>('list');
+const viewMode = ref<'list' | 'detail' | 'settings' | 'article'>('list'); // [MODIFIED]
 const knowledgeBases = ref<KnowledgeBase[]>([]);
 const currentKb = ref<KnowledgeBase | null>(null);
 const currentPath = ref<Content[]>([]); // Stack of folder objects
 const contents = ref<Content[]>([]); // Current folder contents
+const currentArticle = ref<any>(null); // [NEW]
+const currentBlocks = ref<any[]>([]);  // [NEW] Computed blocks for renderer
 const isLoading = ref(false);
 
 const kbFormVisible = ref(false);
@@ -234,20 +237,62 @@ const navigateInto = (folder: Content) => {
     refreshContent();
 };
 
-const navigateToArticle = (article: Content) => {
-    router.push(`/article/${article.id}`);
+const navigateToArticle = async (article: Content) => {
+    isLoading.value = true;
+    try {
+        const fullArticle = await contentApi.get(article.id);
+        currentArticle.value = fullArticle;
+        
+        // Adapt Body to Blocks
+        if (fullArticle.body) {
+            if (fullArticle.body.type === 'Custom' && fullArticle.body.data?.blocks) {
+                // New AST Protocol
+                currentBlocks.value = fullArticle.body.data.blocks;
+            } else if (fullArticle.body.type === 'Markdown') {
+                // Legacy Markdown - Wrap in single block
+                currentBlocks.value = [{
+                    id: 'legacy-md',
+                    type: 'markdown',
+                    payload: { content: fullArticle.body.data }
+                }];
+            } else {
+                // Fallback / Other types
+                currentBlocks.value = []; 
+                console.warn("Unknown body type", fullArticle.body);
+            }
+        } else {
+             currentBlocks.value = [];
+        }
+
+        viewMode.value = 'article';
+    } catch (e) {
+        console.error("Failed to fetch article", e);
+    } finally {
+        isLoading.value = false;
+    }
 };
 
 const navigateUp = (index?: number) => {
-    if (index === undefined) {
-        // Go to root
-        currentPath.value = [];
+    if (viewMode.value === 'article') {
+        // If in article mode, "Back" or "Up" goes to the folder list
+        viewMode.value = 'detail';
+        currentArticle.value = null;
+        // Don't modify path if just going back from article
+        if (index !== undefined) {
+             currentPath.value = currentPath.value.slice(0, index + 1);
+             refreshContent();
+        }
     } else {
-        // Go to specific index
-        currentPath.value = currentPath.value.slice(0, index + 1);
+        if (index === undefined) {
+            // Go to root
+            currentPath.value = [];
+        } else {
+            // Go to specific index
+            currentPath.value = currentPath.value.slice(0, index + 1);
+        }
+        refreshContent();
     }
     viewMode.value = 'detail'; // Ensure looking at detail
-    refreshContent();
 };
 
 const goBackToList = () => {
@@ -363,12 +408,17 @@ const handleDeleteFromMenu = () => {
     });
 };
 
-// Close menu on click elsewhere
-onMounted(() => {
-    document.addEventListener('click', closeContextMenu);
-});
-// Need to remove listener? usually fine in setup script but cleaner to remove
-// Not implementing onUnmounted for brevity but recommended.
+import { useNavigationStore } from '@/stores/navigation';
+import { onActivated, onDeactivated, onUnmounted } from 'vue';
+
+const navStore = useNavigationStore();
+
+const setNavState = () => {
+    // Knowledge Module uses standard header (no custom center/right for now)
+    // So we ensure we reset any custom state from other modules
+    navStore.reset();
+};
+// ... rest of logic
 
 const navigateToNewArticle = () => {
     if (!currentKb.value) return;
@@ -385,6 +435,21 @@ const navigateToNewArticle = () => {
 
 onMounted(() => {
     fetchKBs();
+    document.addEventListener('click', closeContextMenu);
+    setNavState();
+});
+
+onActivated(() => {
+    setNavState();
+});
+
+onDeactivated(() => {
+    // No specific cleanup needed if we just use defaults, but good practice
+    navStore.reset();
+});
+
+onUnmounted(() => {
+    // No specific cleanup needed
 });
 
 </script>
@@ -395,7 +460,7 @@ onMounted(() => {
         <!-- HEADER -->
         <div class="flex items-center justify-between mb-8">
             <div class="flex items-center gap-3">
-                <button v-if="viewMode === 'detail' || viewMode === 'settings'" @click="goBackToList"
+                <button v-if="viewMode === 'detail' || viewMode === 'settings' || viewMode === 'article'" @click="viewMode === 'article' ? navigateUp() : goBackToList()"
                     class="text-ink/60 hover:text-accent">
                     <i class="ri-arrow-left-line text-xl"></i>
                 </button>
@@ -599,6 +664,26 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- ARTICLE READ VIEW -->
+            <div v-else-if="viewMode === 'article'" class="max-w-4xl mx-auto pb-32">
+                 <div class="mb-8 border-b border-ink/5 pb-6">
+                    <h1 class="text-4xl font-serif font-bold mb-4">{{ currentArticle?.title }}</h1>
+                    <div class="flex items-center gap-4 text-xs text-ink/40 font-mono">
+                        <div class="flex items-center gap-2">
+                            <span v-for="tag in currentArticle?.tags" :key="tag" 
+                                class="bg-surface px-2 py-0.5 rounded border border-ink/10">
+                                #{{ tag }}
+                            </span>
+                        </div>
+                        <span v-if="currentArticle?.updated_at">
+                            Updated {{ new Date(currentArticle.updated_at).toLocaleDateString() }}
+                        </span>
+                    </div>
+                </div>
+                
+                <BlockRenderer :blocks="currentBlocks" />
             </div>
 
             <!-- DETAIL VIEW -->

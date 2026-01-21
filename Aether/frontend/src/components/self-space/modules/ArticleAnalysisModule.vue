@@ -444,17 +444,44 @@ const handleUpdateText = async (payload: any) => {
 };
 
 // --- Lifecycle ---
-onMounted(() => {
-    fetchArticles();
+import { onActivated, onDeactivated, nextTick } from 'vue';
+
+// --- Lifecycle ---
+const isActive = ref(false);
+
+const setNavState = () => {
+    isActive.value = true;
     if (props.headless) {
         navStore.setCustomRight(true);
     }
-});
+};
 
-onUnmounted(() => {
+const clearNavState = () => {
+    isActive.value = false;
     if (props.headless) {
         navStore.setCustomRight(false);
     }
+};
+
+onMounted(() => {
+    fetchArticles();
+    nextTick(() => {
+        setNavState();
+    });
+});
+
+onActivated(() => {
+    nextTick(() => {
+        setNavState();
+    });
+});
+
+onDeactivated(() => {
+    clearNavState();
+});
+
+onUnmounted(() => {
+    clearNavState();
 });
 
 // --- Computed ---
@@ -529,8 +556,8 @@ const filteredArticles = computed(() => {
         </div>
 
         <!-- HEADLESS TELEPORT NAV -->
-        <Teleport to="#nav-right-portal" v-if="headless">
-             <div class="flex items-center gap-4 pointer-events-auto">
+        <Teleport to="#nav-right-portal">
+             <div v-if="headless && isActive" class="flex items-center gap-4 pointer-events-auto">
                  <template v-if="viewMode === 'list'">
                     <!-- Compact Search for Topbar -->
                     <div class="relative group">

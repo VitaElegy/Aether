@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue'; // [FIXED]
 import { useRouter } from 'vue-router';
 import TopNavBar from '../components/TopNavBar.vue';
 import ModuleSwitcher from '../components/self-space/ModuleSwitcher.vue';
@@ -18,11 +18,17 @@ const currentModuleId = ref('articles');
 const currentPlugin = computed(() => pluginStore.getPlugin(currentModuleId.value));
 
 const CurrentComponent = computed(() => currentPlugin.value?.component);
-const currentModuleLabel = computed(() => currentPlugin.value?.label || 'Self Space');
+const currentModuleLabel = computed(() => currentPlugin.value?.dock.label || 'Self Space');
+
+// Header Protocol
+const currentHeaderIcon = computed(() => currentPlugin.value?.header?.icon);
+const CurrentHeaderActions = computed(() => currentPlugin.value?.header?.actions);
 
 const switchModule = (id: string) => {
     currentModuleId.value = id;
 };
+
+// Global Safety Net Removed: Relies on module-level onDeactivated cleanup
 
 // Ensure we have a valid selection on mount if plugins are ready
 if (pluginStore.plugins.length > 0 && !pluginStore.getPlugin(currentModuleId.value)) {
@@ -55,7 +61,8 @@ const goBack = () => {
                 <div id="nav-center-portal" class="contents"></div>
 
                 <!-- Default Center Content -->
-                <div v-show="!navStore.hasCustomCenter" class="flex items-center gap-4">
+                <div v-show="!navStore.hasCustomCenter" class="flex items-center gap-3">
+                    <i v-if="currentHeaderIcon" :class="[currentHeaderIcon, 'text-ink/40 text-lg']"></i>
                     <span class="text-[10px] font-black uppercase tracking-[0.3em] text-ink/40">
                         Self Space / {{ currentModuleLabel }}
                     </span>
@@ -68,6 +75,9 @@ const goBack = () => {
 
                 <!-- Default Right Content -->
                 <div v-show="!navStore.hasCustomRight" class="flex items-center gap-2">
+                    <!-- Plugin Default Actions -->
+                    <component :is="CurrentHeaderActions" v-if="CurrentHeaderActions" />
+
                      <!-- Default Global Actions (e.g. Settings, Profile) -->
                      <button 
                         @click="router.push('/settings')"
@@ -86,7 +96,9 @@ const goBack = () => {
                 enter-from-class="opacity-0 translate-y-4" enter-to-class="opacity-100 translate-y-0"
                 leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100 translate-y-0"
                 leave-to-class="opacity-0 -translate-y-4">
-                <component :is="CurrentComponent" class="flex-1 h-full" :headless="true" />
+                <KeepAlive>
+                    <component :is="CurrentComponent" class="flex-1 h-full" :headless="true" />
+                </KeepAlive>
             </Transition>
         </main>
 
