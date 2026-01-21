@@ -7,6 +7,7 @@ export const useVrkbStore = defineStore('vrkb', () => {
     const projects = ref<VrkbProject[]>([]);
     const currentProject = ref<VrkbProject | null>(null);
     const findings = ref<VrkbFinding[]>([]);
+    const sections = ref<any[]>([]); // Need detailed type later
     const isLoading = ref(false);
 
     // Actions
@@ -40,29 +41,71 @@ export const useVrkbStore = defineStore('vrkb', () => {
         }
     };
 
-    const selectProject = async (id: string) => {
+    const fetchFindings = async (projectId: string) => {
+        isLoading.value = true;
+        try {
+            findings.value = await vrkbApi.listFindings(projectId);
+        } finally {
+            isLoading.value = false;
+        }
+    };
+
+    const selectProject = async (id: string | null) => {
+        if (!id) {
+            currentProject.value = null;
+            return;
+        }
         isLoading.value = true;
         try {
             const proj = await vrkbApi.getProject(id);
             currentProject.value = proj;
 
-            // Should also load findings?
-            const f = await vrkbApi.listFindings(id);
+            // Parallel load
+            const [f, s] = await Promise.all([
+                vrkbApi.listFindings(id),
+                vrkbApi.listSections(id)
+            ]);
             findings.value = f;
-
-            // Optional: Update global content context if we had one
+            sections.value = s;
         } finally {
             isLoading.value = false;
         }
+    };
+
+    const updateFindingStatus = async (id: string, status: string) => {
+        // Optimistic update
+        const f = findings.value.find(x => x.id === id);
+        if (f) f.status = status;
+
+        await vrkbApi.updateFinding(id, { status });
+    };
+
+    const createFinding = async (sectionId: string, title: string, severity: string, content: any) => {
+        const newFinding = await vrkbApi.createFinding({
+            section_id: sectionId,
+            title,
+            severity,
+            status: 'Triage',
+            content,
+            is_triage: true
+        });
+        findings.value.push(newFinding);
+        return newFinding;
     };
 
     return {
         projects,
         currentProject,
         findings,
+        sections,
         isLoading,
         fetchProjects,
         createProject,
-        selectProject
+        selectProject,
+        fetchFindings,
+        updateFindingStatus,
+        createFinding
     };
 });
+
+export type { VrkbProject, VrkbFinding, VrkbSection } from '@/api/vrkb';
