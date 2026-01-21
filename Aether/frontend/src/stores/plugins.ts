@@ -9,7 +9,7 @@ export const usePluginStore = defineStore('plugins', () => {
     const registerPlugin = (plugin: SelfSpacePlugin) => {
         if (!plugins.value.some(p => p.id === plugin.id)) {
             // Re-assign to trigger reactivity and sort
-            plugins.value = [...plugins.value, plugin].sort((a, b) => (a.order ?? 99) - (b.order ?? 99));
+            plugins.value = [...plugins.value, plugin].sort((a, b) => (a.dock.order ?? 99) - (b.dock.order ?? 99));
         } else {
             console.warn(`Plugin with id ${plugin.id} is already registered.`);
         }

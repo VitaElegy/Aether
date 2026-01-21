@@ -3,8 +3,17 @@ import KnowledgeModule from '../../components/self-space/modules/KnowledgeModule
 
 export const KnowledgePlugin: SelfSpacePlugin = {
     id: 'knowledge',
-    label: 'Knowledge',
-    icon: 'ri-brain-line',
+    dock: {
+        label: 'Knowledge',
+        icon: 'ri-brain-line',
+        order: 20
+    },
+    header: {
+        title: 'Knowledge Base',
+        icon: 'ri-brain-line'
+    },
+    capabilities: {
+        articleParser: false
+    },
     component: KnowledgeModule,
-    order: 20,
 };

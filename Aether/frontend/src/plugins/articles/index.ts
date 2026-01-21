@@ -3,8 +3,17 @@ import ArticlesModule from '../../components/self-space/modules/ArticlesModule.v
 
 export const ArticlesPlugin: SelfSpacePlugin = {
     id: 'articles',
-    label: 'Articles',
-    icon: 'ri-article-line',
+    dock: {
+        label: 'Articles',
+        icon: 'ri-article-line',
+        order: 10
+    },
+    header: {
+        title: 'Articles',
+        icon: 'ri-article-line'
+    },
+    capabilities: {
+        articleParser: true
+    },
     component: ArticlesModule,
-    order: 10,
 };

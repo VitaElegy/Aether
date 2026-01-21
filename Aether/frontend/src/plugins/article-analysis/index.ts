@@ -3,8 +3,17 @@ import ArticleAnalysisModule from '../../components/self-space/modules/ArticleAn
 
 export const ArticleAnalysisPlugin: SelfSpacePlugin = {
     id: 'article-analysis',
-    label: 'Article Analysis',
-    icon: 'ri-article-line', // RemixIcon
+    dock: {
+        label: 'Article Analysis',
+        icon: 'ri-article-line',
+        order: 45
+    },
+    header: {
+        title: 'Article Analysis',
+        icon: 'ri-article-line'
+    },
+    capabilities: {
+        articleParser: true
+    },
     component: ArticleAnalysisModule,
-    order: 45, // After Vocabulary
 };

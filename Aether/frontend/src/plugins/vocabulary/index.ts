@@ -3,8 +3,17 @@ import VocabularyModule from '../../components/self-space/modules/VocabularyModu
 
 export const VocabularyPlugin: SelfSpacePlugin = {
     id: 'vocabulary',
-    label: 'Vocabulary',
-    icon: 'ri-book-read-line',
+    dock: {
+        label: 'Vocabulary',
+        icon: 'ri-book-read-line',
+        order: 40
+    },
+    header: {
+        title: 'Vocabulary',
+        icon: 'ri-book-read-line'
+    },
+    capabilities: {
+        articleParser: false
+    },
     component: VocabularyModule,
-    order: 40,
 };
