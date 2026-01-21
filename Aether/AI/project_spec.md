@@ -455,6 +455,39 @@ When directory structure changes:
 
 ---
 
+## 14. KB Parser & Multi-Stack Protocol
+
+> **Status**: Defined in Phase 9. All new KBs MUST adhere to this protocol.
+
+### 14.1 Data & Parser Architecture
+
+| Component      | Strategy            | Description                                                                                   |
+| :------------- | :------------------ | :-------------------------------------------------------------------------------------------- |
+| **Parsing**    | **Hybrid**          | Frontend optimizes for speed/edit; Backend handles canonical storage & validation.            |
+| **Storage**    | **Block-First**     | Content is a list of JSON Blocks. "Everything is an Object" (UUIDs).                          |
+| **Versioning** | **Document-Level**  | Updates create a snapshot of the *Document Manifest*, not individual blocks.                  |
+| **Schema**     | **Strict Registry** | KBs must register Zod/Rust schemas. Unknown payloads are rejected.                            |
+| **Migration**  | **Eager**           | No "lazy reads". Data is migrated to the latest schema version at write-time.                 |
+| **Error**      | **Lenient**         | Parsers return `ErrorBlock` on failure; App must render it safely (No White Screen of Death). |
+
+### 14.2 Navigation & Layout Constitution
+
+**1. Multi-Stack Router (The "App" Experiene)**:
+- The Router acts as a Multi-Stack engine.
+- Switching "Tab" (Module) restores the **exact last state** (URL + Scroll) of that module.
+- **NEVER** reset to the module root unless explicitly requested (e.g., double-click).
+
+**2. Hierarchical Back ("Smart Back")**:
+- **Rule**: `Back` button means "Up to Parent" (Hierarchy), NOT "Previous URL" (Chronology), unless traversing lineally deep.
+- **Logic**: If `history.previous` belongs to a different Module, perform `Router.push(Parent)`.
+
+**3. Layout Protocol ("Shell vs Canvas")**:
+- **Shell**: The Top Bar and Bottom Dock are **Scripted** (System Controlled). KB has zero CSS access here.
+- **Canvas**: The Center Stage is **Free**. KB can render anything (Text, 3D, Kanban).
+- **Reactive Context**: KB pushes actions to the Shell via a **Reactive Interface** (Pull Model), not imperative calls.
+
+---
+
 **End of Specification**
 
 > **Remember**: When in doubt, refer to `AI/ERROR_LOG.md` for past failures and `AI/roadmap.md` for current project context.
