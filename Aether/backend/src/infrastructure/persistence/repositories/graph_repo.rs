@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use sea_orm::{ActiveModelTrait, ColumnTrait, EntityTrait, QueryFilter, Set, QueryOrder};
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set, QueryOrder};
 use uuid::Uuid;
 use crate::domain::models::GraphNode;
 use crate::domain::ports::{GraphRepository, RepositoryError};

@@ -5,7 +5,7 @@ use sea_orm::{
 use uuid::Uuid;
 use regex::Regex;
 use serde_json::{Value, json};
-use crate::infrastructure::persistence::entities::{semantic_node, semantic_edge};
+use crate::infrastructure::persistence::entities::{semantic_node};
 use anyhow::Result;
 
 #[derive(Clone)]
@@ -63,7 +63,7 @@ impl IndexerService {
         let mut current_block: Option<ParsedNodeBuilder> = None;
         let mut current_id_counter = 0;
         
-        for (i, line) in lines.iter().enumerate() {
+        for (_i, line) in lines.iter().enumerate() {
             let trim_line = line.trim();
             
             // Check Start

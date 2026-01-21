@@ -4,8 +4,8 @@ use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
 use chrono::Utc;
 use crate::domain::models::VrkbAsset;
-use crate::domain::ports::{VrkbRepository, RepositoryError};
-use std::path::Path;
+use crate::domain::ports::{VrkbRepository};
+// use std::path::Path;
 
 #[derive(Clone)]
 pub struct AssetStorageService {
@@ -18,7 +18,7 @@ impl AssetStorageService {
         Self { repo, storage_root }
     }
 
-    pub async fn store_asset(&self, mapped_file_name: &str, data: &[u8], mime_type: &str) -> Result<VrkbAsset, String> {
+    pub async fn store_asset(&self, _mapped_file_name: &str, data: &[u8], mime_type: &str) -> Result<VrkbAsset, String> {
         // 1. Compute Hash
         let mut hasher = Sha256::new();
         hasher.update(data);

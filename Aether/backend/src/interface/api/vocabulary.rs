@@ -77,7 +77,7 @@ async fn save_vocabulary(
     let user_id = UserId(auth.id);
     
     // Check for existing word to Determine Upsert vs Create
-    let (id, is_update, existing_count, existing_importance) = if let Ok(Some(existing)) = state.repo.find_by_word(&user_id, &payload.word).await {
+    let (id, _is_update, existing_count, existing_importance) = if let Ok(Some(existing)) = state.repo.find_by_word(&user_id, &payload.word).await {
          (existing.node.id, true, existing.query_count, existing.is_important)
     } else {
          (Uuid::new_v4(), false, 0, false)

@@ -3,7 +3,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 pub type BlockId = Uuid;
-pub type AssetId = Uuid;
+// pub type AssetId = Uuid;
 
 /// A Block is the fundamental unit of content in Aether.
 /// It corresponds to the "Block-First" architecture decision.
@@ -51,6 +51,7 @@ impl Block {
 }
 
 impl Document {
+    #[allow(dead_code)]
     pub fn new(title: impl Into<String>, blocks: Vec<Block>) -> Self {
         Self {
             id: Uuid::new_v4(),

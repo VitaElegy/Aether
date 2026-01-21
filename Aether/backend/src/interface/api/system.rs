@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
 };
 use std::process::Command;
-use serde::{Serialize, Deserialize};
+use serde::{Serialize};
 
 #[derive(Serialize, Debug)]
 pub struct GitCommit {

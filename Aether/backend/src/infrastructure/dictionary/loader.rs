@@ -13,6 +13,7 @@ pub struct DictionaryLoader {
 }
 
 struct CustomDict {
+    #[allow(dead_code)]
     name: String,
     file_path: PathBuf,
     // Map word -> (offset, size)

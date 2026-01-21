@@ -123,6 +123,7 @@ pub trait KnowledgeBaseRepository: Send + Sync {
 }
 
 #[async_trait]
+#[allow(dead_code)]
 pub trait DraftRepository: Send + Sync {
     async fn save_draft(&self, draft: crate::domain::models::UserDraft) -> Result<(), RepositoryError>;
     async fn get_draft(&self, user_id: &UserId) -> Result<Option<crate::domain::models::UserDraft>, RepositoryError>;

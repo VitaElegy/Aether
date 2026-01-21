@@ -245,7 +245,7 @@ impl VocabularyRepository for PostgresRepository {
     }
 
     async fn increment_query_count(&self, id: &Uuid) -> Result<(), RepositoryError> {
-        use sea_orm::sea_query::{Query, Expr};
+        // use sea_orm::sea_query::{Query, Expr};
         // Atomic increment using SeaQuery
         let stmt = sea_orm::Statement::from_sql_and_values(
             self.db.get_database_backend(),

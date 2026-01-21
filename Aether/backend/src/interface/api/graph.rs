@@ -8,7 +8,7 @@ use uuid::Uuid;
 use sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
 
 use crate::interface::state::AppState;
-use crate::infrastructure::persistence::entities::{semantic_node, semantic_edge};
+use crate::infrastructure::persistence::entities::{semantic_node};
 
 #[derive(Debug, Deserialize)]
 pub struct ContextParams {

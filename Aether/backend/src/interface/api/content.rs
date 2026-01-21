@@ -5,7 +5,7 @@ use crate::domain::{
     ports::{ArticleRepository, RepositoryError, PermissionRepository, UserRepository}, 
     models::{Article, Node, NodeType, PermissionMode, ContentBody, ContentStatus, UserId},
 };
-use crate::infrastructure::persistence::entities::draft;
+// use crate::infrastructure::persistence::entities::draft;
 use uuid::Uuid;
 use chrono::Utc;
 use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
@@ -400,7 +400,7 @@ pub async fn list_content_handler(
     if let Some(uid) = user.0.as_ref() {
         let is_self_view = params.author_id == Some(uid.id);
         if is_self_view {
-            use sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
+            // use sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
             
             // Collect Article IDs
             let article_ids: Vec<Uuid> = items.iter().filter_map(|i| {
@@ -800,7 +800,7 @@ pub async fn publish_draft_handler(
 }
 
 pub fn router() -> axum::Router<crate::interface::state::AppState> {
-    use axum::routing::{get, post, put};
+    use axum::routing::{get, post};
     axum::Router::new()
         .route("/api/content", post(create_content_handler).get(list_content_handler))
         .route("/api/content/:id", get(get_content_handler).put(update_content_handler).delete(delete_content_handler))
