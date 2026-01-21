@@ -15,3 +15,5 @@ pub mod relationship;
 pub mod semantic_node;
 pub mod semantic_edge;
 pub mod graph_node;
+
+pub mod vrkb;
