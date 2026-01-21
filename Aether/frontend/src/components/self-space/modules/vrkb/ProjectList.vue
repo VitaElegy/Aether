@@ -102,7 +102,6 @@ import { useVrkbStore } from '@/stores/vrkb';
 import { DateTime } from 'luxon';
 
 const store = useVrkbStore();
-const switchTab = inject('switchTab') as (tab: string) => void;
 const showCreateModal = ref(false);
 const newProjectName = ref('');
 const newProjectRepo = ref('');
@@ -118,7 +117,7 @@ onMounted(() => {
 const openProject = async (id: string) => {
     try {
         await store.selectProject(id);
-        switchTab('dashboard');
+        // Navigation is handled by parent (VrkbModule) reacting to store.currentProject
     } catch (e: any) {
         console.error(e);
         alert("Failed to open project: " + (e.response?.data?.message || e.message));
