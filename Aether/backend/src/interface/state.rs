@@ -2,7 +2,7 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use crate::domain::ports::{
     AuthService, CommentRepository, ArticleRepository, ExportService,
-    MemoRepository, UserRepository, VocabularyRepository, NodeRepository
+    MemoRepository, UserRepository, VocabularyRepository, NodeRepository, VrkbRepository
 };
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::dictionary::loader::DictionaryLoader;
@@ -18,6 +18,8 @@ pub struct AppState {
     pub dictionary_cache: moka::future::Cache<String, String>, // JSON serialized entry
     pub indexer_service: Arc<IndexerService>,
     pub graph_service: Arc<crate::domain::graph_service::GraphService>,
+    pub asset_storage: Arc<crate::infrastructure::storage::service::AssetStorageService>,
+    pub schema_registry: crate::domain::kb::SchemaRegistry,
 }
 
 impl FromRef<AppState> for Arc<dyn AuthService> {
@@ -83,5 +85,17 @@ impl FromRef<AppState> for Arc<dyn crate::domain::ports::KnowledgeBaseRepository
 impl FromRef<AppState> for crate::domain::permission_service::PermissionService<PostgresRepository> {
     fn from_ref(state: &AppState) -> Self {
         state.permission_service.clone()
+    }
+}
+
+impl FromRef<AppState> for Arc<dyn VrkbRepository> {
+    fn from_ref(state: &AppState) -> Self {
+        state.repo.clone() as Arc<dyn VrkbRepository>
+    }
+}
+
+impl FromRef<AppState> for Arc<crate::infrastructure::storage::service::AssetStorageService> {
+    fn from_ref(state: &AppState) -> Self {
+        state.asset_storage.clone()
     }
 }

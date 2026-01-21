@@ -174,3 +174,26 @@ pub trait GraphRepository: Send + Sync {
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<crate::domain::models::GraphNode>, RepositoryError>;
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
 }
+
+#[async_trait]
+pub trait VrkbRepository: Send + Sync {
+    // Project
+    async fn create_project(&self, project: crate::domain::models::VrkbProject) -> Result<Uuid, RepositoryError>;
+    async fn get_project(&self, id: &Uuid) -> Result<Option<crate::domain::models::VrkbProject>, RepositoryError>;
+    async fn list_projects(&self) -> Result<Vec<crate::domain::models::VrkbProject>, RepositoryError>;
+    
+    // Section
+    async fn create_section(&self, section: crate::domain::models::VrkbSection) -> Result<Uuid, RepositoryError>;
+    async fn list_sections(&self, project_id: &Uuid) -> Result<Vec<crate::domain::models::VrkbSection>, RepositoryError>;
+    
+    // Finding
+    async fn create_finding(&self, finding: crate::domain::models::VrkbFinding) -> Result<Uuid, RepositoryError>;
+    async fn get_finding(&self, id: &Uuid) -> Result<Option<crate::domain::models::VrkbFinding>, RepositoryError>;
+    async fn list_findings(&self, section_id: Option<Uuid>, project_id: Option<Uuid>) -> Result<Vec<crate::domain::models::VrkbFinding>, RepositoryError>;
+    async fn update_finding_status(&self, id: &Uuid, status: String) -> Result<(), RepositoryError>;
+
+    // Asset
+    async fn create_asset(&self, asset: crate::domain::models::VrkbAsset) -> Result<Uuid, RepositoryError>;
+    async fn get_asset_by_hash(&self, hash: &str) -> Result<Option<crate::domain::models::VrkbAsset>, RepositoryError>;
+    async fn link_asset_to_project(&self, project_id: Uuid, asset_id: Uuid, virtual_path: String) -> Result<(), RepositoryError>;
+}

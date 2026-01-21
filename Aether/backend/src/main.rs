@@ -280,6 +280,64 @@ async fn main() {
         );
     ").await.map_err(|e| println!("Migration note (graph_nodes): {}", e));
 
+    // --- VRKB Schema (Phase 5) ---
+    // Project-Centric Vulnerability Research Knowledge Base
+    let _ = db.execute_unprepared("
+        CREATE TABLE IF NOT EXISTS vrkb_projects (
+            id UUID PRIMARY KEY,
+            name TEXT NOT NULL,
+            repository_url TEXT,
+            quota_bytes BIGINT NOT NULL DEFAULT 5368709120, -- Default 5GB
+            settings JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS vrkb_sections (
+            id UUID PRIMARY KEY,
+            project_id UUID NOT NULL,
+            title TEXT NOT NULL,
+            checklist JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES vrkb_projects(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS vrkb_findings (
+            id UUID PRIMARY KEY,
+            section_id UUID NOT NULL,
+            title TEXT NOT NULL,
+            status TEXT NOT NULL,
+            severity TEXT NOT NULL,
+            content JSONB,
+            is_triage BOOLEAN NOT NULL DEFAULT FALSE,
+            author_id UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (section_id) REFERENCES vrkb_sections(id) ON DELETE CASCADE,
+            FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS vrkb_assets (
+            id UUID PRIMARY KEY,
+            hash TEXT UNIQUE NOT NULL,
+            storage_path TEXT NOT NULL,
+            mime_type TEXT NOT NULL,
+            size_bytes BIGINT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS vrkb_project_assets (
+            project_id UUID NOT NULL,
+            asset_id UUID NOT NULL,
+            virtual_path TEXT NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, asset_id),
+            FOREIGN KEY (project_id) REFERENCES vrkb_projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (asset_id) REFERENCES vrkb_assets(id) ON DELETE CASCADE
+        );
+    ").await.map_err(|e| println!("Migration note (vrkb): {}", e));
+
 
     // Initialize Auth Service
     let repo = Arc::new(PostgresRepository::new(db.clone()));
@@ -350,6 +408,13 @@ async fn main() {
 
     let indexer_service = Arc::new(crate::domain::indexer_service::IndexerService::new(db.clone()));
     let graph_service = Arc::new(crate::domain::graph_service::GraphService::new(repo.clone() as Arc<dyn crate::domain::ports::GraphRepository>));
+    let asset_storage = Arc::new(crate::infrastructure::storage::service::AssetStorageService::new(repo.clone() as Arc<dyn crate::domain::ports::VrkbRepository>, "uploads".to_string()));
+
+    // --- Schema Registry Logic (Phase 11) ---
+    let schema_registry = crate::domain::kb::SchemaRegistry::new();
+    schema_registry.register("markdown", crate::domain::kb::schemas::markdown::MarkdownSchema);
+    schema_registry.register("math_block", crate::domain::kb::schemas::math::MathSchema);
+    tracing::info!("KB Schema Registry initialized (types: markdown, math_block)");
 
     let state = AppState {
         repo,
@@ -360,6 +425,8 @@ async fn main() {
         dictionary_cache,
         indexer_service,
         graph_service,
+        asset_storage,
+        schema_registry,
     };
 
     // --- 4. Build Router with Trace Middleware ---
@@ -378,6 +445,7 @@ async fn main() {
         .merge(user::router())
         .merge(system::router())
         .merge(crate::interface::api::graph::router())
+        .merge(crate::interface::api::vrkb::router())
         .with_state(state);
 
     let app = Router::new()

@@ -265,3 +265,50 @@ pub struct GraphNode {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
+
+// --- VRKB Domain ---
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbProject {
+    pub id: Uuid,
+    pub name: String,
+    pub repository_url: Option<String>,
+    pub quota_bytes: i64,
+    pub settings: Option<serde_json::Value>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbSection {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub title: String,
+    pub checklist: Option<serde_json::Value>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbFinding {
+    pub id: Uuid,
+    pub section_id: Uuid,
+    pub title: String,
+    pub status: String,
+    pub severity: String,
+    pub content: Option<serde_json::Value>,
+    pub is_triage: bool,
+    pub author_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbAsset {
+    pub id: Uuid,
+    pub hash: String,
+    pub storage_path: String,
+    pub mime_type: String,
+    pub size_bytes: i64,
+    pub created_at: DateTime<Utc>,
+}
