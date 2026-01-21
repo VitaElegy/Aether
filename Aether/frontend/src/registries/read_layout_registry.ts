@@ -12,6 +12,7 @@ const registry = new Map<string, Component>();
 registry.set('default', StandardReadLayout);
 registry.set('math_v1', MathArchiveLayout);
 registry.set('math_v3', MathManuscriptLayout);
+registry.set('vulnerability_research', defineAsyncComponent(() => import('@/components/layouts/VRLayout.vue')));
 
 const EnglishArticleAnalyzer = defineAsyncComponent(() => import('@/components/english/EnglishArticleAnalyzer.vue'));
 registry.set('english_v1', EnglishArticleAnalyzer);
@@ -39,6 +40,7 @@ const dashboardRegistry = new Map<string, Component>();
 
 // We will register components lazily or manually
 // dashboardRegistry.set('math_v1', MathDashboard);
+dashboardRegistry.set('vulnerability_research', defineAsyncComponent(() => import('@/views/VRProjectDashboard.vue')));
 
 export const registerDashboard = (id: string, component: Component) => {
     dashboardRegistry.set(id, component);
