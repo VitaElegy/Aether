@@ -15,7 +15,9 @@
         <div v-for="memo in column" :key="memo.id" class="w-full">
            <MemoCard 
               :memo="memo" 
-              @click="$emit('open', memo)"
+              :selected="store.ui.selectedIds.has(memo.id)"
+              :selectable="store.ui.selectionMode"
+              @click="handleCardClick(memo)"
               @delete="$emit('delete', memo.id)"
               @pin="$emit('toggle-pin', memo)"
               @pin-click="$emit('toggle-pin', memo)" 
@@ -29,14 +31,24 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { useElementSize } from '@vueuse/core';
-import type { Memo } from '@/stores/memos';
+import { useMemosStore, type Memo } from '@/stores/memos';
 import MemoCard from './MemoCard.vue';
+
+const store = useMemosStore();
 
 const props = defineProps<{
   memos: Memo[];
 }>();
 
-defineEmits(['open', 'delete', 'toggle-pin', 'create']);
+const emit = defineEmits(['open', 'delete', 'toggle-pin', 'create']);
+
+function handleCardClick(memo: Memo) {
+    if (store.ui.selectionMode) {
+        store.toggleSelection(memo.id);
+    } else {
+        emit('open', memo);
+    }
+}
 
 const containerRef = ref<HTMLElement | null>(null);
 const { width } = useElementSize(containerRef);

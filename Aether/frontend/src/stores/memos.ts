@@ -52,7 +52,7 @@ export const useMemosStore = defineStore('memos', () => {
     const memos = ref<Memo[]>([]);
     const loading = ref(false);
     const error = ref<string | null>(null);
-    const currentView = ref<'masonry' | 'kanban' | 'calendar' | 'list'>('masonry');
+    const currentView = ref<'masonry' | 'kanban' | 'calendar' | 'list' | 'timeline'>('masonry');
 
     // Filters
     const searchQuery = ref('');
@@ -209,10 +209,20 @@ export const useMemosStore = defineStore('memos', () => {
     const ui = ref({
         showEditor: false,
         isCreating: false,
-        editingMemo: null as Memo | null
+        editingMemo: null as Memo | null,
+        selectionMode: false,
+        selectedIds: new Set<string>()
     });
 
     function openEditor(memo: Memo | null = null) {
+        if (ui.value.selectionMode) {
+            // If in selection mode, clicking opens? No, usually toggles selection.
+            // But openEditor is called by components. 
+            // Logic should be handled at component level or here?
+            // Let's keep openEditor strictly for Editor.
+            // Selection logic should be distinct.
+            return;
+        }
         ui.value.editingMemo = memo ? JSON.parse(JSON.stringify(memo)) : null;
         ui.value.isCreating = !memo;
         ui.value.showEditor = true;
@@ -222,6 +232,55 @@ export const useMemosStore = defineStore('memos', () => {
         ui.value.showEditor = false;
         ui.value.editingMemo = null;
         ui.value.isCreating = false;
+    }
+
+    // Selection Actions
+    function toggleSelectionMode(active: boolean) {
+        ui.value.selectionMode = active;
+        if (!active) {
+            ui.value.selectedIds.clear();
+        }
+    }
+
+    function toggleSelection(id: string) {
+        if (ui.value.selectedIds.has(id)) {
+            ui.value.selectedIds.delete(id);
+        } else {
+            ui.value.selectedIds.add(id);
+        }
+    }
+
+    function selectAll() {
+        memos.value.forEach(m => ui.value.selectedIds.add(m.id));
+    }
+
+    function deselectAll() {
+        ui.value.selectedIds.clear();
+    }
+
+    async function batchDelete() {
+        const ids = Array.from(ui.value.selectedIds);
+        if (ids.length === 0) return;
+
+        // Optimistic delete
+        const originalMemos = [...memos.value];
+        memos.value = memos.value.filter(m => !ui.value.selectedIds.has(m.id));
+
+        try {
+            // Parallel deletes or bulk endpoint? 
+            // Current backend might not have bulk delete.
+            // Let's use parallel for now (up to reasonable limit).
+            // Ideally we need /api/memos/batch-delete
+            // For now, loop.
+            await Promise.all(ids.map(id => axios.delete(`/api/memos/${id}`)));
+            ui.value.selectedIds.clear();
+            ui.value.selectionMode = false;
+        } catch (e) {
+            console.error('Batch delete failed', e);
+            memos.value = originalMemos; // Revert
+            // Re-fetch to be safe
+            await fetchMemos();
+        }
     }
 
     return {
@@ -244,6 +303,12 @@ export const useMemosStore = defineStore('memos', () => {
         fetchWorkflow, // Export
         saveWorkflow,  // Export
         openEditor,
-        closeEditor
+        closeEditor,
+        // Selection
+        toggleSelectionMode,
+        toggleSelection,
+        selectAll,
+        deselectAll,
+        batchDelete
     };
 });

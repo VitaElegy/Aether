@@ -1,9 +1,9 @@
 <template>
     <div 
-    class="memo-card relative group flex flex-col rounded-xl transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer select-none overflow-hidden bg-white dark:bg-zinc-900 border border-transparent isolate"
+    class="memo-card relative group flex flex-col rounded-xl transition-all duration-300 hover:translate-y-[-2px] cursor-pointer select-none overflow-hidden border isolate h-full"
     :class="[
-      selected ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-black' : 'border-border/40 hover:border-black/5 dark:hover:border-white/10',
-      colorBorderClass
+      selected ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-black' : '',
+      themeClasses
     ]"
     @click="$emit('click')"
   >
@@ -32,7 +32,8 @@
         <span 
             v-for="tag in memo.tags.slice(0, 3)" 
             :key="tag" 
-            class="bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-full text-text-secondary/80 font-semibold tracking-wide"
+            class="px-2 py-0.5 rounded-full font-semibold tracking-wide"
+            :class="getTagColor(tag)"
         >
           #{{ tag }}
         </span>
@@ -46,20 +47,33 @@
     <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-200 flex flex-col gap-1 translate-x-2 group-hover:translate-x-0 z-20">
        <div class="flex gap-1">
             <button 
-                class="w-7 h-7 rounded-lg bg-surface-2 dark:bg-zinc-800/90 shadow-sm hover:bg-surface-3 text-text-secondary hover:text-primary transition-all flex items-center justify-center backdrop-blur-sm"
+                class="w-7 h-7 rounded-lg bg-white/50 dark:bg-zinc-800/50 shadow-sm hover:bg-white text-text-secondary hover:text-primary transition-all flex items-center justify-center backdrop-blur-sm"
                 @click.stop="$emit('pin')"
                 title="Pin"
             >
                 <i :class="memo.is_pinned ? 'ri-pushpin-fill' : 'ri-pushpin-line'" />
             </button>
             <button 
-                class="w-7 h-7 rounded-lg bg-surface-2 dark:bg-zinc-800/90 shadow-sm hover:bg-surface-3 text-text-secondary hover:text-red-500 transition-all flex items-center justify-center backdrop-blur-sm"
+                class="w-7 h-7 rounded-lg bg-white/50 dark:bg-zinc-800/50 shadow-sm hover:bg-white text-text-secondary hover:text-red-500 transition-all flex items-center justify-center backdrop-blur-sm"
                 @click.stop="$emit('delete')"
                 title="Delete"
             >
                 <i class="ri-delete-bin-line" />
             </button>
        </div>
+    </div>
+    <!-- Selection Overlay -->
+    <div 
+        v-if="selectable || selected"
+        class="absolute inset-0 z-30 transition-colors pointer-events-none flex items-start justify-end p-2"
+        :class="selected ? 'bg-primary/5' : 'bg-transparent group-hover:bg-black/5'"
+    >
+        <div 
+            class="w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all duration-200 shadow-sm"
+            :class="selected ? 'bg-primary border-primary scale-110' : 'bg-surface-0 border-border/60 opacity-0 group-hover:opacity-100 scale-90 hover:scale-100'"
+        >
+            <i class="ri-check-line text-white text-sm" v-if="selected"></i>
+        </div>
     </div>
   </div>
 </template>
@@ -68,10 +82,12 @@
 import { computed } from 'vue';
 import type { Memo } from '@/stores/memos';
 import { formatDistanceToNow } from 'date-fns';
+import { getTagColor } from '@/utils/colors';
 
 const props = defineProps<{
   memo: Memo;
   selected?: boolean;
+  selectable?: boolean;
 }>();
 
 defineEmits(['click', 'delete', 'pin']);
@@ -80,17 +96,16 @@ const previewContent = computed(() => {
     return props.memo.content || 'Empty Note';
 });
 
-// Use a left border or subtle background tint instead of strong gradients
-// Elegant Minimalism: White card with colored indicator
-const colorBorderClass = computed(() => {
+const themeClasses = computed(() => {
+    // Elegant Minimalism: White/Dark card with colored left border
     switch (props.memo.color) {
-        case 'Yellow': return 'border-l-[4px] border-l-amber-300 dark:border-l-amber-600 bg-amber-50/30 dark:bg-amber-950/20'; 
-        case 'Red': return 'border-l-[4px] border-l-red-300 dark:border-l-red-600 bg-red-50/30 dark:bg-red-950/20';
-        case 'Green': return 'border-l-[4px] border-l-emerald-300 dark:border-l-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20';
-        case 'Blue': return 'border-l-[4px] border-l-blue-300 dark:border-l-blue-600 bg-blue-50/30 dark:bg-blue-950/20';
-        case 'Purple': return 'border-l-[4px] border-l-purple-300 dark:border-l-purple-600 bg-purple-50/30 dark:bg-purple-950/20';
-        case 'Gray': return 'border-l-[4px] border-l-zinc-300 dark:border-l-zinc-600 bg-zinc-50/30 dark:bg-zinc-800/30';
-        default: return 'border-l-[4px] border-l-transparent';
+        case 'Yellow': return 'border-l-[4px] border-l-amber-300 dark:border-l-amber-500 bg-amber-50/30 dark:bg-amber-950/20 hover:border-black/5 dark:hover:border-white/10 shadow-sm hover:shadow-md'; 
+        case 'Red': return 'border-l-[4px] border-l-red-300 dark:border-l-red-500 bg-red-50/30 dark:bg-red-950/20 hover:border-black/5 dark:hover:border-white/10 shadow-sm hover:shadow-md';
+        case 'Green': return 'border-l-[4px] border-l-emerald-300 dark:border-l-emerald-500 bg-emerald-50/30 dark:bg-emerald-950/20 hover:border-black/5 dark:hover:border-white/10 shadow-sm hover:shadow-md';
+        case 'Blue': return 'border-l-[4px] border-l-blue-300 dark:border-l-blue-500 bg-blue-50/30 dark:bg-blue-950/20 hover:border-black/5 dark:hover:border-white/10 shadow-sm hover:shadow-md';
+        case 'Purple': return 'border-l-[4px] border-l-purple-300 dark:border-l-purple-500 bg-purple-50/30 dark:bg-purple-950/20 hover:border-black/5 dark:hover:border-white/10 shadow-sm hover:shadow-md';
+        case 'Gray': return 'border-l-[4px] border-l-zinc-300 dark:border-l-zinc-500 bg-zinc-50/30 dark:bg-zinc-800/30 hover:border-black/5 dark:hover:border-white/10 shadow-sm hover:shadow-md';
+        default: return 'border-l-[4px] border-l-transparent bg-white dark:bg-zinc-900 border-border/40';
     }
 });
 
