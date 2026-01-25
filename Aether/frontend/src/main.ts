@@ -27,6 +27,7 @@ import { VrkbPlugin } from './plugins/vrkb'
 const pluginStore = usePluginStore()
 pluginStore.registerPlugin(ArticlesPlugin)
 pluginStore.registerPlugin(KnowledgePlugin)
+console.log('[Main] Registering MemosPlugin...');
 pluginStore.registerPlugin(MemosPlugin)
 pluginStore.registerPlugin(VocabularyPlugin)
 pluginStore.registerPlugin(VrkbPlugin)
