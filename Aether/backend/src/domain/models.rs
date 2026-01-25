@@ -312,3 +312,69 @@ pub struct VrkbAsset {
     pub size_bytes: i64,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbMember {
+    pub project_id: Uuid,
+    pub user_id: Uuid,
+    pub role: String,
+    pub joined_at: DateTime<Utc>,
+    // Optional Join for Listing
+    pub user: Option<User>, 
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbSpec {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub title: String,
+    pub content: Option<String>,
+    pub version: i32,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbDoc {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub title: String,
+    pub content: Option<serde_json::Value>,
+    pub parent_id: Option<Uuid>,
+    pub author_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub deleted_at: Option<DateTime<Utc>>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbStats {
+    pub metrics: VrkbMetrics,
+    pub modules: Vec<VrkbModuleStat>,
+    pub heatmap: Vec<VrkbHeatmapItem>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbMetrics {
+    pub total: i64,
+    pub critical: i64,
+    pub triage: i64,
+    pub fixed: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbModuleStat {
+    pub name: String,
+    pub status: String,
+    pub progress: u32,
+    pub bugs: i64,
+    pub last_audit: String, // Simplified string for now, could be timestamp
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbHeatmapItem {
+    pub path: String,
+    pub name: String,
+    pub r#type: String, // "folder" or "file"
+    pub level: i32,
+    pub vulns: i64,
+}

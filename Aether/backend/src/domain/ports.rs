@@ -197,4 +197,32 @@ pub trait VrkbRepository: Send + Sync {
     async fn create_asset(&self, asset: crate::domain::models::VrkbAsset) -> Result<Uuid, RepositoryError>;
     async fn get_asset_by_hash(&self, hash: &str) -> Result<Option<crate::domain::models::VrkbAsset>, RepositoryError>;
     async fn link_asset_to_project(&self, project_id: Uuid, asset_id: Uuid, virtual_path: String) -> Result<(), RepositoryError>;
+    async fn list_project_assets(&self, project_id: &Uuid) -> Result<Vec<crate::domain::models::VrkbAsset>, RepositoryError>;
+    async fn delete_asset(&self, id: &Uuid) -> Result<(), RepositoryError>;
+
+    // Members
+    async fn add_member(&self, member: crate::domain::models::VrkbMember) -> Result<(), RepositoryError>;
+    async fn remove_member(&self, project_id: &Uuid, user_id: &Uuid) -> Result<(), RepositoryError>;
+    async fn list_members(&self, project_id: &Uuid) -> Result<Vec<crate::domain::models::VrkbMember>, RepositoryError>;
+    async fn update_member_role(&self, project_id: &Uuid, user_id: &Uuid, role: String) -> Result<(), RepositoryError>;
+
+    // Specs
+    async fn get_specs(&self, project_id: &Uuid) -> Result<Vec<crate::domain::models::VrkbSpec>, RepositoryError>;
+    async fn save_spec(&self, spec: crate::domain::models::VrkbSpec) -> Result<Uuid, RepositoryError>;
+
+    // Docs
+    async fn create_doc(&self, doc: crate::domain::models::VrkbDoc) -> Result<Uuid, RepositoryError>;
+    async fn get_doc(&self, id: &Uuid) -> Result<Option<crate::domain::models::VrkbDoc>, RepositoryError>;
+    async fn update_doc(&self, doc: crate::domain::models::VrkbDoc) -> Result<(), RepositoryError>;
+    async fn delete_doc(&self, id: &Uuid) -> Result<(), RepositoryError>;
+    async fn list_docs(&self, project_id: &Uuid) -> Result<Vec<crate::domain::models::VrkbDoc>, RepositoryError>;
+    
+    // Trash
+    async fn list_trash(&self, project_id: &Uuid) -> Result<Vec<crate::domain::models::VrkbDoc>, RepositoryError>;
+    async fn restore_doc(&self, id: &Uuid) -> Result<(), RepositoryError>;
+    async fn permanent_delete_doc(&self, id: &Uuid) -> Result<(), RepositoryError>;
+    async fn cleanup_trash(&self, days: i64) -> Result<u64, RepositoryError>;
+    
+    // Stats
+    async fn get_project_stats(&self, project_id: &Uuid) -> Result<crate::domain::models::VrkbStats, RepositoryError>;
 }
