@@ -41,19 +41,27 @@ async fn main() {
     // ... DB Init & Seeding (Same as before) ...
     // --- DROPPING TABLES FOR SCHEMA RESET (Phase 1 Refactor) ---
     // User approved "Fresh Start". We destroy old tables to rebuild the "Linux Kernel" architecture.
-    // let _ = db.execute_unprepared("
-    //     DROP TABLE IF EXISTS comments;
-    //     DROP TABLE IF EXISTS content_versions;
-    //     DROP TABLE IF EXISTS knowledge_bases;
-    //     DROP TABLE IF EXISTS contents;      -- Old Articles
-    //     DROP TABLE IF EXISTS vocabularies;  -- Old Vocab
-    //     DROP TABLE IF EXISTS memos;         -- Old Memos
-    //     DROP TABLE IF EXISTS article_details;
-    //     DROP TABLE IF EXISTS vocab_details;
-    //     DROP TABLE IF EXISTS memo_details;
-    //     DROP TABLE IF EXISTS nodes;
-    //     DROP TABLE IF EXISTS users;
-    // ").await;
+    // --- DROPPING TABLES FOR SCHEMA RESET (Phase 1 Refactor) ---
+    // User approved "Fresh Start". We destroy old tables to rebuild the "Linux Kernel" architecture.
+    let _ = db.execute_unprepared("
+        DROP TABLE IF EXISTS comments;
+        DROP TABLE IF EXISTS content_versions;
+        DROP TABLE IF EXISTS knowledge_bases;
+        DROP TABLE IF EXISTS contents;      -- Old Articles
+        DROP TABLE IF EXISTS vocabularies;  -- Old Vocab
+        DROP TABLE IF EXISTS memos;         -- Old Memos
+        DROP TABLE IF EXISTS article_details;
+        DROP TABLE IF EXISTS vocab_details;
+        DROP TABLE IF EXISTS memo_details;
+        DROP TABLE IF EXISTS nodes;
+        DROP TABLE IF EXISTS users;
+    ").await;
+
+    // --- RECREATING SCHEMA ---
+// ... (Lines 59-165 kept implicitly as we only replace the block around line 44-56 and the memos table)
+// Wait, I cannot edit non-contiguous blocks with replace_file_content.
+// I will use multi_replace_file_content.
+
 
     // --- RECREATING SCHEMA ---
     let _ = db.execute_unprepared("
@@ -162,12 +170,18 @@ async fn main() {
             FOREIGN KEY(id) REFERENCES nodes(id) ON DELETE CASCADE
         );
         
-        -- File System Driver: Memos
+        // File System Driver: Memos
         CREATE TABLE IF NOT EXISTS memo_details (
             id UUID PRIMARY KEY, -- FK to nodes.id
-            content TEXT NOT NULL,
-            priority TEXT DEFAULT 'Medium', -- High/Medium/Low
-            tags TEXT NOT NULL,
+            project_id UUID,
+            color TEXT NOT NULL,
+            is_pinned BOOLEAN NOT NULL DEFAULT FALSE,
+            content JSONB NOT NULL,
+            status TEXT NOT NULL,
+            priority TEXT NOT NULL,
+            due_at TIMESTAMPTZ,
+            reminder_at TIMESTAMPTZ,
+            tags JSONB NOT NULL DEFAULT '[]',
             FOREIGN KEY(id) REFERENCES nodes(id) ON DELETE CASCADE
         );
 
