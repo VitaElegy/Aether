@@ -11,12 +11,18 @@
 
         <!-- Editor Card -->
         <div 
-            class="relative w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden transform transition-all border border-black/5 dark:border-white/10"
+            class="relative w-full max-w-2xl rounded-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden transform transition-all border border-black/5 dark:border-white/10 bg-white dark:bg-zinc-900"
             :class="themeClasses"
             @click.stop
         >
+            <!-- Top Color Gradient Wash -->
+            <div 
+                class="absolute top-0 inset-x-0 h-48 pointer-events-none transition-colors duration-500 ease-in-out opacity-60 dark:opacity-40"
+                :class="topGradientClasses"
+            ></div>
+
             <!-- Top Bar (Minimal) -->
-            <div class="px-6 pt-5 pb-2 flex items-center justify-between shrink-0 z-10">
+            <div class="px-6 pt-5 pb-2 flex items-center justify-between shrink-0 z-10 relative">
                 <!-- Color Dots -->
                 <div class="flex items-center gap-1.5">
                     <button 
@@ -45,10 +51,10 @@
                     
                     <button 
                         @click="$emit('close')"
-                        class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
+                        class="px-3 py-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 text-xs font-bold uppercase tracking-widest"
                         title="Close"
                     >
-                        <i class="ri-close-line text-2xl leading-none"></i>
+                        Close
                     </button>
                 </div>
             </div>
@@ -77,7 +83,8 @@
                     <div 
                         v-for="tag in localData.tags" 
                         :key="tag" 
-                        class="bg-black/5 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1 group transition-colors hover:bg-red-500/10 hover:text-red-500 cursor-pointer"
+                        class="px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1 group transition-colors cursor-pointer"
+                        :class="getTagColor(tag)"
                         @click="removeTag(tag)"
                     >
                         <i class="ri-hashtag opacity-50"></i>
@@ -91,7 +98,7 @@
                             @keydown.enter.prevent="addTagFromInput" 
                             @keydown.backspace="handleBackspace"
                             @focus="showSuggestions = true"
-                            @blur="setTimeout(() => showSuggestions = false, 200)"
+                            @blur="handleBlur"
                             type="text"
                             placeholder="#Add tag..." 
                             class="w-full bg-transparent border-none p-0 text-sm text-zinc-600 dark:text-zinc-400 placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:ring-0 font-medium"
@@ -120,38 +127,38 @@
             </div>
 
             <!-- Bottom Bar (Context & Save) -->
-            <div class="px-6 py-4 border-t border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-zinc-800/30 backdrop-blur-sm flex items-center justify-between shrink-0">
-                <div class="flex items-center gap-4">
+            <div class="px-6 py-4 border-t border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-zinc-800/30 backdrop-blur-sm flex items-center justify-between shrink-0 z-20 h-16">
+                <div class="flex items-center gap-4 h-full">
                     <!-- Status Pill -->
-                    <div class="relative group">
+                    <div class="relative group h-9 flex items-center">
                          <select 
                             v-model="localData.status" 
-                            class="appearance-none bg-transparent pl-7 pr-3 py-1.5 text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 cursor-pointer rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors focus:ring-0 border-none"
+                            class="appearance-none bg-transparent pl-7 pr-3 h-full text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 cursor-pointer rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors focus:ring-0 border-none flex items-center"
                          >
                             <option value="Todo">Todo</option>
                             <option value="Doing">Doing</option>
                             <option value="Done">Done</option>
                             <option value="Archived">Archived</option>
                          </select>
-                         <i class="ri-checkbox-circle-line absolute left-2 top-1/2 -translate-y-1/2 text-lg text-zinc-400 pointer-events-none"></i>
+                         <i class="ri-checkbox-circle-line absolute left-2 text-lg text-zinc-400 pointer-events-none"></i>
                     </div>
 
                     <!-- Priority -->
-                     <div class="relative group">
+                     <div class="relative group h-9 flex items-center">
                          <select 
                             v-model="localData.priority" 
-                            class="appearance-none bg-transparent pl-7 pr-3 py-1.5 text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 cursor-pointer rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors focus:ring-0 border-none"
+                            class="appearance-none bg-transparent pl-7 pr-3 h-full text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-200 cursor-pointer rounded-lg hover:bg-black/5 dark:hover:bg-white/5 transition-colors focus:ring-0 border-none flex items-center"
                          >
                             <option value="P0">Urgent</option>
                             <option value="P1">High</option>
                             <option value="P2">Normal</option>
                             <option value="P3">Low</option>
                          </select>
-                         <i class="ri-flag-line absolute left-2 top-1/2 -translate-y-1/2 text-lg text-zinc-400 pointer-events-none"></i>
+                         <i class="ri-flag-line absolute left-2 text-lg text-zinc-400 pointer-events-none"></i>
                     </div>
 
                     <!-- Date Picker (Hidden native input hack) -->
-                    <div class="relative flex items-center group cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg px-2 py-1.5 transition-colors">
+                    <div class="relative flex items-center group cursor-pointer hover:bg-black/5 dark:hover:bg-white/5 rounded-lg px-2 h-9 transition-colors">
                         <i class="ri-calendar-line text-lg text-zinc-400 group-hover:text-zinc-600 mr-2"></i>
                         <input 
                             type="datetime-local" 
@@ -159,24 +166,24 @@
                             class="absolute inset-0 opacity-0 cursor-pointer"
                         />
                         <span 
-                            class="text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-900"
+                            class="text-xs font-bold uppercase tracking-widest text-zinc-500 hover:text-zinc-900 pt-0.5"
                         >
                             {{ dates.due ? formatDisplayDate(dates.due) : 'Set Date' }}
                         </span>
                     </div>
                 </div>
 
-                <div class="flex items-center gap-3">
+                <div class="flex items-center gap-3 h-full">
                     <span v-if="!isNew" class="text-[10px] text-zinc-400 uppercase tracking-widest hidden sm:block">
-                        Updated {{ formatTime(localData.updated_at || new Date().toISOString()) }}
+                        {{ formatTime(localData.updated_at || new Date().toISOString()) }}
                     </span>
                     
                     <button 
                         @click="save"
-                        class="px-6 py-2.5 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-xl hover:shadow-lg hover:-translate-y-0.5 active:scale-95 transition-all text-sm font-bold tracking-wide flex items-center gap-2"
+                        class="px-4 py-2 text-zinc-900 dark:text-zinc-100 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 active:scale-95 transition-all text-sm font-bold tracking-wide flex items-center gap-2 group"
                     >
-                        <i class="ri-save-line text-lg font-normal"></i>
                         <span>Save Memo</span>
+                        <i class="ri-arrow-right-line text-lg transition-transform group-hover:translate-x-1"></i>
                     </button>
                 </div>
             </div>
@@ -189,8 +196,11 @@
 import { ref, computed, watch } from 'vue';
 import { useMemosStore, type Memo } from '@/stores/memos';
 import { format } from 'date-fns';
+import { getTagColor } from '@/utils/colors';
 
 const store = useMemosStore();
+// ... (rest of imports)
+
 
 const props = defineProps<{
   memo: Memo | null;
@@ -240,30 +250,43 @@ if (props.memo) {
 
 // Styling Helpers
 // Styling Helpers
+// Styling Helpers
 function colorBg(c: string) {
     switch(c) {
         // Use gradients for the dots to imply the theme
-        case 'Yellow': return 'bg-gradient-to-br from-yellow-100 to-yellow-200 dark:from-yellow-900/40 dark:to-yellow-800/40';
-        case 'Red': return 'bg-gradient-to-br from-red-100 to-red-200 dark:from-red-900/40 dark:to-red-800/40';
-        case 'Green': return 'bg-gradient-to-br from-emerald-100 to-emerald-200 dark:from-emerald-900/40 dark:to-emerald-800/40';
-        case 'Blue': return 'bg-gradient-to-br from-sky-100 to-sky-200 dark:from-sky-900/40 dark:to-sky-800/40';
-        case 'Purple': return 'bg-gradient-to-br from-purple-100 to-purple-200 dark:from-purple-900/40 dark:to-purple-800/40';
-        case 'Gray': return 'bg-gradient-to-br from-gray-100 to-gray-200 dark:from-zinc-800 dark:to-zinc-700';
+        case 'Yellow': return 'bg-yellow-400 dark:bg-yellow-500';
+        case 'Red': return 'bg-red-400 dark:bg-red-500';
+        case 'Green': return 'bg-emerald-400 dark:bg-emerald-500';
+        case 'Blue': return 'bg-sky-400 dark:bg-sky-500';
+        case 'Purple': return 'bg-purple-400 dark:bg-purple-500';
+        case 'Gray': return 'bg-zinc-400 dark:bg-zinc-500';
         default: return 'bg-white';
     }
 }
 
 const themeClasses = computed(() => {
-    // Richer backgrounds with subtle gradients
+    // Top-Only Color Logic: Container is neutral, only borders/shadows might hint color
     switch (localData.value.color) {
-        // Stronger gradients as requested
-        case 'Yellow': return 'bg-gradient-to-br from-[#FFFBE6] via-[#FFF1B8] to-[#FFE58F] dark:from-zinc-900 dark:to-yellow-950/30 dark:border-yellow-500/30'; 
-        case 'Red': return 'bg-gradient-to-br from-[#FFF1F0] via-[#FFCCC7] to-[#FFA39E] dark:from-zinc-900 dark:to-red-950/30 dark:border-red-500/30';
-        case 'Green': return 'bg-gradient-to-br from-[#F6FFED] via-[#D9F7BE] to-[#B7EB8F] dark:from-zinc-900 dark:to-green-950/30 dark:border-green-500/30';
-        case 'Blue': return 'bg-gradient-to-br from-[#E6F7FF] via-[#BAE7FF] to-[#91D5FF] dark:from-zinc-900 dark:to-blue-950/30 dark:border-blue-500/30';
-        case 'Purple': return 'bg-gradient-to-br from-[#F9F0FF] via-[#EFDBFF] to-[#D3ADF7] dark:from-zinc-900 dark:to-purple-950/30 dark:border-purple-500/30';
-        case 'Gray': return 'bg-gradient-to-br from-[#FAFAFA] via-[#F5F5F5] to-[#E5E5E5] dark:from-zinc-900 dark:to-zinc-800 dark:border-zinc-700';
-        default: return 'bg-white dark:bg-zinc-900';
+        case 'Yellow': return 'border-yellow-200/50 dark:border-yellow-500/10 shadow-2xl shadow-yellow-500/5'; 
+        case 'Red': return 'border-red-200/50 dark:border-red-500/10 shadow-2xl shadow-red-500/5';
+        case 'Green': return 'border-emerald-200/50 dark:border-green-500/10 shadow-2xl shadow-emerald-500/5';
+        case 'Blue': return 'border-sky-200/50 dark:border-sky-500/10 shadow-2xl shadow-sky-500/5';
+        case 'Purple': return 'border-purple-200/50 dark:border-purple-500/10 shadow-2xl shadow-purple-500/5';
+        case 'Gray': return 'border-black/5 dark:border-white/5 shadow-2xl shadow-black/10';
+        default: return 'shadow-2xl';
+    }
+});
+
+const topGradientClasses = computed(() => {
+    // Premium faint gradient wash from top
+    switch (localData.value.color) {
+        case 'Yellow': return 'bg-gradient-to-b from-yellow-200/40 via-yellow-100/10 to-transparent dark:from-yellow-900/30 dark:to-transparent'; 
+        case 'Red': return 'bg-gradient-to-b from-red-200/40 via-red-100/10 to-transparent dark:from-red-900/30 dark:to-transparent';
+        case 'Green': return 'bg-gradient-to-b from-emerald-200/40 via-emerald-100/10 to-transparent dark:from-emerald-900/30 dark:to-transparent';
+        case 'Blue': return 'bg-gradient-to-b from-sky-200/40 via-sky-100/10 to-transparent dark:from-sky-900/30 dark:to-transparent';
+        case 'Purple': return 'bg-gradient-to-b from-purple-200/40 via-purple-100/10 to-transparent dark:from-purple-900/30 dark:to-transparent';
+        case 'Gray': return 'bg-gradient-to-b from-gray-200/40 via-gray-100/10 to-transparent dark:from-zinc-800/50 dark:to-transparent';
+        default: return 'opacity-0';
     }
 });
 
@@ -340,6 +363,12 @@ function handleBackspace(e: KeyboardEvent) {
         // Remove last tag
         localData.value.tags.pop();
     }
+}
+
+function handleBlur() {
+    setTimeout(() => {
+        showSuggestions.value = false;
+    }, 200);
 }
 </script>
 
