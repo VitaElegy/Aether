@@ -1,39 +1,89 @@
 <template>
-  <div class="h-full flex flex-col bg-surface-0">
-    <!-- Main Content -->
-    <div class="flex-1 overflow-hidden relative">
-      <div v-if="store.loading && store.memos.length === 0" class="absolute inset-0 flex items-center justify-center bg-surface-0/50 z-10">
-        <div class="i-ph-spinner animate-spin text-2xl text-primary" />
+  <div class="h-full flex bg-surface-0 overflow-hidden">
+    <!-- Sidebar: Tag Index -->
+    <aside class="w-64 flex-shrink-0 border-r border-border/40 bg-surface-1/50 flex flex-col">
+        <div class="p-6 pb-4">
+            <h2 class="text-sm font-bold text-text-secondary uppercase tracking-wider mb-4 px-2">Index</h2>
+            
+            <div class="space-y-1">
+                <!-- All Notes Filter -->
+                <button 
+                    @click="store.filterTags = []"
+                    class="w-full flex items-center justify-between px-3 py-2 rounded-lg text-sm transition-colors group"
+                    :class="store.filterTags.length === 0 ? 'bg-primary/10 text-primary font-medium' : 'text-text-secondary hover:bg-surface-2'"
+                >
+                    <div class="flex items-center gap-2">
+                        <i class="ri-function-line text-lg opacity-70" />
+                        <span>All Notes</span>
+                    </div>
+                    <span class="text-xs opacity-50">{{ store.memos.length }}</span>
+                </button>
+            </div>
+
+            <div class="mt-6 mb-2 px-2 text-xs font-bold text-text-tertiary uppercase tracking-widest opacity-60">Tags</div>
+
+            <div class="space-y-0.5 overflow-y-auto max-h-[calc(100vh-250px)] custom-scrollbar pr-2">
+                <button 
+                    v-for="tag in store.uniqueTags" 
+                    :key="tag.name"
+                    @click="toggleTag(tag.name)"
+                    class="w-full flex items-center justify-between px-3 py-1.5 rounded-md text-sm transition-all group relative"
+                    :class="store.filterTags.includes(tag.name) ? 'bg-primary/10 text-primary font-medium' : 'text-text-secondary hover:bg-surface-2 hover:pl-4'"
+                >
+                     <div class="flex items-center gap-2 truncate">
+                        <i class="ri-hashtag text-xs opacity-40 shrink-0" />
+                        <span class="truncate">{{ tag.name }}</span>
+                     </div>
+                     <span 
+                        class="text-[10px] px-1.5 py-0.5 rounded-full bg-surface-3/50 text-text-tertiary group-hover:bg-surface-3 transition-colors"
+                        :class="store.filterTags.includes(tag.name) ? 'bg-primary/20 text-primary' : ''"
+                     >
+                        {{ tag.count }}
+                     </span>
+                </button>
+                
+                <div v-if="store.uniqueTags.length === 0" class="px-3 py-4 text-center">
+                    <p class="text-xs text-text-tertiary italic">No tags yet</p>
+                </div>
+            </div>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <div class="flex-1 flex flex-col min-w-0 bg-surface-0 relative">
+      <div class="flex-1 overflow-hidden relative">
+        <div v-if="store.loading && store.memos.length === 0" class="absolute inset-0 flex items-center justify-center bg-surface-0/50 z-10">
+          <div class="i-ph-spinner animate-spin text-2xl text-primary" />
+        </div>
+
+        <Transition mode="out-in" name="fade-slide">
+          <KeepAlive>
+            <component 
+              :is="store.currentView === 'masonry' ? MemoMasonry : store.currentView === 'kanban' ? MemoKanban : MemoCalendar"
+              :memos="store.currentView === 'masonry' || store.currentView === 'calendar' ? store.filteredMemos : []"
+              :columns="store.currentView === 'kanban' ? store.kanbanColumns : {}"
+              @open="(m: Memo) => store.openEditor(m)"
+              @delete="handleDelete"
+              @toggle-pin="handleTogglePin"
+              @move="handleMove"
+              @create="(date: Date) => { store.ui.isCreating = true; store.ui.showEditor = true; initialDate = date; }"
+              @update-date="handleDateUpdate"
+            />
+          </KeepAlive>
+        </Transition>
       </div>
 
-      <Transition mode="out-in" name="fade-slide">
-        <KeepAlive>
-          <component 
-            :is="store.currentView === 'masonry' ? MemoMasonry : store.currentView === 'kanban' ? MemoKanban : MemoCalendar"
-            :memos="store.currentView === 'masonry' || store.currentView === 'calendar' ? store.filteredMemos : []"
-            :columns="store.currentView === 'kanban' ? store.kanbanColumns : {}"
-            @open="(m: Memo) => store.openEditor(m)"
-            @delete="handleDelete"
-            @toggle-pin="handleTogglePin"
-            @move="handleMove"
-            @create="(date: Date) => { store.ui.isCreating = true; store.ui.showEditor = true; initialDate = date; }"
-            @update-date="handleDateUpdate"
-          />
-        </KeepAlive>
-      </Transition>
-
+      <!-- Quick Capture / Editor Modal -->
+      <MemoEditor 
+        v-if="store.ui.showEditor"
+        :memo="store.ui.editingMemo"
+        :is-new="store.ui.isCreating"
+        :initial-date="initialDate"
+        :initial-status="initialStatus"
+        @close="store.closeEditor(); initialDate = undefined; initialStatus = undefined;"
+        @save="handleSave"
+      />
     </div>
-
-    <!-- Quick Capture / Editor Modal -->
-    <MemoEditor 
-      v-if="store.ui.showEditor"
-      :memo="store.ui.editingMemo"
-      :is-new="store.ui.isCreating"
-      :initial-date="initialDate"
-      :initial-status="initialStatus"
-      @close="store.closeEditor(); initialDate = undefined; initialStatus = undefined;"
-      @save="handleSave"
-    />
   </div>
 </template>
 
@@ -83,6 +133,15 @@ async function handleMove(id: string, status: string) {
 
 async function handleDateUpdate(id: string, dateIso: string) {
     await store.updateMemo(id, { due_at: dateIso });
+}
+
+function toggleTag(tag: string) {
+    const idx = store.filterTags.indexOf(tag);
+    if (idx === -1) {
+        store.filterTags.push(tag);
+    } else {
+        store.filterTags.splice(idx, 1);
+    }
 }
 </script>
 

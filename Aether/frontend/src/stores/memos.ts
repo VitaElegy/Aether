@@ -80,6 +80,18 @@ export const useMemosStore = defineStore('memos', () => {
         });
     });
 
+    const uniqueTags = computed(() => {
+        const counts = new Map<string, number>();
+        memos.value.forEach(m => {
+            m.tags.forEach(t => {
+                counts.set(t, (counts.get(t) || 0) + 1);
+            });
+        });
+        return Array.from(counts.entries())
+            .map(([name, count]) => ({ name, count }))
+            .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
+    });
+
     const kanbanColumns = computed(() => {
         const cols = {
             Todo: [] as Memo[],
@@ -187,6 +199,7 @@ export const useMemosStore = defineStore('memos', () => {
         searchQuery,
         filterTags,
         filteredMemos,
+        uniqueTags,
         kanbanColumns,
         ui, // Export UI state
         fetchMemos,
