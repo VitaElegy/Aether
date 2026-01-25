@@ -8,7 +8,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, watch, onMounted } from 'vue';
 import ProjectList from './ProjectList.vue';
 import VulnerabilityKanban from './VulnerabilityKanban.vue';
 import { useVrkbStore } from '@/stores/vrkb';
@@ -16,9 +16,24 @@ import { useVrkbStore } from '@/stores/vrkb';
 const store = useVrkbStore();
 const currentProject = computed(() => store.currentProject);
 
-// Logic: If no project selected -> Show List.
-// If project selected -> Show Kanban (Dashboard).
-// The children component can handle "Back" logic by calling store.selectProject(null).
+// Sync URL
+onMounted(() => {
+    const params = new URLSearchParams(window.location.search);
+    const pid = params.get('project_id');
+    if (pid) {
+        store.selectProject(pid);
+    }
+});
+
+watch(currentProject, (newVal) => {
+    const url = new URL(window.location.href);
+    if (newVal) {
+        url.searchParams.set('project_id', newVal.id);
+    } else {
+        url.searchParams.delete('project_id');
+    }
+    window.history.replaceState({}, '', url.toString());
+});
 </script>
 
 <style scoped>

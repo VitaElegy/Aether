@@ -93,6 +93,15 @@ export const useVrkbStore = defineStore('vrkb', () => {
         return newFinding;
     };
 
+    const uploadAsset = async (file: File) => {
+        isLoading.value = true;
+        try {
+            return await vrkbApi.uploadAsset(file);
+        } finally {
+            isLoading.value = false;
+        }
+    };
+
     return {
         projects,
         currentProject,
@@ -104,8 +113,9 @@ export const useVrkbStore = defineStore('vrkb', () => {
         selectProject,
         fetchFindings,
         updateFindingStatus,
-        createFinding
+        createFinding,
+        uploadAsset
     };
 });
 
-export type { VrkbProject, VrkbFinding, VrkbSection } from '@/api/vrkb';
+export type { VrkbProject, VrkbFinding, VrkbSection, VrkbAsset } from '@/api/vrkb';
