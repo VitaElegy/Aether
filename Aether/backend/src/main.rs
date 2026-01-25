@@ -336,7 +336,69 @@ async fn main() {
             FOREIGN KEY (project_id) REFERENCES vrkb_projects(id) ON DELETE CASCADE,
             FOREIGN KEY (asset_id) REFERENCES vrkb_assets(id) ON DELETE CASCADE
         );
+
+        CREATE TABLE IF NOT EXISTS vrkb_members (
+            project_id UUID NOT NULL,
+            user_id UUID NOT NULL,
+            role TEXT NOT NULL, -- 'Owner', 'Admin', 'Member', 'Viewer'
+            joined_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (project_id, user_id),
+            FOREIGN KEY (project_id) REFERENCES vrkb_projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS vrkb_specs (
+            id UUID PRIMARY KEY,
+            project_id UUID NOT NULL,
+            title TEXT NOT NULL,
+            content TEXT, -- Markdown content
+            version INT NOT NULL DEFAULT 1,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES vrkb_projects(id) ON DELETE CASCADE
+        );
+
+        CREATE TABLE IF NOT EXISTS vrkb_docs (
+            id UUID PRIMARY KEY,
+            project_id UUID NOT NULL,
+            title TEXT NOT NULL,
+            content JSONB, -- Block-based content or simple text
+            parent_id UUID, -- For hierarchy
+            author_id UUID,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY (project_id) REFERENCES vrkb_projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (parent_id) REFERENCES vrkb_docs(id) ON DELETE SET NULL,
+            FOREIGN KEY (author_id) REFERENCES users(id) ON DELETE SET NULL
+        );
+
+        -- Recycle Bin Migration
+        -- SQLite Note: Removed IF NOT EXISTS. Ignore errors.
+        ALTER TABLE vrkb_docs ADD COLUMN deleted_at TIMESTAMPTZ;
     ").await.map_err(|e| println!("Migration note (vrkb): {}", e));
+
+    // --- RECYCLE BIN CLEANUP TASK ---
+    let db_clone_cleanup = db.clone();
+    tokio::spawn(async move {
+        let threshold_days = 30;
+        tracing::info!("Running Recycle Bin Cleanup (Threshold: {} days)...", threshold_days);
+        
+        use crate::infrastructure::persistence::entities::vrkb::doc;
+        use sea_orm::{EntityTrait, QueryFilter, ColumnTrait};
+        use chrono::Utc;
+
+        let time_threshold = Utc::now() - chrono::Duration::days(threshold_days);
+        
+        // Using ORM for safe dialect handling
+        let res = doc::Entity::delete_many()
+            .filter(doc::Column::DeletedAt.lt(time_threshold))
+            .exec(&db_clone_cleanup)
+            .await;
+            
+        match res {
+            Ok(r) => tracing::info!("Cleanup complete. {} items permanently removed.", r.rows_affected),
+            Err(e) => tracing::error!("Cleanup failed: {}", e),
+        }
+    });
 
 
     // Initialize Auth Service
