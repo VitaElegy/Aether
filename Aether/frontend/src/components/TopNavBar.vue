@@ -1,18 +1,18 @@
 <template>
-  <nav class="h-16 w-full flex-shrink-0 flex items-center justify-between px-6 bg-paper/95 backdrop-blur z-[100] absolute top-0 left-0 transition-all duration-200 border-b border-ink/5">
+  <nav class="h-16 w-full flex-shrink-0 flex items-center justify-between px-6 bg-transparent z-[100] absolute top-0 left-0 transition-all duration-200 pointer-events-none">
     <!-- Left: Page Identity / Title -->
-    <div class="flex items-center gap-4 flex-1 justify-start min-w-0">
+    <div class="flex items-center gap-4 flex-1 justify-start min-w-0 pointer-events-auto">
       <GlobalBeacon />
       <slot name="left"></slot>
     </div>
 
     <!-- Center: Navigation / Context Controls -->
-    <div class="flex items-center justify-center gap-6 flex-[2] min-w-0 px-4">
+    <div class="flex items-center justify-center gap-6 flex-[2] min-w-0 px-4 pointer-events-auto">
       <slot name="center"></slot>
     </div>
 
     <!-- Right: Functional Actions -->
-    <div class="flex items-center gap-4 flex-1 justify-end min-w-0">
+    <div class="flex items-center gap-4 flex-1 justify-end min-w-0 pointer-events-auto">
       <slot name="right"></slot>
     </div>
   </nav>
