@@ -1,49 +1,65 @@
 <template>
-  <div 
-    class="memo-card relative group flex flex-col bg-surface-1 border border-border rounded-xl transition-all duration-200 hover:shadow-lg cursor-pointer select-none overflow-hidden"
+    <div 
+    class="memo-card relative group flex flex-col rounded-xl transition-all duration-300 hover:shadow-lg hover:-translate-y-0.5 cursor-pointer select-none overflow-hidden bg-white dark:bg-zinc-900 border border-transparent isolate"
     :class="[
-      selected ? 'ring-2 ring-primary' : '',
-      colorClass
+      selected ? 'ring-2 ring-primary ring-offset-2 dark:ring-offset-black' : 'border-border/40 hover:border-black/5 dark:hover:border-white/10',
+      colorBorderClass
     ]"
     @click="$emit('click')"
   >
     <!-- Header: Title & Pin -->
-    <div v-if="memo.title || memo.is_pinned" class="p-3 pb-0 flex items-start justify-between">
-      <h3 v-if="memo.title" class="font-bold text-text-primary text-sm line-clamp-2">
+    <div class="px-5 pt-5 pb-2 flex items-start justify-between relative z-10">
+      <h3 v-if="memo.title" class="font-bold text-text-primary text-base leading-tight line-clamp-2 tracking-tight">
         {{ memo.title }}
       </h3>
-      <div v-if="memo.is_pinned" class="text-xs text-primary">
-        <i class="ri-pushpin-fill" />
+      <div v-else class="h-6"></div> <!-- Spacer for formatting -->
+      
+      <div v-if="memo.is_pinned" class="text-amber-500 shrink-0 ml-2">
+        <i class="ri-pushpin-fill text-sm" />
       </div>
     </div>
 
     <!-- Body: Content Preview -->
-    <div class="p-3 text-sm text-text-secondary">
-      <div class="line-clamp-6 whitespace-pre-wrap font-serif">
+    <div class="px-5 pb-4 text-[15px] leading-relaxed text-text-secondary/90 font-medium relative z-10">
+      <div class="line-clamp-6 whitespace-pre-wrap decoration-clone font-sans">
          {{ previewContent }}
       </div>
     </div>
 
     <!-- Footer: Tags & Meta -->
-    <div class="mt-auto p-3 pt-0 flex items-center justify-between text-xs text-text-tertiary">
-      <div class="flex gap-1 overflow-hidden">
-        <span v-for="tag in memo.tags.slice(0, 3)" :key="tag" class="bg-surface-2 px-1.5 py-0.5 rounded-md">
+    <div class="mt-auto px-5 pb-5 flex items-center justify-between text-xs pt-3 border-t border-black/5 dark:border-white/5 mx-1 relative z-10">
+      <div class="flex gap-1.5 overflow-hidden flex-wrap max-h-6">
+        <span 
+            v-for="tag in memo.tags.slice(0, 3)" 
+            :key="tag" 
+            class="bg-black/5 dark:bg-white/10 px-2 py-0.5 rounded-full text-text-secondary/80 font-semibold tracking-wide"
+        >
           #{{ tag }}
         </span>
       </div>
-      <div>
+      <div class="text-text-tertiary font-medium font-mono text-[10px] uppercase tracking-wider opacity-70">
         {{ formatDate(memo.created_at) }}
       </div>
     </div>
     
-    <!-- Hover Actions -->
-    <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-1">
-       <button class="p-1 rounded-md bg-surface-2 hover:bg-surface-3 text-text-primary transition-colors" @click.stop="$emit('pin')">
-         <i :class="memo.is_pinned ? 'ri-pushpin-fill' : 'ri-pushpin-line'" />
-       </button>
-       <button class="p-1 rounded-md bg-surface-2 hover:bg-surface-3 text-red-500 hover:text-red-600 transition-colors" @click.stop="$emit('delete')">
-         <i class="ri-delete-bin-line" />
-       </button>
+    <!-- Hover Actions (Floating) -->
+    <div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-200 flex flex-col gap-1 translate-x-2 group-hover:translate-x-0 z-20">
+       <div class="flex gap-1">
+            <button 
+                class="w-7 h-7 rounded-lg bg-surface-2 dark:bg-zinc-800/90 shadow-sm hover:bg-surface-3 text-text-secondary hover:text-primary transition-all flex items-center justify-center backdrop-blur-sm"
+                @click.stop="$emit('pin')"
+                title="Pin"
+            >
+                <i :class="memo.is_pinned ? 'ri-pushpin-fill' : 'ri-pushpin-line'" />
+            </button>
+            <button 
+                class="w-7 h-7 rounded-lg bg-surface-2 dark:bg-zinc-800/90 shadow-sm hover:bg-surface-3 text-text-secondary hover:text-red-500 transition-all flex items-center justify-center backdrop-blur-sm"
+                @click.stop="$emit('delete')"
+                title="Delete"
+            >
+                <i class="ri-delete-bin-line" />
+            </button>
+       </div>
     </div>
   </div>
 </template>
@@ -61,36 +77,26 @@ const props = defineProps<{
 defineEmits(['click', 'delete', 'pin']);
 
 const previewContent = computed(() => {
-    // Simple text preview. If content is JSON, parse and extract text? 
-    // Requirement said content is "Block-First" but stored as JSON string.
-    // However, if we simply use raw text for phase 1, creating memo sends string.
-    // If backend stores JSONB, frontend CreateMemo sends string. Backend API (CreateMemoRequest) expects string.
-    // memo.rs -> Handler maps payload.content (String) to memo.content (String) to detail.content (String/JSONB).
-    // If DB has JSONB, saving a raw string might fail if not valid JSON.
-    // Ah, Step 217 `set(memo.content)` where `memo.content` came from `payload.content` (String).
-    // If DB expects JSONB, this string MUST be valid JSON.
-    // OR we wrap it: `serde_json::json!({ "text": memo.content })`.
-    // Given Block-First requirement, ideally we wrap it.
-    // But for now let's assume it's just text to get it working, OR assume the input IS valid JSON.
-    // Let's assume raw text for the preview logic for now.
-    return props.memo.content;
+    return props.memo.content || 'Empty Note';
 });
 
-const colorClass = computed(() => {
+// Use a left border or subtle background tint instead of strong gradients
+// Elegant Minimalism: White card with colored indicator
+const colorBorderClass = computed(() => {
     switch (props.memo.color) {
-        case 'Red': return 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800/30';
-        case 'Green': return 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800/30';
-        case 'Blue': return 'bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800/30';
-        case 'Purple': return 'bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800/30';
-        case 'Yellow': return 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800/30';
-        case 'Gray': return 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700';
-        default: return 'bg-surface-1';
+        case 'Yellow': return 'border-l-[4px] border-l-amber-300 dark:border-l-amber-600 bg-amber-50/30 dark:bg-amber-950/20'; 
+        case 'Red': return 'border-l-[4px] border-l-red-300 dark:border-l-red-600 bg-red-50/30 dark:bg-red-950/20';
+        case 'Green': return 'border-l-[4px] border-l-emerald-300 dark:border-l-emerald-600 bg-emerald-50/30 dark:bg-emerald-950/20';
+        case 'Blue': return 'border-l-[4px] border-l-blue-300 dark:border-l-blue-600 bg-blue-50/30 dark:bg-blue-950/20';
+        case 'Purple': return 'border-l-[4px] border-l-purple-300 dark:border-l-purple-600 bg-purple-50/30 dark:bg-purple-950/20';
+        case 'Gray': return 'border-l-[4px] border-l-zinc-300 dark:border-l-zinc-600 bg-zinc-50/30 dark:bg-zinc-800/30';
+        default: return 'border-l-[4px] border-l-transparent';
     }
 });
 
 function formatDate(date: string) {
     try {
-        return formatDistanceToNow(new Date(date), { addSuffix: true });
+        return formatDistanceToNow(new Date(date), { addSuffix: true }).replace('about ', '');
     } catch {
         return '';
     }

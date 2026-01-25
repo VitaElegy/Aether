@@ -30,7 +30,8 @@
       :memo="store.ui.editingMemo"
       :is-new="store.ui.isCreating"
       :initial-date="initialDate"
-      @close="store.closeEditor(); initialDate = undefined;"
+      :initial-status="initialStatus"
+      @close="store.closeEditor(); initialDate = undefined; initialStatus = undefined;"
       @save="handleSave"
     />
   </div>
@@ -46,6 +47,7 @@ import MemoCalendar from './MemoCalendar.vue';
 
 const store = useMemosStore();
 const initialDate = ref<Date | undefined>(undefined);
+const initialStatus = ref<string | undefined>(undefined);
 
 onMounted(() => {
   store.fetchMemos();
