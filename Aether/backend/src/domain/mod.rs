@@ -6,4 +6,5 @@ pub mod diff_service;
 pub mod sentence_parser;
 pub mod ports;
 pub mod kb;
+pub mod memos;
 

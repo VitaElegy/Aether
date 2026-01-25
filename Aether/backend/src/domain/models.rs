@@ -107,7 +107,12 @@ pub struct Memo {
     #[serde(flatten)]
     pub node: Node,
     pub content: String,
-    pub priority: Option<String>, // High, Medium, Low
+    pub priority: String, // P0, P1...
+    pub status: String, // Todo, Doing...
+    pub color: String, // Yellow, Red...
+    pub is_pinned: bool,
+    pub due_at: Option<DateTime<Utc>>,
+    pub reminder_at: Option<DateTime<Utc>>,
     pub tags: Vec<String>,
 }
 
