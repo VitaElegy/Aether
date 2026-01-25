@@ -71,6 +71,54 @@
                 ></textarea>
             </div>
 
+            <!-- Tags Section -->
+            <div class="px-8 pb-4 shrink-0">
+                <div class="flex flex-wrap gap-2 items-center relative">
+                    <div 
+                        v-for="tag in localData.tags" 
+                        :key="tag" 
+                        class="bg-black/5 dark:bg-white/10 text-zinc-600 dark:text-zinc-300 px-2.5 py-1 rounded-full text-xs font-medium flex items-center gap-1 group transition-colors hover:bg-red-500/10 hover:text-red-500 cursor-pointer"
+                        @click="removeTag(tag)"
+                    >
+                        <i class="ri-hashtag opacity-50"></i>
+                        <span>{{ tag }}</span>
+                        <i class="ri-close-line opacity-0 group-hover:opacity-100 transition-opacity"></i>
+                    </div>
+
+                    <div class="relative flex-1 min-w-[120px]">
+                        <input 
+                            v-model="tagInput" 
+                            @keydown.enter.prevent="addTagFromInput" 
+                            @keydown.backspace="handleBackspace"
+                            @focus="showSuggestions = true"
+                            @blur="setTimeout(() => showSuggestions = false, 200)"
+                            type="text"
+                            placeholder="#Add tag..." 
+                            class="w-full bg-transparent border-none p-0 text-sm text-zinc-600 dark:text-zinc-400 placeholder:text-zinc-300 dark:placeholder:text-zinc-600 focus:ring-0 font-medium"
+                        />
+                        
+                        <!-- Autocomplete Dropdown -->
+                        <div 
+                            v-if="showSuggestions && suggestedTags.length > 0" 
+                            class="absolute bottom-full left-0 mb-2 w-48 bg-white dark:bg-zinc-800 shadow-xl rounded-xl overflow-hidden border border-black/5 dark:border-white/5 z-20 flex flex-col py-1"
+                        >
+                            <button
+                                v-for="tag in suggestedTags"
+                                :key="tag.name"
+                                @click="addTag(tag.name)"
+                                class="px-3 py-2 text-left text-xs font-medium text-zinc-600 dark:text-zinc-300 hover:bg-black/5 dark:hover:bg-white/5 flex items-center justify-between group"
+                            >
+                                <div class="flex items-center gap-2">
+                                     <i class="ri-hashtag opacity-40"></i>
+                                     <span>{{ tag.name }}</span>
+                                </div>
+                                <span class="text-[10px] opacity-40">{{ tag.count }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Bottom Bar (Context & Save) -->
             <div class="px-6 py-4 border-t border-black/5 dark:border-white/5 bg-gray-50/50 dark:bg-zinc-800/30 backdrop-blur-sm flex items-center justify-between shrink-0">
                 <div class="flex items-center gap-4">
@@ -139,8 +187,10 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
-import type { Memo } from '@/stores/memos';
+import { useMemosStore, type Memo } from '@/stores/memos';
 import { format } from 'date-fns';
+
+const store = useMemosStore();
 
 const props = defineProps<{
   memo: Memo | null;
@@ -242,7 +292,54 @@ function save() {
         payload.visibility = 'Private'; 
     }
 
+    // Ensure tags array exists
+    if (!localData.value.tags) localData.value.tags = [];
+
     emit('save', payload);
+}
+
+// --- Tag Logic ---
+const tagInput = ref('');
+const showSuggestions = ref(false);
+
+const suggestedTags = computed(() => {
+    const input = tagInput.value.toLowerCase().replace(/^#/, '');
+    const currentTags = localData.value.tags || [];
+    
+    return store.uniqueTags.filter(t => {
+        const matchesInput = t.name.toLowerCase().includes(input);
+        const notSelected = !currentTags.includes(t.name);
+        return matchesInput && notSelected;
+    }).slice(0, 5); // Limit to 5 suggestions
+});
+
+function addTag(name: string) {
+    if (!localData.value.tags) localData.value.tags = [];
+    if (!localData.value.tags.includes(name)) {
+        localData.value.tags.push(name);
+    }
+    tagInput.value = '';
+    showSuggestions.value = false;
+}
+
+function addTagFromInput() {
+    const raw = tagInput.value.trim().replace(/^#/, '');
+    if (raw) {
+        addTag(raw);
+    }
+}
+
+function removeTag(name: string) {
+    if (localData.value.tags) {
+        localData.value.tags = localData.value.tags.filter(t => t !== name);
+    }
+}
+
+function handleBackspace(e: KeyboardEvent) {
+    if (tagInput.value === '' && localData.value.tags && localData.value.tags.length > 0) {
+        // Remove last tag
+        localData.value.tags.pop();
+    }
 }
 </script>
 
