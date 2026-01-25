@@ -1,5 +1,15 @@
 <template>
   <div class="h-full flex bg-surface-0 overflow-hidden">
+    <!-- Teleport Title to Nav Bar -->
+    <Teleport to="#nav-center-portal">
+         <div v-if="isActive" class="flex items-center gap-3">
+             <i class="ri-sticky-note-line text-ink/40 text-lg"></i>
+             <span class="text-[10px] font-black uppercase tracking-[0.3em] text-ink/40">
+                 Self Space / Memos / {{ currentViewLabel }}
+             </span>
+         </div>
+    </Teleport>
+
     <!-- Sidebar: Tag Index -->
     <aside class="w-64 flex-shrink-0 border-r border-border/40 bg-surface-1/50 flex flex-col">
         <div class="p-6 pb-4">
@@ -59,8 +69,8 @@
         <Transition mode="out-in" name="fade-slide">
           <KeepAlive>
             <component 
-              :is="store.currentView === 'masonry' ? MemoMasonry : store.currentView === 'kanban' ? MemoKanban : MemoCalendar"
-              :memos="store.currentView === 'masonry' || store.currentView === 'calendar' ? store.filteredMemos : []"
+              :is="viewComponent"
+              :memos="store.currentView !== 'kanban' ? store.filteredMemos : []"
               :columns="store.currentView === 'kanban' ? store.kanbanColumns : {}"
               @open="(m: Memo) => store.openEditor(m)"
               @delete="handleDelete"
@@ -85,25 +95,94 @@
         @close="store.closeEditor(); initialDate = undefined; initialStatus = undefined;"
         @save="handleSave"
       />
+
+      <!-- Immersive Writer Modal (FAB Activated) -->
+      <MemoWriterModal 
+        v-model="showWriter"
+        @save="handleQuickSave"
+      />
+
+      <!-- FAB -->
+      <button
+        @click="openWriter"
+        class="absolute bottom-8 right-8 w-14 h-14 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-full shadow-xl hover:shadow-2xl hover:-translate-y-1 active:scale-95 transition-all flex items-center justify-center z-50 group"
+        title="Quick Note"
+      >
+        <i class="ri-add-line text-3xl transition-transform group-hover:rotate-90"></i>
+      </button>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, computed, onActivated, onDeactivated, nextTick } from 'vue';
 import { useMemosStore, type Memo, type CreateMemoPayload, type UpdateMemoPayload } from '@/stores/memos';
+import { useNavigationStore } from '@/stores/navigation';
 import MemoMasonry from './MemoMasonry.vue';
 import MemoKanban from './MemoKanban.vue';
 import MemoEditor from './MemoEditor.vue';
 import MemoCalendar from './MemoCalendar.vue';
+import MemoTimeline from './MemoTimeline.vue';
+import MemoWriterModal from './MemoWriterModal.vue';
 
 const store = useMemosStore();
+const navStore = useNavigationStore();
 const initialDate = ref<Date | undefined>(undefined);
 const initialStatus = ref<string | undefined>(undefined);
+const showWriter = ref(false);
+const isActive = ref(false); // Track visibility for teleport content
+
+// View Component Map
+const viewComponent = computed(() => {
+    switch (store.currentView) {
+        case 'kanban': return MemoKanban;
+        case 'calendar': return MemoCalendar;
+        case 'timeline': return MemoTimeline;
+        default: return MemoMasonry;
+    }
+});
+
+const currentViewLabel = computed(() => {
+    switch(store.currentView) {
+        case 'masonry': return 'Gallery';
+        case 'kanban': return 'Board';
+        case 'calendar': return 'Calendar';
+        case 'timeline': return 'Timeline';
+        default: return 'Gallery';
+    }
+});
 
 onMounted(() => {
   store.fetchMemos();
+  // If not using KeepAlive, we'd set active here too.
+  // But usually wrapped in KeepAlive, so use onActivated.
+  // Wait, MemosModule IS wrapped in KeepAlive in SelfSpaceView.
 });
+
+onActivated(() => {
+    isActive.value = true;
+    navStore.setCustomCenter(true);
+});
+
+onDeactivated(() => {
+    isActive.value = false;
+    navStore.setCustomCenter(false);
+});
+
+// Fallback if not kept alive (nav safe)
+import { onBeforeUnmount } from 'vue';
+onBeforeUnmount(() => {
+    navStore.setCustomCenter(false);
+});
+
+function openWriter() {
+    showWriter.value = true;
+}
+
+async function handleQuickSave(payload: CreateMemoPayload) {
+    await store.createMemo(payload);
+    // showWriter is handled by v-model in the modal component or auto-closed
+}
 
 async function handleSave(payload: CreateMemoPayload | UpdateMemoPayload) {
   if (store.ui.isCreating) {
