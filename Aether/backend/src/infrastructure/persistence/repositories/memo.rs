@@ -65,8 +65,8 @@ impl MemoRepository for PostgresRepository {
 
         let detail_model = memo_detail::ActiveModel {
             id: Set(memo.node.id),
-            project_id: Set(memo.node.knowledge_base_id), // Map Project to KB ID
-            content: Set(memo.content), // Assuming content is JSONB? The Model says Text. Wait model in memo_detail.rs line 10 said `content: String`. Wait, earlier I set main.rs to JSONB. But entity.rs was String in the original file I overwrote?
+            project_id: Set(memo.node.knowledge_base_id), 
+            content: Set(serde_json::json!(memo.content)),
             // In Step 191 I made memo_detail.rs have `content: String` but `column_type = "Text"`.
             // But main.rs SQL says `content JSONB`.
             // If main.rs creates JSONB, SeaORM model MUST match.
@@ -189,7 +189,7 @@ fn map_memo(n: node::Model, d: memo_detail::Model) -> Memo {
             created_at: n.created_at.with_timezone(&Utc),
             updated_at: n.updated_at.with_timezone(&Utc),
         },
-        content: d.content,
+        content: d.content.as_str().map(|s| s.to_string()).or_else(|| d.content.to_string().into()).unwrap_or_default(),
         priority: match d.priority {
             memo_detail::MemoPriority::P0 => "P0".to_string(),
             memo_detail::MemoPriority::P1 => "P1".to_string(),

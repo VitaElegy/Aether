@@ -170,7 +170,7 @@ async fn main() {
             FOREIGN KEY(id) REFERENCES nodes(id) ON DELETE CASCADE
         );
         
-        // File System Driver: Memos
+        -- File System Driver: Memos
         CREATE TABLE IF NOT EXISTS memo_details (
             id UUID PRIMARY KEY, -- FK to nodes.id
             project_id UUID,

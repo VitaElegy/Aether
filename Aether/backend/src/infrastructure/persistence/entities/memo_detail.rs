@@ -58,8 +58,9 @@ pub struct Model {
     pub is_pinned: bool,
 
     // Content
-    #[sea_orm(column_type = "Text")]
-    pub content: String, // Stored as JSON Block array string, or just raw text? Requirements say "Block-First". But for simplicity in DB, often JSONB or Text. `article_details` uses JSONB. Let's use JSONB to be safe for Block structure.
+    // Content
+    #[sea_orm(column_type = "JsonBinary")]
+    pub content: Json,
     
     // GTD Fields
     pub status: MemoStatus,
