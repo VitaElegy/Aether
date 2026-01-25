@@ -32,11 +32,12 @@
       <!-- Days -->
       <!-- We need 6 rows to cover all possible month spans (max 42 days) or just flex -->
       <!-- Subgrid for days: grid-rows-6 (approx) -->
-      <div class="col-span-7 grid grid-cols-7 grid-rows-6 h-full">
+      <!-- Subgrid for days: grid-rows-6 (fixed 42 cells) -->
+      <div class="col-span-7 grid grid-cols-7 grid-rows-6 h-full min-h-0">
          <div 
             v-for="(day, idx) in calendarDays" 
             :key="idx"
-            class="border-r border-b border-border relative group flex flex-col overflow-hidden transition-colors"
+            class="border-r border-b border-border relative group flex flex-col overflow-hidden transition-colors min-h-0"
             :class="[
                 day.isCurrentMonth ? 'bg-surface-1' : 'bg-surface-2/30 text-text-tertiary',
                 isToday(day.date) ? 'bg-primary/5' : ''
@@ -48,7 +49,7 @@
             <div class="p-2 flex items-center justify-between shrink-0">
                 <span 
                     class="text-xs font-medium w-6 h-6 flex items-center justify-center rounded-full"
-                    :class="isToday(day.date) ? 'bg-primary text-white' : ''"
+                    :class="isToday(day.date) ? 'bg-text-primary text-surface-0' : ''"
                 >
                     {{ format(day.date, 'd') }}
                 </span>
@@ -70,10 +71,10 @@
                     @click.stop="$emit('open', memo)"
                     draggable="true"
                     @dragstart="onDragStart($event, memo)"
-                    class="text-[10px] p-1.5 rounded border mb-0.5 cursor-pointer shadow-sm hover:shadow-md transition-all truncate bg-surface-0 border-border hover:border-primary/50"
+                    class="text-[10px] p-1.5 rounded border mb-0.5 cursor-pointer shadow-sm hover:shadow-md transition-all truncate hover:border-primary/50"
                     :class="[ statusColorClass(memo) ]"
                 >
-                    <span v-if="memo.due_at" class="mr-1 text-primary">●</span>
+                    <span v-if="memo.due_at" class="mr-1 opacity-70">●</span>
                     {{ memo.title || 'Untitled' }}
                 </div>
             </div>
@@ -110,23 +111,24 @@ const currentDate = ref(new Date());
 const weekDays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Calendar Logic
+// Calendar Logic
 const calendarDays = computed(() => {
     const start = startOfWeek(startOfMonth(currentDate.value));
-    const end = endOfWeek(endOfMonth(currentDate.value));
     
-    // Ensure always 6 weeks (42 days) for consistent grid height
-    // Actually `eachDayOfInterval` just gives the range. 
-    // If we want fixed 6 rows, we might need to pad.
-    // Let's generate range mostly, and let grid layout handle it.
-    // CSS grid-rows-6 requires exactly 42 items? 
-    // Actually, `startOfWeek` and `endOfWeek` usually give 4, 5, or 6 weeks.
-    // To keep UI stable, let's just use what `eachDayOfInterval` gives, but force row height to be dynamic `1fr`.
+    // Generate exactly 42 days (6 rows * 7 columns) to keep grid stable
+    // This fixes issues where some months have 5 weeks and the grid layout shifts or breaks
+    const days = [];
+    let day = start;
     
-    const days = eachDayOfInterval({ start, end });
-    return days.map(date => ({
-        date,
-        isCurrentMonth: isSameMonth(date, currentDate.value)
-    }));
+    for (let i = 0; i < 42; i++) {
+        days.push({
+            date: day,
+            isCurrentMonth: isSameMonth(day, currentDate.value)
+        });
+        day = new Date(day.getTime() + 24 * 60 * 60 * 1000); // Add 1 day safely
+    }
+    
+    return days;
 });
 
 function isToday(date: Date) {
@@ -147,24 +149,26 @@ function jumpToToday() {
 
 function getMemosForDate(date: Date) {
     return props.memos.filter(memo => {
-        // Preference: check due_at first, then created_at?
-        // Usually Calendar View is for Due Dates (GTD).
-        // If no due_at, maybe don't show? Or show on created_at?
-        // Let's stick to: "Show if due_at is on this day".
-        // If we want a journal view, we use created_at.
-        // Let's support both logic via props later or just mix them?
-        // For now: Due Date is priority.
-        if (memo.due_at) {
-            return isSameDay(new Date(memo.due_at), date);
-        }
-        return false; 
+        // Preference: check due_at first, then fallback to created_at.
+        // This ensures every memo appears on the calendar at least once.
+        const targetDate = memo.due_at ? new Date(memo.due_at) : new Date(memo.created_at);
+        return isSameDay(targetDate, date);
     });
 }
 
 function statusColorClass(memo: Memo) {
-    if (memo.status === 'Done') return 'opacity-50 line-through decoration-text-tertiary text-text-tertiary';
-    // Priority colors?
-    return 'text-text-primary';
+    if (memo.status === 'Done') return 'opacity-60 bg-surface-2 border-transparent line-through text-text-tertiary';
+
+    // Map memo.color to classes
+    switch (memo.color) {
+        case 'Yellow': return 'bg-yellow-500/10 border-yellow-500/30 text-yellow-700 dark:text-yellow-300';
+        case 'Red': return 'bg-red-500/10 border-red-500/30 text-red-700 dark:text-red-300';
+        case 'Green': return 'bg-green-500/10 border-green-500/30 text-green-700 dark:text-green-300';
+        case 'Blue': return 'bg-blue-500/10 border-blue-500/30 text-blue-700 dark:text-blue-300';
+        case 'Purple': return 'bg-purple-500/10 border-purple-500/30 text-purple-700 dark:text-purple-300';
+        case 'Gray': return 'bg-zinc-500/10 border-zinc-500/30 text-zinc-700 dark:text-zinc-300';
+        default: return 'bg-surface-0 border-border text-text-primary';
+    }
 }
 
 // Drag and Drop (Reschedule)
