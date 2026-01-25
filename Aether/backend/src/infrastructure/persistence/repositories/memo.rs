@@ -39,12 +39,8 @@ impl MemoRepository for PostgresRepository {
             .exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         // 2. Save Detail
-        let status_enum = match memo.status.as_str() {
-            "Doing" => memo_detail::MemoStatus::Doing,
-            "Done" => memo_detail::MemoStatus::Done,
-            "Archived" => memo_detail::MemoStatus::Archived,
-            _ => memo_detail::MemoStatus::Todo,
-        };
+        // Status is now dynamic (String)
+        let status_val = memo.status.clone();
         
         let priority_enum = match memo.priority.as_str() {
             "P0" => memo_detail::MemoPriority::P0,
@@ -85,7 +81,7 @@ impl MemoRepository for PostgresRepository {
             // For now, let's proceed with String <-> JSONB casting logic if possible or just use whatever type aligns.
             // I will stick to what's defined in the FILE currently (String).
             priority: Set(priority_enum),
-            status: Set(status_enum),
+            status: Set(status_val),
             color: Set(color_enum),
             is_pinned: Set(memo.is_pinned),
             due_at: Set(memo.due_at.map(|d| d.into())),
@@ -196,12 +192,7 @@ fn map_memo(n: node::Model, d: memo_detail::Model) -> Memo {
             memo_detail::MemoPriority::P2 => "P2".to_string(),
             memo_detail::MemoPriority::P3 => "P3".to_string(),
         },
-        status: match d.status {
-            memo_detail::MemoStatus::Todo => "Todo".to_string(),
-            memo_detail::MemoStatus::Doing => "Doing".to_string(),
-            memo_detail::MemoStatus::Done => "Done".to_string(),
-            memo_detail::MemoStatus::Archived => "Archived".to_string(),
-        },
+        status: d.status,
         color: match d.color {
              memo_detail::MemoColor::Yellow => "Yellow".to_string(),
              memo_detail::MemoColor::Red => "Red".to_string(),

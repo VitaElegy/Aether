@@ -16,19 +16,6 @@ pub enum MemoPriority {
 
 #[derive(Clone, Debug, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
 #[sea_orm(rs_type = "String", db_type = "String(None)")]
-pub enum MemoStatus {
-    #[sea_orm(string_value = "Todo")]
-    Todo,
-    #[sea_orm(string_value = "Doing")]
-    Doing,
-    #[sea_orm(string_value = "Done")]
-    Done,
-    #[sea_orm(string_value = "Archived")]
-    Archived,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, EnumIter, DeriveActiveEnum, Serialize, Deserialize)]
-#[sea_orm(rs_type = "String", db_type = "String(None)")]
 pub enum MemoColor {
     #[sea_orm(string_value = "Yellow")]
     Yellow,
@@ -63,7 +50,7 @@ pub struct Model {
     pub content: Json,
     
     // GTD Fields
-    pub status: MemoStatus,
+    pub status: String,
     pub priority: MemoPriority,
     pub due_at: Option<DateTimeWithTimeZone>,
     pub reminder_at: Option<DateTimeWithTimeZone>,
