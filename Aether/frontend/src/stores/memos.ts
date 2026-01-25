@@ -59,6 +59,10 @@ export const useMemosStore = defineStore('memos', () => {
     const filterTags = ref<string[]>([]);
     const filterProject = ref<string | null>(null); // TODO: Project support
 
+    // Workflow
+    // Default fallback until loaded
+    const workflow = ref<string[]>(['Todo', 'Doing', 'Done']);
+
     // Getters
     const filteredMemos = computed(() => {
         let list = memos.value;
@@ -93,17 +97,22 @@ export const useMemosStore = defineStore('memos', () => {
     });
 
     const kanbanColumns = computed(() => {
-        const cols = {
-            Todo: [] as Memo[],
-            Doing: [] as Memo[],
-            Done: [] as Memo[],
-            Archived: [] as Memo[] // Usually hidden in default view
-        };
+        // Dynamic Columns from Workflow
+        const cols: Record<string, Memo[]> = {};
+
+        // Initialize from workflow
+        workflow.value.forEach(status => {
+            cols[status] = [];
+        });
+
         filteredMemos.value.forEach(m => {
-            if (cols[m.status as keyof typeof cols]) {
-                cols[m.status as keyof typeof cols].push(m);
+            if (cols[m.status]) {
+                cols[m.status].push(m);
             } else {
-                cols['Todo'].push(m); // Fallback
+                // If status is unknown (e.g. deleted from workflow), put in first column
+                const fallback = workflow.value[0] || 'Todo';
+                if (!cols[fallback]) cols[fallback] = []; // Safety
+                cols[fallback].push(m);
             }
         });
         return cols;
@@ -113,12 +122,36 @@ export const useMemosStore = defineStore('memos', () => {
     async function fetchMemos() {
         loading.value = true;
         try {
+            // Load Workflow Config First
+            await fetchWorkflow();
+
             const res = await axios.get('/api/memos');
             memos.value = res.data;
         } catch (e: any) {
             error.value = e.message || 'Failed to fetch memos';
         } finally {
             loading.value = false;
+        }
+    }
+
+    async function fetchWorkflow() {
+        try {
+            const res = await axios.get('/api/memos/workflow');
+            if (res.data && res.data.columns) {
+                workflow.value = res.data.columns;
+            }
+        } catch (e) {
+            console.warn('Failed to fetch workflow, using default', e);
+        }
+    }
+
+    async function saveWorkflow(columns: string[]) {
+        // Optimistic
+        workflow.value = columns;
+        try {
+            await axios.put('/api/memos/workflow', { columns });
+        } catch (e) {
+            console.error('Failed to save workflow', e);
         }
     }
 
@@ -201,12 +234,15 @@ export const useMemosStore = defineStore('memos', () => {
         filteredMemos,
         uniqueTags,
         kanbanColumns,
+        workflow, // Export State
         ui, // Export UI state
         fetchMemos,
         createMemo,
         updateMemo,
         deleteMemo,
         moveMemoToStatus,
+        fetchWorkflow, // Export
+        saveWorkflow,  // Export
         openEditor,
         closeEditor
     };

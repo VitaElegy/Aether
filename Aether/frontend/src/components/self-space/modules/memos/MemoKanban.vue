@@ -26,7 +26,15 @@
             >
                 <i class="ri-add-line" />
             </button>
-            <div class="i-ph-dots-three text-lg cursor-pointer text-text-tertiary hover:text-text-primary transition-colors" />
+            
+            <button
+                v-if="Object.keys(columns).length > 1"
+                @click="$emit('delete-column', String(status))"
+                class="w-6 h-6 rounded flex items-center justify-center text-text-tertiary hover:bg-red-500/10 hover:text-red-500 opacity-0 group-hover/header:opacity-100 transition-all scale-90 active:scale-95"
+                title="Delete Column"
+            >
+                <i class="ri-delete-bin-line" />
+            </button> 
         </div>
       </div>
 
@@ -57,6 +65,19 @@
         </div>
       </div>
     </div>
+      <!-- Add Column Button -->
+      <div 
+        class="flex-shrink-0 w-12 h-full flex items-start pt-3 opacity-50 hover:opacity-100 transition-opacity"
+      >
+        <button 
+          @click="$emit('add-column')"
+          class="w-8 h-8 rounded-full border border-dashed border-text-tertiary flex items-center justify-center text-text-tertiary hover:border-primary hover:text-primary hover:bg-primary/10 transition-all"
+          title="Add Status Column"
+        >
+          <i class="ri-add-line text-lg" />
+        </button>
+      </div>
+
   </div>
 </template>
 
@@ -68,24 +89,35 @@ defineProps<{
   columns: Record<string, Memo[]>;
 }>();
 
-const emit = defineEmits(['open', 'delete', 'move', 'toggle-pin', 'create']);
+const emit = defineEmits(['open', 'delete', 'move', 'toggle-pin', 'create', 'add-column', 'delete-column']);
 
 function statusColor(status: string) {
-    switch (status) {
-        case 'Todo': return 'bg-zinc-400';
-        case 'Doing': return 'bg-blue-500 shadow-blue-500/20';
-        case 'Done': return 'bg-emerald-500 shadow-emerald-500/20';
-        case 'Archived': return 'bg-purple-500 shadow-purple-500/20';
-        default: return 'bg-zinc-400';
+    // Persistent Hash Color for User Defined Columns
+    const colors = [
+        'bg-zinc-400', 
+        'bg-blue-500 shadow-blue-500/20', 
+        'bg-emerald-500 shadow-emerald-500/20', 
+        'bg-purple-500 shadow-purple-500/20',
+        'bg-amber-500 shadow-amber-500/20',
+        'bg-rose-500 shadow-rose-500/20',
+        'bg-cyan-500 shadow-cyan-500/20',
+        'bg-indigo-500 shadow-indigo-500/20',
+    ];
+
+    if (status === 'Todo') return colors[0];
+    if (status === 'Doing') return colors[1];
+    if (status === 'Done') return colors[2];
+    
+    // Hash string to index
+    let hash = 0;
+    for (let i = 0; i < status.length; i++) {
+        hash = status.charCodeAt(i) + ((hash << 5) - hash);
     }
+    const index = Math.abs(hash) % colors.length;
+    return colors[index];
 }
 
 function headerBorderClass(status: string) {
-    // Subtle top accent
-    // switch (status) {
-    //     case 'Doing': return 'border-t-2 border-t-blue-500/30';
-    //     default: return '';
-    // }
     return '';
 }
 
@@ -94,7 +126,6 @@ function onDragStart(event: DragEvent, memo: Memo) {
         event.dataTransfer.dropEffect = 'move';
         event.dataTransfer.effectAllowed = 'move';
         event.dataTransfer.setData('application/json', memo.id);
-        // Clean ghost image? Browser default usually OK.
     }
 }
 

@@ -67,6 +67,8 @@
               @toggle-pin="handleTogglePin"
               @move="handleMove"
               @create="(date: Date) => { store.ui.isCreating = true; store.ui.showEditor = true; initialDate = date; }"
+              @add-column="handleAddColumn"
+              @delete-column="handleDeleteColumn"
               @update-date="handleDateUpdate"
             />
           </KeepAlive>
@@ -141,6 +143,23 @@ function toggleTag(tag: string) {
         store.filterTags.push(tag);
     } else {
         store.filterTags.splice(idx, 1);
+    }
+}
+
+async function handleAddColumn() {
+    const name = prompt('Enter new column name:');
+    if (name && name.trim()) {
+        const cleanName = name.trim();
+        if (!store.workflow.includes(cleanName)) {
+            await store.saveWorkflow([...store.workflow, cleanName]);
+        }
+    }
+}
+
+async function handleDeleteColumn(status: string) {
+    if (confirm(`Delete column "${status}"? Memos in this column will be moved to the first column visually.`)) {
+        const newWorkflow = store.workflow.filter(s => s !== status);
+        await store.saveWorkflow(newWorkflow);
     }
 }
 </script>

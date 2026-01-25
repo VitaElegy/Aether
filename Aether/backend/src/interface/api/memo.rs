@@ -3,6 +3,7 @@ use axum::{
     http::StatusCode,
     response::IntoResponse,
 };
+use sea_orm::EntityTrait;
 use uuid::Uuid;
 use chrono::{Utc, DateTime};
 use crate::domain::models::{Memo, Node, NodeType, PermissionMode, UserId};
@@ -204,9 +205,104 @@ pub async fn update_memo_handler(
     }
 }
 
+#[derive(serde::Deserialize, serde::Serialize, Debug)]
+pub struct WorkflowConfig {
+    pub columns: Vec<String>,
+}
+
+pub async fn get_workflow_handler(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+) -> impl IntoResponse {
+    // 1. Try Find Config Node by Title "memo_workflow" (and author for personalization? or global?)
+    // Project Spec says: Config Node.
+    // Let's assume per-user config for now.
+    // Query: Node type="config", title="memo_workflow", author_id=user.id
+    
+    // We need a way to find specific config node.
+    // For now, list all nodes of type "config" created by user and filter in memory, or add find_by_type_title to repo.
+    // Adding `find_config` to Repo is cleaner but modifying Repo trait is heavy.
+    // Let's misuse `list` or just create a specific one-off query here using Entity if possible? 
+    // Repo abstraction hides Entity.
+    // Let's use `list` filter if possible, or accept we need a new repo method.
+    // Actually, we can just use `find_by_title` if we had it.
+    // Let's implement a simple loop over `list` for MVP since config nodes are rare.
+    // IMPROVEMENT: Add `find_config(key)` to repository.
+    
+    // WORKAROUND: Iterate list (inefficient but safe for now)
+    // Real implementation: DB Query `WHERE type='config' AND title='memo_workflow' AND author_id=?`
+    
+    // But wait, `list` returns Memos only? No, repo is `MemoRepository`. 
+    // We need generic Node access or a ConfigRepository.
+    // Let's punt and store this in a "Hidden Memo"? 
+    // No, "Everything is a Node".
+    // Let's use `state.repo.find_by_id` if we knew the ID. We don't.
+    // We need a `ConfigRepository`.
+    // OR: We store it in `users` table `experience` JSONB field?
+    // User requested "Convenient custom workflow".
+    // Storing in User.experience is actually cleaner for "User Preferences".
+    // Let's Pivot: Store in `User.experience.memo_workflow`.
+    
+    // Fetch User
+    let user_model = match crate::infrastructure::persistence::entities::user::Entity::find_by_id(user.id)
+        .one(&state.repo.db).await {
+            Ok(Some(u)) => u,
+            _ => return (StatusCode::INTERNAL_SERVER_ERROR, "User not found").into_response(),
+    };
+
+    let default_columns = vec!["Todo".to_string(), "Doing".to_string(), "Done".to_string()];
+
+    if let Some(exp) = user_model.experience {
+         if let Some(workflow) = exp.get("memo_workflow") {
+             if let Ok(cols) = serde_json::from_value::<Vec<String>>(workflow.clone()) {
+                 return Json(WorkflowConfig { columns: cols }).into_response();
+             }
+         }
+    }
+
+    // Default
+    Json(WorkflowConfig { columns: default_columns }).into_response()
+}
+
+pub async fn update_workflow_handler(
+    State(state): State<AppState>,
+    user: AuthenticatedUser,
+    Json(payload): Json<WorkflowConfig>,
+) -> impl IntoResponse {
+    use sea_orm::*;
+    use crate::infrastructure::persistence::entities::user;
+
+    // 1. Fetch User
+    let user_model = match user::Entity::find_by_id(user.id).one(&state.repo.db).await {
+        Ok(Some(u)) => u,
+        _ => return (StatusCode::INTERNAL_SERVER_ERROR, "User not found").into_response(),
+    };
+
+    let mut user_active: user::ActiveModel = user_model.into();
+    
+    // 2. Update Experience JSON
+    let mut exp = user_active.experience.clone().unwrap().unwrap_or(serde_json::json!({}));
+    // Ensure it's an object
+    if !exp.is_object() { exp = serde_json::json!({}); }
+    
+    exp["memo_workflow"] = serde_json::to_value(payload.columns).unwrap();
+    
+    user_active.experience = Set(Some(exp));
+
+    // 3. Save
+    match user_active.update(&state.repo.db).await {
+        Ok(_) => StatusCode::OK.into_response(),
+        Err(e) => {
+            tracing::error!("Failed to save workflow: {:?}", e);
+            (StatusCode::INTERNAL_SERVER_ERROR, "Failed to save workflow").into_response()
+        }
+    }
+}
+
 pub fn router() -> axum::Router<AppState> {
-    use axum::routing::{get, post, put};
+    use axum::routing::{get, post};
     axum::Router::new()
         .route("/api/memos", post(create_memo_handler).get(list_memos_handler))
+        .route("/api/memos/workflow", get(get_workflow_handler).put(update_workflow_handler))
         .route("/api/memos/:id", get(get_memo_handler).delete(delete_memo_handler).put(update_memo_handler))
 }
