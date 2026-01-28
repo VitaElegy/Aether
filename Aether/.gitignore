@@ -60,4 +60,4 @@ Cargo.lock
 debug/
 
 # AI Agent Documentation
-AI/
+# AI/ (Unignored for Governance)
