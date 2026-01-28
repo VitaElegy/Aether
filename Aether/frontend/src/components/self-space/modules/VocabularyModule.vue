@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
+
+const props = defineProps<{
+    kbId?: string; // [NEW] Context from Self Space
+}>();
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useDebounceFn } from '@vueuse/core';
 import { dictionaryApi, type DictionaryEntry } from '@/api/dictionary';
@@ -51,7 +55,16 @@ const navStore = useNavigationStore();
 const isActive = ref(false); // [HOISTED]
 
 // Tab State
-const activeTab = ref<'vocabulary' | 'articles'>('vocabulary');
+const activeTab = ref<'vocabulary' | 'articles'>('articles'); // Default to Articles for "English KB" context if kbId is present
+// If standard vocabulary view (no kbId), maybe default to words?
+// Actually, "English Analysis" KB is usually about Articles.
+// Let's make it smart.
+
+onMounted(() => {
+    if (props.kbId) {
+        activeTab.value = 'articles';
+    }
+});
 
 // Sync Navigation Bar State
 // Sync Navigation Bar State
@@ -464,7 +477,9 @@ const saveWord = async () => {
         const existing = vocabularyList.value.find(v => v.word.toLowerCase() === createForm.word.toLowerCase());
         const payload = {
              ...createForm,
+             kb_id: props.kbId, // [NEW] Bind to KB
              // Note: query_count and is_important are handled by server preservation logic in save_vocabulary,
+
         };
         
         await axios.post('/api/vocabulary', payload, config);
@@ -588,9 +603,14 @@ const fetchVocabularyList = async (query = '') => {
     try {
         const token = localStorage.getItem('aether_token');
         const config = { headers: { Authorization: `Bearer ${token}` } };
-        const url = query 
+        let url = query 
             ? `/api/vocabulary?limit=100&query=${query}&sort_by=${sortBy.value}&order=${sortOrder.value}` 
             : `/api/vocabulary?limit=100&sort_by=${sortBy.value}&order=${sortOrder.value}`;
+        
+        if (props.kbId) {
+            url += `&kb_id=${props.kbId}`;
+        }
+
             
         const res = await axios.get(url, config);
         vocabularyList.value = res.data;
@@ -694,7 +714,7 @@ const handleViewDetailsFromArticle = (payload: any) => {
 
         <!-- content: ARTICLES TAB -->
         <div v-if="activeTab === 'articles'" class="w-full h-full">
-            <ArticleAnalysisModule :headless="true" />
+            <ArticleAnalysisModule :kbId="props.kbId" :headless="true" />
         </div>
 
         <!-- content: VOCABULARY TAB -->

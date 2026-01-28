@@ -1,5 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
+
+const props = defineProps<{
+    kbId?: string;
+}>();
 import { useRouter } from 'vue-router';
 import { knowledgeApi, type KnowledgeBase } from '../../../api/knowledge';
 import { contentApi, type Content } from '../../../api/content';
@@ -409,9 +413,11 @@ const handleDeleteFromMenu = () => {
 };
 
 import { useNavigationStore } from '@/stores/navigation';
+import { usePreferencesStore } from '@/stores/preferences'; // [NEW]
 import { onActivated, onDeactivated, onUnmounted } from 'vue';
 
 const navStore = useNavigationStore();
+const prefStore = usePreferencesStore(); // [NEW]
 
 const setNavState = () => {
     // Knowledge Module uses standard header (no custom center/right for now)
@@ -434,9 +440,36 @@ const navigateToNewArticle = () => {
 };
 
 onMounted(() => {
-    fetchKBs();
+    if (props.kbId) {
+        // Direct Mode
+        knowledgeApi.get(props.kbId).then(kb => {
+            currentKb.value = kb;
+            viewMode.value = 'detail';
+            refreshContent();
+        }).catch(e => {
+            console.error("Failed to load initial KB", e);
+            fetchKBs(); // Fallback
+        });
+    } else {
+        fetchKBs();
+    }
     document.addEventListener('click', closeContextMenu);
     setNavState();
+});
+
+// Watch for prop change (if switching between pinned KBs of same type)
+watch(() => props.kbId, (newId) => {
+    if (newId) {
+         knowledgeApi.get(newId).then(kb => {
+            currentKb.value = kb;
+            viewMode.value = 'detail';
+            refreshContent();
+        });
+    } else {
+        viewMode.value = 'list';
+        currentKb.value = null;
+        fetchKBs();
+    }
 });
 
 onActivated(() => {
@@ -521,6 +554,14 @@ onUnmounted(() => {
                             <i class="ri-book-mark-fill text-6xl"></i>
                         </div>
                     </div>
+
+                    <!-- Pin Button (Top Right) -->
+                    <button @click.stop="prefStore.togglePin(kb.id)"
+                        class="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+                        :class="{ 'bg-accent/80 text-white': prefStore.isPinned(kb.id) }"
+                        title="Pin to Dock">
+                        <i :class="prefStore.isPinned(kb.id) ? 'ri-pushpin-fill' : 'ri-pushpin-line'"></i>
+                    </button>
 
                     <!-- Gradient Overlay -->
                     <div
@@ -755,6 +796,8 @@ onUnmounted(() => {
                         <option value="math_v1">Math Archive (Graph)</option>
                         <option value="math_v3">Math Manuscript (Book)</option>
                         <option value="english_v1">English Analysis (Academic)</option>
+                        <option value="memo">Memos (Sticky Notes)</option>
+                        <option value="vocabulary">Vocabulary (English)</option>
                     </select>
                 </div>
 

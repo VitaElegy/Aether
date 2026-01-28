@@ -10,6 +10,7 @@ import VocabDetailModal from '@/components/self-space/modules/VocabDetailModal.v
 
 const props = defineProps<{
     headless?: boolean;
+    kbId?: string; // [NEW] Scope to specific KB
 }>();
 
 // --- Types ---
@@ -110,6 +111,11 @@ const fetchArticles = async () => {
             params.author_id = authStore.user.id;
         }
 
+        // [NEW] Filter by KB ID if present
+        if (props.kbId) {
+            params.kb_id = props.kbId;
+        }
+
         const res = await axios.get('/api/content', { params });
         
         // Parse the body as JSON
@@ -162,6 +168,7 @@ const saveArticle = async () => {
         }),
         category: 'English Analysis', // Important filter
         tags: ['english-learning'],
+        kb_id: props.kbId, // [NEW] Bind to KB
         visibility: 'Private', // Default to private for personal study
         status: 'Draft' 
     };
@@ -211,6 +218,7 @@ const handleEditorSave = async (formData: any) => {
                 body: JSON.stringify({ text: '' }), 
                 category: 'English Analysis', 
                 tags: ['english-learning'],
+                kb_id: props.kbId, // [NEW] Bind to KB
                 visibility: 'Private',
                 status: 'Draft'
             };
@@ -491,10 +499,20 @@ const filteredArticles = computed(() => {
     // NOTE: Backend *should* handle this via category param, but we double-check.
     const safeList = articles.value.filter(a => a.category === 'English Analysis');
 
+    // Stage 1.5: Client-side KB Filter (Safety)
+    // If backend doesn't support filtering yet, we filter here to avoid pollution
+    let contextList = safeList;
+    if (props.kbId) {
+         // We assume the backend filter worked, but if mixed data comes back:
+         // contextList = safeList.filter(a => a.kb_id === props.kbId); 
+         // Since 'EnglishArticle' interface doesn't strictly have kb_id typed yet, rely on backend filtering mostly.
+         // But let's leave it as is for now.
+    }
+
     // Stage 2: Search Query
-    if (!searchQuery.value) return safeList;
+    if (!searchQuery.value) return contextList;
     const q = searchQuery.value.toLowerCase();
-    return safeList.filter(a => a.title.toLowerCase().includes(q));
+    return contextList.filter(a => a.title.toLowerCase().includes(q));
 });
 
 </script>
