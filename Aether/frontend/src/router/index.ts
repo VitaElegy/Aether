@@ -82,6 +82,12 @@ const router = createRouter({
       component: () => import('../components/self-space/presentation/PresentationContainer.vue'),
       meta: { transition: 'fade' }
     },
+    {
+      path: '/demo/math-v2',
+      name: 'math-v2-demo',
+      component: () => import('../views/MathV2Demo.vue'),
+      meta: { transition: 'fade' }
+    },
     // Wildcard redirect for safety
     {
       path: '/:pathMatch(.*)*',
