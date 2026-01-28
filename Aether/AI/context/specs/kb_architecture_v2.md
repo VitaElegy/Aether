@@ -1,7 +1,7 @@
 # Aether Knowledge Base Protocol V2 (Architecture Specification)
 
 **Status**: FINAL DRAFT
-**Version**: 2.0
+**Version**: 2.1
 **Date**: 2026-01-28
 **Architect**: System Agent (Elegy)
 
@@ -142,3 +142,30 @@ trait Searchable {
 1.  **Legacy Import**: Convert existing `content` (Markdown string) to `Block[]` using a specialized Migration Script.
 2.  **Dual Write**: Temporarily write to both `nodes.content` and `blocks` table during transition.
 3.  **Cutover**: Switch read path to `blocks` table once validation passes.
+
+---
+
+## 6. Special Knowledge Bases (Self Space Integration)
+
+### 6.1 Definition
+Special Knowledge Bases (SKBs) are instances of `KnowledgeBase` distinguished by their `renderer_id` (e.g., `memo`, `english`, `vrkb`). They are not separate database tables but distinct "Lenses" on the generic Node graph.
+
+### 6.2 Lifecycle & Topology
+-   **Mixed Mode**: Supports both **Singleton** (Ticketing) and **Template** (Multiple Memo Spaces) lifecycles.
+-   **Discovery**: Managed via the unified `Self Space > Knowledge` list view.
+-   **Activation**: Users "Pin" specific SKBs to the Self Space Dock.
+
+### 6.3 Dock Protocol (Pinning)
+-   **Storage**: `UserPreferences` (Local Storage / Backend Sync) stores list of `pinned_kb_ids`.
+-   **UI Behavior**:
+    -   Dock displays icons for Pinned KBs.
+    -   **Grouped Expansion**: If multiple KBs of type `memo` are pinned, they group under a single Memo Icon which reveals a sub-menu on click.
+
+### 6.4 Permissions
+-   **Strict Inheritance**: Access to the SKB implies access to its children.
+-   **Privacy Narrowing**: Child nodes can enforce **stricter** permissions (e.g., Private Doc in Shared KB). The System ReBAC must respect this "Deny-Override".
+
+### 6.5 Navigation & Reactivity
+-   **Component Recycling**: The Dock uses `<KeepAlive>` for performance.
+-   **Reactive Watchers**: All Module Components MUST implement `watch(() => props.kbId)` to handle switching between Pinned KBs of the same `renderer_id`.
+-   **State Isolation**: Switching from "Memo A" to "Memo B" must completely reset local state (loading flags, data arrays) to avoid data bleeding.
