@@ -30,6 +30,10 @@ pluginStore.registerPlugin(KnowledgePlugin)
 console.log('[Main] Registering MemosPlugin...');
 pluginStore.registerPlugin(MemosPlugin)
 pluginStore.registerPlugin(VocabularyPlugin)
+
 pluginStore.registerPlugin(VrkbPlugin)
+
+import { VrkbManifest } from './components/self-space/modules/vrkb/manifest'
+pluginStore.registerManifest(VrkbManifest)
 
 app.mount('#app')
