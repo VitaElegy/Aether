@@ -17,3 +17,4 @@ pub mod semantic_edge;
 pub mod graph_node;
 
 pub mod vrkb;
+pub mod blocks;

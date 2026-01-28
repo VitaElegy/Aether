@@ -43,6 +43,8 @@ async fn main() {
     // User approved "Fresh Start". We destroy old tables to rebuild the "Linux Kernel" architecture.
     // --- DROPPING TABLES FOR SCHEMA RESET (Phase 1 Refactor) ---
     // User approved "Fresh Start". We destroy old tables to rebuild the "Linux Kernel" architecture.
+    // --- DROPPING TABLES FOR SCHEMA RESET (Phase 1 Refactor) ---
+    // User approved "Fresh Start". We destroy old tables to rebuild the "Linux Kernel" architecture.
     let _ = db.execute_unprepared("
         DROP TABLE IF EXISTS comments;
         DROP TABLE IF EXISTS content_versions;
@@ -531,11 +533,100 @@ async fn main() {
         .layer(axum::extract::DefaultBodyLimit::max(50 * 1024 * 1024)) // 50MB Limit
         .layer(TraceLayer::new_for_http()); // Magic happens here: Automatic logging for every request
     
+    let args: Vec<String> = env::args().collect();
+    if args.len() > 1 && args[1] == "migrate" {
+        tracing::info!("Starting Bulk Migration: Articles -> Blocks...");
+        run_bulk_migration(db).await;
+        return;
+    }
+
     let addr = "0.0.0.0:3000";
     let listener = TcpListener::bind(addr).await.unwrap();
     tracing::info!("Aether Core online at {}", addr);
     axum::serve(listener, app).await.unwrap();
 }
+
+async fn run_bulk_migration(db: DatabaseConnection) {
+    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, Set, TransactionTrait};
+    use crate::infrastructure::persistence::entities::{article_detail, blocks, node};
+    use crate::domain::blocks::parser::parse_markdown_to_blocks;
+
+    // Fetch all articles
+    let articles = article_detail::Entity::find().all(&db).await.expect("Failed to fetch articles");
+    tracing::info!("Found {} articles to migrate.", articles.len());
+
+    for article in articles {
+        // Only migrate Markdown content
+        let body_json = article.body;
+        // Check if body acts like Markdown (string or object with 'markdown' key)
+        let md_text = if let Some(t) = body_json.as_str() {
+             t.to_string()
+        } else if let Some(t) = body_json.get("markdown").and_then(|v| v.as_str()) {
+             t.to_string()
+        } else if let Some(content) = body_json.get("content").and_then(|v| v.as_str()) {
+             // Tiptap or other formats might differ, but assuming simple here
+             content.to_string()
+        } else {
+             // Fallback: try to serialize generic JSON to string
+             serde_json::to_string_pretty(&body_json).unwrap_or_default()
+        };
+
+        if md_text.is_empty() {
+            tracing::warn!("Skipping empty article: {}", article.id);
+            continue;
+        }
+
+        let blocks_vec = parse_markdown_to_blocks(article.id, &md_text);
+        
+        if blocks_vec.is_empty() {
+             tracing::info!("No blocks parsed for article: {}", article.id);
+             continue;
+        }
+
+        // Transactional Replace
+        let txn = db.begin().await.expect("Txn begin failed");
+        
+        // 1. Delete existing
+        let del_res = blocks::Entity::delete_many()
+            .filter(blocks::Column::DocumentId.eq(article.id))
+            .exec(&txn)
+            .await;
+            
+        if let Err(e) = del_res {
+             tracing::error!("Failed to clean blocks for {}: {}", article.id, e);
+             continue; 
+        }
+
+        // 2. Insert new
+        let active_blocks: Vec<blocks::ActiveModel> = blocks_vec.into_iter().map(|mut b| {
+            // Ensure search trait application 
+            crate::domain::blocks::strategies::apply_searchable_trait(&mut b);
+
+            blocks::ActiveModel {
+                id: Set(b.id),
+                document_id: Set(b.document_id),
+                r#type: Set(b.type_name),
+                ordinal: Set(b.ordinal),
+                revision: Set(b.revision),
+                payload: Set(b.payload),
+                created_at: Set(b.created_at.into()),
+                updated_at: Set(b.updated_at.into()),
+            }
+        }).collect();
+
+        if let Err(e) = blocks::Entity::insert_many(active_blocks).exec(&txn).await {
+            tracing::error!("Failed to insert blocks for {}: {}", article.id, e);
+        } else {
+            if let Err(e) = txn.commit().await {
+                 tracing::error!("Failed to commit migration for {}: {}", article.id, e);
+            } else {
+                 tracing::info!("Migrated article: {} ({} blocks)", article.id, article.slug);
+            }
+        }
+    }
+    tracing::info!("Migration Complete.");
+}
+
 
 async fn health_check() -> &'static str {
     "Aether Systems Operational"

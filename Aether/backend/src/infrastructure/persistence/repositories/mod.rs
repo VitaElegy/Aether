@@ -9,3 +9,4 @@ pub mod knowledge_base;
 pub mod permission;
 pub mod graph_repo;
 pub mod vrkb;
+pub mod block_repository;
