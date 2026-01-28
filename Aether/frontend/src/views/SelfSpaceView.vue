@@ -93,6 +93,7 @@ const dockItems = computed(() => {
         component: {} as any,
         capabilities: []
     } as any;
+    libraryPlugin.pinned = true; // [NEW] System Fixed
     
     // 2. Aggregate Items (Pinned U Running)
     const groups: Record<string, any[]> = {};
@@ -115,7 +116,8 @@ const dockItems = computed(() => {
             },
             _renderer_id: renderer,
             _kb_id: kb.id,
-            _manifest: manifest
+            _manifest: manifest,
+            pinned: false // Default
         };
     };
 
@@ -125,6 +127,7 @@ const dockItems = computed(() => {
     pinnedKbs.value.forEach(kb => {
         processedIds.add(kb.id);
         const item = processKb(kb);
+        item.pinned = true; // [NEW] Explicitly pinned
         const key = item._renderer_id;
         if (!groups[key]) groups[key] = [];
         groups[key].push(item);
@@ -136,6 +139,7 @@ const dockItems = computed(() => {
             const kb = allKbs.value.find(k => k.id === kbId);
             if (kb) {
                 const item = processKb(kb);
+                item.pinned = false; // [NEW] Explicitly unpinned
                 const key = item._renderer_id;
                 if (!groups[key]) groups[key] = [];
                 groups[key].push(item);
@@ -335,6 +339,6 @@ const goBack = () => {
         </main>
 
         <!-- Dock Navigation -->
-        <ModuleSwitcher :active-module="currentModuleId" :modules="dockItems" @switch="switchModule" />
+        <ModuleSwitcher :active-module="currentModuleId" :modules="dockItems" @switch="switchModule" @close="closeApp" />
     </div>
 </template>
