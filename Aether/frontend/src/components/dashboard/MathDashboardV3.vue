@@ -99,8 +99,10 @@ const handleCreate = () => {
     router.push({ path: '/editor', query });
 };
 
+const emit = defineEmits(['open-settings']);
+
 const handleSettings = () => {
-    alert("Settings dialog would open here (use KnowledgeModule logic)");
+    emit('open-settings');
 };
 
 const goArticle = (id: string) => router.push(`/article/${id}`);

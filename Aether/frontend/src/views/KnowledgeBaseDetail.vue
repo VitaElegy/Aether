@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted, computed, defineAsyncComponent, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { knowledgeApi } from '@/api/knowledge';
 import { getDashboard } from '@/registries/read_layout_registry';
+import KnowledgeBaseSettings from '@/components/knowledge/KnowledgeBaseSettings.vue';
 
 // Lazy load known dashboards to register them
 // In a real plugin system these would be auto-discovered
@@ -15,10 +16,12 @@ registerDashboard('math_v1', MathDashboard);
 registerDashboard('math_v3', MathDashboardV3);
 
 const route = useRoute();
+const router = useRouter(); // [NEW]
 const kbId = computed(() => route.params.id as string);
 const kb = ref<any>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
+const showSettings = ref(false); // [NEW]
 
 const activeLayout = computed(() => {
     if (!kb.value) return null;
@@ -40,6 +43,10 @@ const loadKB = async () => {
 
 onMounted(loadKB);
 watch(kbId, loadKB);
+
+const handleDelete = () => {
+    router.push('/space'); // Redirect to Space/Home after delete
+};
 </script>
 
 <template>
@@ -58,6 +65,16 @@ watch(kbId, loadKB);
             :is="activeLayout" 
             :kb="kb"
             @refresh="loadKB"
+            @open-settings="showSettings = true"
+        />
+
+        <!-- Settings Modal -->
+        <KnowledgeBaseSettings 
+            v-if="showSettings && kb" 
+            :kb="kb" 
+            @close="showSettings = false"
+            @update="loadKB"
+            @delete="handleDelete"
         />
 
         <!-- Default Dashboard Fallback -->
