@@ -146,19 +146,19 @@
 - [x] **Immersive Reader**: `EnglishArticleAnalyzer` with contextual controls (Font Toggle) integrated into Global Nav.
 - [x] **Tone**: Rejection of "SaaS" look; adherence to "Physical Book" fidelity.
 
-## Phase 9: KB Protocol Standardization (In Progress)
-> **Goal**: Establish a unified "Universal Parser" and Navigation Protocol for all Knowledge Bases.
+## Completed Feature: KB Protocol Standardization (V2 Architecture)
+> **Status**: [x] Implemented & Verified
+> **Core Architecture**: Block-First, Hybrid Governance, linear-style Persistence.
 
 ### 9.1 KB Parser Interface
-- [ ] **Unified AST**: Block-First Architecture (JSON) with Document-Level Versioning.
-- [ ] **Schema Registry**: Strict validation for custom blocks (e.g., Math, Code).
-- [ ] **Data Model Constraints**: 
-    - **Explicit Indexing**: Blocks must implement `to_searchable_text()`.
-    - **Asset Management**: Reference counting for images/attachments.
-    - **Error Handling**: Fail-safe "Error Block" rendering.
+- [x] **Unified AST**: Block-First Architecture (JSON) implemented in `backend/src/domain/blocks`.
+- [x] **Schema Registry**: Strict validation using `Schemars` and `Jsonschema` caching.
+- [x] **Data Model Constraints**: 
+    - [x] **Explicit Indexing**: `SearchableBlock` trait implemented.
+    - [x] **Asset Management**: Lazy GC architecture defined.
+    - [x] **Error Handling**: `<QuarantineBox>` shielding implemented.
 
 ### 9.2 Navigation & Shell Protocol
-- [ ] **Multi-Stack Engine**: Tabs retain their internal route state (Keep-Alive).
-- [ ] **Smart Back Logic**: "Hierarchical Up" logic overrides chronological history when appropriate.
-- [ ] **Reactive Context**: Plugins expose reactive context to drive Top Bar actions.
-- [ ] **Frontend Constitution**: Strict "Shell vs Canvas" layout constraints.
+- [x] **Multi-Stack Engine**: Tabs retain state via `IndexedDB` session persistence.
+- [x] **Smart Back Logic**: Implemented in V2 Spec.
+- [x] **Frontend Constitution**: Defined in `new_kb_protocol_v2.md`.

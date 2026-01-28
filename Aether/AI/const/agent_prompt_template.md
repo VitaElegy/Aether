@@ -20,8 +20,9 @@ Before writing a single line of code or plan, you **MUST** read and analyze the 
     -   **SKILL LOADING**: Based on your task, load the relevant skills listed in Section 1 of this file (e.g., `AI/skills/frontend_vue.md`). Do not hallucinate rules.
 2.  **`AI/memory/ERROR_LOG.md`**: This is the history of past failures.
 3.  **`AI/context/roadmap.md`**: Project context.
-4.  **Feature Discovery**:
-    -   Check `.agent/workflows/` for plans.
+4.  **Feature Discovery and Protocols**:
+    -   **Check Protocol Registry**: In `AI/const/project_spec.md` (Section 1.1), check if your task falls under a governed domain (e.g., New KB). If so, READ the mandated protocol.
+    -   Check `.agent/workflows/` for existing plans.
     -   Check `scripts/scaffold/` for generators. **Prefer running scripts over manual creation.**
 
 ## 🎯 Task Objective
