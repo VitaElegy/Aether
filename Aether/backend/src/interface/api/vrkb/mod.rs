@@ -9,6 +9,8 @@ pub mod specs;
 pub mod docs;
 pub mod stats;
 
+pub mod structure;
+
 pub fn router() -> Router<AppState> {
     Router::new()
         .merge(projects::router())
@@ -18,4 +20,5 @@ pub fn router() -> Router<AppState> {
         .merge(specs::router())
         .merge(docs::router())
         .merge(stats::router())
+        .route("/api/kb/:id/structure", axum::routing::get(structure::get_kb_structure))
 }

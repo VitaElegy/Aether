@@ -6,7 +6,8 @@ use crate::domain::models::{Article, ContentBody, ContentVersionSnapshot, Node, 
 use crate::domain::models::UserId;
 use crate::domain::ports::{ArticleRepository, PermissionRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::infrastructure::persistence::entities::{node, article_detail, content_version, user};
+use crate::infrastructure::persistence::entities::{node, article_detail, content_version, user, blocks};
+use crate::domain::blocks::parser::parse_markdown_to_blocks;
 
 #[async_trait]
 impl ArticleRepository for PostgresRepository {
@@ -120,7 +121,7 @@ impl ArticleRepository for PostgresRepository {
                  node_id: Set(article.node.id),
                  version: Set(new_version),
                  title: Set(article.node.title),
-                 body: Set(body_json),
+                 body: Set(body_json.clone()),
                  change_reason: Set(change_reason),
                  content_hash: Set(current_hash),
                  editor_id: Set(editor_id.0),
@@ -128,6 +129,42 @@ impl ArticleRepository for PostgresRepository {
             };
             content_version::Entity::insert(version_model).exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         }
+
+        // [NEW] Dual Write Block Architecture
+        // ---------------------------------------------------------
+        // Parse Body and Write to Blocks Table
+        if let crate::domain::models::ContentBody::Markdown(ref md_text) = article.body {
+             let blocks_vec = parse_markdown_to_blocks(article.node.id, md_text);
+             
+             // 1. Delete existing blocks for this document
+             blocks::Entity::delete_many()
+                .filter(blocks::Column::DocumentId.eq(article.node.id))
+                .exec(&txn)
+                .await
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+             // 2. Insert Parsed Blocks
+             if !blocks_vec.is_empty() {
+                 let active_blocks: Vec<blocks::ActiveModel> = blocks_vec.into_iter().map(|b| {
+                    blocks::ActiveModel {
+                        id: Set(b.id),
+                        document_id: Set(b.document_id),
+                        r#type: Set(b.type_name),
+                        ordinal: Set(b.ordinal),
+                        revision: Set(b.revision),
+                        payload: Set(b.payload),
+                        created_at: Set(b.created_at.into()),
+                        updated_at: Set(b.updated_at.into()),
+                    }
+                }).collect();
+
+                 blocks::Entity::insert_many(active_blocks)
+                     .exec(&txn)
+                     .await
+                     .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+             }
+        }
+        // ---------------------------------------------------------
 
         txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
