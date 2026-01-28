@@ -84,7 +84,7 @@ pub trait VocabularyRepository: Send + Sync {
     async fn save(&self, vocab: Vocabulary) -> Result<Uuid, RepositoryError>;
     async fn find_by_word(&self, user_id: &UserId, word: &str) -> Result<Option<Vocabulary>, RepositoryError>; 
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<Vocabulary>, RepositoryError>;
-    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>, sort_by: Option<String>, order: Option<String>) -> Result<Vec<Vocabulary>, RepositoryError>;
+    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>, sort_by: Option<String>, order: Option<String>, knowledge_base_id: Option<Uuid>) -> Result<Vec<Vocabulary>, RepositoryError>;
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
     // Batch Operations
     async fn delete_many(&self, ids: &[Uuid]) -> Result<(), RepositoryError>; 

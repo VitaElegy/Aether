@@ -167,7 +167,7 @@ impl VocabularyRepository for PostgresRepository {
         }
     }
 
-    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>, sort_by: Option<String>, order: Option<String>) -> Result<Vec<Vocabulary>, RepositoryError> {
+    async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>, sort_by: Option<String>, order: Option<String>, knowledge_base_id: Option<Uuid>) -> Result<Vec<Vocabulary>, RepositoryError> {
         // Eager Loading using find_with_related is messy for 3 levels, so doing it iteratively or with find_also
         // Let's do a basic list then fetch details.
         
@@ -175,6 +175,16 @@ impl VocabularyRepository for PostgresRepository {
             .filter(node::Column::Type.eq("Vocabulary"))
             .filter(node::Column::AuthorId.eq(user_id.0)) 
             .find_also_related(vocab_detail::Entity);
+
+        // Filter by Knowledge Base ID
+        if let Some(kbid) = knowledge_base_id {
+            select = select.filter(node::Column::KnowledgeBaseId.eq(kbid));
+        } else {
+            // [OPTIONAL] If no KB ID provided, do we assume "Global/Library" items (kb_id IS NULL)?
+            // OR do we return ALL items across all KBs?
+            // "My Library" usually implies "All my stuff". So we DON'T filter by NULL here.
+            // This allows the "Library" view to see everything.
+        }
             
         // Query Search
         if let Some(q) = query {

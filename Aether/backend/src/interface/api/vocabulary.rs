@@ -43,6 +43,7 @@ pub struct CreateVocabularyRequest {
     // New
     pub root: Option<String>,
     pub examples: Option<Vec<ExampleRequest>>,
+    pub kb_id: Option<Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -52,6 +53,7 @@ pub struct ListVocabularyRequest {
     pub query: Option<String>,
     pub sort_by: Option<String>, // "query_count", "is_important", "created_at"
     pub order: Option<String>, // "asc", "desc"
+    pub kb_id: Option<Uuid>,
 }
 
 #[derive(Deserialize)]
@@ -103,7 +105,7 @@ async fn save_vocabulary(
             id,
             parent_id: None,
             author_id: user_id.0,
-            knowledge_base_id: None,
+            knowledge_base_id: payload.kb_id,
             r#type: NodeType::Vocabulary,
             title: payload.word.clone(), 
             permission_mode: PermissionMode::Private, 
@@ -138,7 +140,7 @@ async fn list_vocabulary(
     let limit = params.limit.unwrap_or(50);
     let offset = params.offset.unwrap_or(0);
 
-    match state.repo.list(&UserId(auth.id), limit, offset, params.query, params.sort_by, params.order).await {
+    match state.repo.list(&UserId(auth.id), limit, offset, params.query, params.sort_by, params.order, params.kb_id).await {
         Ok(list) => (StatusCode::OK, Json(serde_json::to_value(list).unwrap())).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
