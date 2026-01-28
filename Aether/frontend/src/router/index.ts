@@ -65,12 +65,7 @@ const router = createRouter({
       component: () => import('../views/SelfSpaceView.vue'),
       meta: { transition: 'fade' }
     },
-    {
-      path: '/kb/:id',
-      name: 'knowledge-base',
-      component: () => import('../views/KnowledgeBaseDetail.vue'),
-      meta: { transition: 'slide-right' }
-    },
+
     {
       path: '/kb/:id/tree',
       name: 'kb-tree-detail',
@@ -110,11 +105,7 @@ router.beforeEach(async (to, from, next) => {
   let moduleId = 'global';
   const path = to.path;
 
-  if (path.startsWith('/kb/')) {
-    // Extract KB ID: /kb/math/tree -> kb_math
-    const parts = path.split('/');
-    if (parts[2]) moduleId = `kb_${parts[2]}`;
-  } else if (path.startsWith('/space')) {
+  if (path.startsWith('/space')) {
     moduleId = 'space';
   } else if (path.startsWith('/editor')) {
     moduleId = 'editor';

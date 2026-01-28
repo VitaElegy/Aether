@@ -1,5 +1,5 @@
+import { defineAsyncComponent } from 'vue';
 import type { SelfSpacePlugin } from '../../core/plugin';
-import VocabularyModule from '../../components/self-space/modules/VocabularyModule.vue';
 
 export const VocabularyPlugin: SelfSpacePlugin = {
     id: 'vocabulary',
@@ -15,5 +15,5 @@ export const VocabularyPlugin: SelfSpacePlugin = {
     capabilities: {
         articleParser: false
     },
-    component: VocabularyModule,
+    component: defineAsyncComponent(() => import('../../components/self-space/modules/VocabularyModule.vue')),
 };

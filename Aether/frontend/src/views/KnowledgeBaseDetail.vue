@@ -14,6 +14,8 @@ const MathDashboardV3 = defineAsyncComponent(() => import('@/components/dashboar
 import { registerDashboard } from '@/registries/read_layout_registry';
 registerDashboard('math_v1', MathDashboard);
 registerDashboard('math_v3', MathDashboardV3);
+registerDashboard('vrkb', defineAsyncComponent(() => import('@/components/self-space/modules/vrkb/VrkbModule.vue')));
+registerDashboard('vuln', defineAsyncComponent(() => import('@/components/self-space/modules/vrkb/VrkbModule.vue'))); // Alias
 
 const route = useRoute();
 const router = useRouter(); // [NEW]
