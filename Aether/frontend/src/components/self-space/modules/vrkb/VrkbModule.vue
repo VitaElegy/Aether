@@ -9,30 +9,55 @@
 
 <script setup lang="ts">
 import { computed, watch, onMounted } from 'vue';
+import { useRoute, useRouter } from 'vue-router'; // [NEW]
 import ProjectList from './ProjectList.vue';
 import VulnerabilityKanban from './VulnerabilityKanban.vue';
 import { useVrkbStore } from '@/stores/vrkb';
 
 const store = useVrkbStore();
+const route = useRoute();
+const router = useRouter();
+
 const currentProject = computed(() => store.currentProject);
 
-// Sync URL
+// Sync URL (Deep Linking Rule)
+// Sync URL (Deep Linking Rule)
+// 1. Initialize from URL
 onMounted(() => {
-    const params = new URLSearchParams(window.location.search);
-    const pid = params.get('project_id');
+    const pid = route.query.project as string;
     if (pid) {
         store.selectProject(pid);
+    } else {
+        // CRITICAL: If no project in URL, ensure store is cleared
+        // This prevents stale state from persisting when switching modules
+        store.selectProject(null);
+    }
+});
+
+// 2. Watch URL -> Store (Forward Sync)
+// Handles browser back/forward buttons, or clicking Dock icon (which resets URL)
+watch(() => route.query.project, (newPid) => {
+    if (newPid && typeof newPid === 'string') {
+        if (store.currentProject?.id !== newPid) {
+            store.selectProject(newPid);
+        }
+    } else {
+        if (store.currentProject) {
+            store.selectProject(null);
+        }
     }
 });
 
 watch(currentProject, (newVal) => {
-    const url = new URL(window.location.href);
+    const query = { ...route.query };
     if (newVal) {
-        url.searchParams.set('project_id', newVal.id);
+        query.project = newVal.id;
     } else {
-        url.searchParams.delete('project_id');
+        delete query.project;
+        // Also clear view if we go back to project list
+        delete query.view;
     }
-    window.history.replaceState({}, '', url.toString());
+    router.replace({ query });
 });
 </script>
 

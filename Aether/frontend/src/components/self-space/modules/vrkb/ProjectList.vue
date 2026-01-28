@@ -1,7 +1,9 @@
 <template>
     <div class="h-full flex flex-col p-6 overflow-y-auto">
         <div class="flex items-center justify-between mb-8">
-            <h2 class="text-2xl font-serif text-ink tracking-tight">Projects</h2>
+            <div class="flex items-center gap-4">
+                <h2 class="text-2xl font-serif text-ink tracking-tight">Projects</h2>
+            </div>
             <button @click="showCreateModal = true" class="bg-accent text-white px-4 py-2 rounded-md hover:bg-accent/90 transition-colors font-medium flex items-center gap-2">
                 <i class="ri-add-line text-lg"></i>
                 New Project
@@ -102,6 +104,7 @@ import { useVrkbStore } from '@/stores/vrkb';
 import { DateTime } from 'luxon';
 
 const store = useVrkbStore();
+
 const showCreateModal = ref(false);
 const newProjectName = ref('');
 const newProjectRepo = ref('');
