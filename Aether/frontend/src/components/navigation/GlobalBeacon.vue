@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import { useNavigationStackStore } from '../../stores/navigationStack';
 
 const router = useRouter();
+const navStore = useNavigationStackStore();
 const isHovered = ref(false);
 
 const goHome = () => {
@@ -10,10 +12,17 @@ const goHome = () => {
 };
 
 const goBack = () => {
-    if (window.history.state && window.history.state.back) {
-        router.back();
+    // 1. Try Smart Trace (Scoped Stack)
+    // activeModule should be set by Router guard
+    const smartPrev = navStore.popRoute(navStore.activeModule);
+    
+    if (smartPrev) {
+        // We found a previous step in this module's history trace.
+        // Use replace to avoid polluting browser history with a "Back" action.
+        router.replace(smartPrev);
     } else {
-        // Smart fallback: if no history, go up one level or home
+        // 2. Hierarchy Fallback (No history for this module)
+        // Climb up the URL tree: /kb/math/tree -> /kb/math -> /
         const current = router.currentRoute.value.path;
         const segments = current.split('/').filter(p => p);
         if (segments.length > 0) {
