@@ -10,18 +10,22 @@ import { contentApi, type Content } from '../../../api/content';
 import { uploadApi } from '../../../api/upload';
 import TagInput from '../../common/TagInput.vue';
 import UserSelect from '../../common/UserSelect.vue';
-import BlockRenderer from '../renderer/BlockRenderer.vue'; // [FIXED]
+import BlockRenderer from '../renderer/BlockRenderer.vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+
+// -- V3 OS Context --
+import { inject } from 'vue';
+const os = inject<{ launchApp: (id: string) => void }>('os');
 
 // -- State --
 const router = useRouter();
-const viewMode = ref<'list' | 'detail' | 'settings' | 'article'>('list'); // [MODIFIED]
+const viewMode = ref<'list' | 'detail' | 'settings' | 'article'>('list');
 const knowledgeBases = ref<KnowledgeBase[]>([]);
 const currentKb = ref<KnowledgeBase | null>(null);
 const currentPath = ref<Content[]>([]); // Stack of folder objects
 const contents = ref<Content[]>([]); // Current folder contents
-const currentArticle = ref<any>(null); // [NEW]
-const currentBlocks = ref<any[]>([]);  // [NEW] Computed blocks for renderer
+const currentArticle = ref<any>(null);
+const currentBlocks = ref<any[]>([]);
 const isLoading = ref(false);
 
 const kbFormVisible = ref(false);
@@ -37,7 +41,7 @@ const settingsForm = ref({
     visibility: 'Private' as 'Public' | 'Private' | 'Internal',
     renderer_id: 'default'
 });
-const collaborators = ref<any[]>([]); // { user_id, username, role, ... }
+const collaborators = ref<any[]>([]); 
 const newCollaboratorRole = ref('Viewer');
 const newCollaboratorUser = ref<any>(null);
 
@@ -47,7 +51,9 @@ const contentForm = ref({ title: '' });
 
 // Context Menu State
 const contextMenuVisible = ref(false);
+// We differentiate between Content (Files) and KnowledgeBase (Apps)
 const contextMenuTarget = ref<Content | null>(null);
+const contextMenuKbTarget = ref<KnowledgeBase | null>(null); // [NEW]
 const contextMenuPosition = ref({ x: 0, y: 0 });
 
 
@@ -76,20 +82,31 @@ const fetchKBs = async () => {
 };
 
 const openKb = (kb: KnowledgeBase) => {
-    // Navigate to the dedicated Knowledge Base Dashboard
-    router.push(`/kb/${kb.id}`);
+    // V3: Direct Launch (OS Model)
+    if (os) {
+        os.launchApp(kb.id);
+    } else {
+        console.error("OS Context not found");
+        // Fallback for standalone dev
+        router.push(`/kb/${kb.id}`);
+    }
 };
 
-const openSettings = () => {
-    if (!currentKb.value) return;
+const openSettings = (kb?: KnowledgeBase) => {
+    // Support opening settings for specific KB (from context menu) or current (legacy)
+    const target = kb || currentKb.value;
+    if (!target) return;
+    
+    currentKb.value = target; // Ensure current is set for mutations
+    
     settingsForm.value = {
-        title: currentKb.value.title,
-        description: currentKb.value.description || '',
-        tags: currentKb.value.tags ? currentKb.value.tags.join(', ') : '',
-        cover_image: currentKb.value.cover_image || '',
-        cover_offset_y: currentKb.value.cover_offset_y || 50,
-        visibility: currentKb.value.visibility || 'Private',
-        renderer_id: currentKb.value.renderer_id || 'default'
+        title: target.title,
+        description: target.description || '',
+        tags: target.tags ? target.tags.join(', ') : '',
+        cover_image: target.cover_image || '',
+        cover_offset_y: target.cover_offset_y || 50,
+        visibility: target.visibility || 'Private',
+        renderer_id: target.renderer_id || 'default'
     };
     viewMode.value = 'settings';
     fetchCollaborators();
@@ -375,6 +392,16 @@ const createContent = async () => {
 const handleContextMenu = (e: MouseEvent, item: Content) => {
     e.preventDefault();
     contextMenuTarget.value = item;
+    contextMenuKbTarget.value = null; // Clear KB target
+    contextMenuPosition.value = { x: e.clientX, y: e.clientY };
+    contextMenuVisible.value = true;
+};
+
+const handleKbContextMenu = (e: MouseEvent, kb: KnowledgeBase) => {
+    e.preventDefault();
+    contextMenuKbTarget.value = kb;
+    contextMenuTarget.value = null; // Clear Content target
+    // Adjust position to avoid clipping
     contextMenuPosition.value = { x: e.clientX, y: e.clientY };
     contextMenuVisible.value = true;
 };
@@ -382,6 +409,7 @@ const handleContextMenu = (e: MouseEvent, item: Content) => {
 const closeContextMenu = () => {
     contextMenuVisible.value = false;
     contextMenuTarget.value = null;
+    contextMenuKbTarget.value = null;
 };
 
 const handleDeleteFromMenu = () => {
@@ -528,7 +556,7 @@ onUnmounted(() => {
                         class="bg-ink text-paper px-3 py-1.5 text-xs font-medium rounded hover:bg-accent transition-colors">
                         <i class="ri-file-add-line mr-1"></i> 文章
                     </button>
-                    <button @click="openSettings"
+                    <button @click="() => openSettings()"
                         class="bg-surface border border-ink/10 text-ink px-3 py-1.5 text-xs font-medium rounded hover:border-accent hover:text-accent transition-colors ml-2">
                         <i class="ri-settings-3-line mr-1"></i> 设置
                     </button>
@@ -541,7 +569,9 @@ onUnmounted(() => {
 
             <!-- LIST VIEW -->
             <div v-if="viewMode === 'list'" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div v-for="kb in knowledgeBases" :key="kb.id" @click="openKb(kb)"
+                <div v-for="kb in knowledgeBases" :key="kb.id" 
+                    @click="openKb(kb)"
+                    @contextmenu="handleKbContextMenu($event, kb)" 
                     class="group relative aspect-[4/3] rounded-2xl overflow-hidden cursor-pointer border border-ink/5 hover:shadow-2xl hover:shadow-black/5 transition-all duration-500">
 
                     <!-- Background Image or Placeholder -->
@@ -599,7 +629,6 @@ onUnmounted(() => {
                     <p>No Knowledge Bases found.</p>
                 </div>
             </div>
-
             <!-- SETTINGS VIEW -->
             <div v-else-if="viewMode === 'settings'" class="max-w-2xl mx-auto pb-32">
                 <div class="bg-surface rounded-lg border border-ink/5 p-8">
@@ -643,6 +672,9 @@ onUnmounted(() => {
                                     <option value="math_v1">Math Archive (Graph)</option>
                                     <option value="math_v3">Math Manuscript (Book)</option>
                                     <option value="english_v1">English Analysis (Academic)</option>
+                                    <option value="memo">Memos (Sticky Notes)</option>
+                                    <option value="vocabulary">Vocabulary (English)</option>
+                                    <option value="vrkb">Vulnerability Research (Kanban)</option>
                                 </select>
                             </div>
                             <div class="col-span-2">
@@ -773,10 +805,27 @@ onUnmounted(() => {
              class="fixed z-[100] bg-paper border border-ink/10 shadow-xl rounded py-1 min-w-[160px] flex flex-col"
              :style="{ top: `${contextMenuPosition.y}px`, left: `${contextMenuPosition.x}px` }"
              @click.stop>
-            <button @click="handleDeleteFromMenu" 
-                class="text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2">
-                <i class="ri-delete-bin-line"></i> Delete
-            </button>
+            
+            <!-- KB Context Menu -->
+            <template v-if="contextMenuKbTarget">
+                <button @click="openSettings(contextMenuKbTarget); closeContextMenu()" 
+                    class="text-left px-4 py-2 text-sm text-ink hover:bg-ash/50 transition-colors flex items-center gap-2">
+                    <i class="ri-settings-3-line"></i> Properties
+                </button>
+                <div class="h-[1px] bg-ink/5 my-1"></div>
+                <button @click="deleteKb" 
+                    class="text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2">
+                    <i class="ri-delete-bin-line"></i> Delete
+                </button>
+            </template>
+
+            <!-- Content Context Menu -->
+            <template v-else-if="contextMenuTarget">
+                <button @click="handleDeleteFromMenu" 
+                    class="text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2">
+                    <i class="ri-delete-bin-line"></i> Delete
+                </button>
+            </template>
         </div>
 
         <div v-if="kbFormVisible"
@@ -798,6 +847,7 @@ onUnmounted(() => {
                         <option value="english_v1">English Analysis (Academic)</option>
                         <option value="memo">Memos (Sticky Notes)</option>
                         <option value="vocabulary">Vocabulary (English)</option>
+                        <option value="vrkb">Vulnerability Research (Kanban)</option>
                     </select>
                 </div>
 
