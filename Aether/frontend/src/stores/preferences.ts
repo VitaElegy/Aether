@@ -38,6 +38,37 @@ export const usePreferencesStore = defineStore('preferences', () => {
     const readViewShowOutline = ref<boolean>(localStorage.getItem('aether_read_show_outline') !== 'false');
     const readViewTreeSide = ref<'left' | 'right'>((localStorage.getItem('aether_read_tree_side') as 'left' | 'right') || 'left');
 
+    // -- Pinned Knowledge Bases --
+    const pinnedKbIds = ref<string[]>([]);
+    try {
+        const stored = localStorage.getItem('aether_pinned_kbs');
+        if (stored) {
+            const parsed = JSON.parse(stored);
+            if (Array.isArray(parsed)) pinnedKbIds.value = parsed;
+        }
+    } catch (e) {
+        console.error('Failed to load pinned kbs', e);
+    }
+
+    watch(pinnedKbIds, (newVal) => {
+        localStorage.setItem('aether_pinned_kbs', JSON.stringify(newVal));
+    }, { deep: true });
+
+    const pinKb = (id: string) => {
+        if (!pinnedKbIds.value.includes(id)) pinnedKbIds.value.push(id);
+    };
+
+    const unpinKb = (id: string) => {
+        pinnedKbIds.value = pinnedKbIds.value.filter(x => x !== id);
+    };
+
+    const isPinned = (id: string) => pinnedKbIds.value.includes(id);
+
+    const togglePin = (id: string) => {
+        if (isPinned(id)) unpinKb(id);
+        else pinKb(id);
+    };
+
     // Persistence
     watch(readViewShowTree, (v) => localStorage.setItem('aether_read_show_tree', v.toString()));
     watch(readViewShowOutline, (v) => localStorage.setItem('aether_read_show_outline', v.toString()));
@@ -50,7 +81,12 @@ export const usePreferencesStore = defineStore('preferences', () => {
         readViewShowTree,
         readViewShowOutline,
         readViewTreeSide,
+        pinnedKbIds,
         toggleTheme,
-        toggleSidebar
+        toggleSidebar,
+        pinKb,
+        unpinKb,
+        isPinned,
+        togglePin
     };
 });

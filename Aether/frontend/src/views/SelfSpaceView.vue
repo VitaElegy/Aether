@@ -11,30 +11,176 @@ const router = useRouter();
 const pluginStore = usePluginStore();
 const vocabStore = useVocabularyStore();
 const navStore = useNavigationStore();
+const prefStore = usePreferencesStore(); // [NEW]
+import { usePreferencesStore } from '../stores/preferences';
+import { knowledgeApi, type KnowledgeBase } from '../api/knowledge';
 
-// Default to the first registered plugin or fallback to 'articles'
-const currentModuleId = ref('articles');
+// Default to 'library' (the manager)
+const currentModuleId = ref('library');
 
-const currentPlugin = computed(() => pluginStore.getPlugin(currentModuleId.value));
+// -- Dynamic Dock Logic --
+const pinnedKbs = ref<KnowledgeBase[]>([]);
+const isLoadingDock = ref(false);
 
-const CurrentComponent = computed(() => currentPlugin.value?.component);
-const currentModuleLabel = computed(() => currentPlugin.value?.dock.label || 'Self Space');
+const updateDock = async () => {
+    // We fetch all KBs and filter by pinned IDs
+    // Optimization: In real app, we should have a 'get_many' endpoint or just list.
+    // List is lightweight enough.
+    isLoadingDock.value = true;
+    try {
+        const all = await knowledgeApi.list();
+        pinnedKbs.value = all.filter(kb => prefStore.isPinned(kb.id));
+    } catch (e) {
+        console.error("Dock update failed", e);
+    } finally {
+        isLoadingDock.value = false;
+    }
+};
 
-// Header Protocol
-const currentHeaderIcon = computed(() => currentPlugin.value?.header?.icon);
-const CurrentHeaderActions = computed(() => currentPlugin.value?.header?.actions);
+// Initial Load & Watch
+watch(() => prefStore.pinnedKbIds, updateDock, { deep: true });
+// Also fetch on mount
+updateDock();
 
+// Compute Dock Items
+const dockItems = computed(() => {
+    // 1. The "Library" (All Apps) - Fixed
+    const libraryPlugin = pluginStore.getPlugin('knowledge') || {
+        id: 'library',
+        dock: { label: 'Library', icon: 'ri-apps-2-line', order: 0 },
+        component: {} as any,
+        capabilities: []
+    } as any; // Cast to avoid strict type check for now
+    
+    // 2. Pinned Items Grouping
+    const groups: Record<string, any[]> = {};
+    const singles: any[] = [];
+    
+    // First, map all to standardized objects
+    pinnedKbs.value.forEach(kb => {
+        let icon = 'ri-book-2-line';
+        let typeLabel = 'Knowedge';
+        let groupId = kb.renderer_id || 'default';
+
+        if (kb.renderer_id === 'memo') { icon = 'ri-sticky-note-line'; typeLabel = 'Memos'; }
+        if (kb.renderer_id === 'english') { icon = 'ri-translate-2'; typeLabel = 'English'; }
+        if (kb.renderer_id && kb.renderer_id.startsWith('math')) { icon = 'ri-functions'; typeLabel = 'Math'; }
+
+        const dockItem = {
+            id: kb.id,
+            dock: {
+                label: kb.title,
+                icon: icon,
+                order: 10
+            },
+            _renderer_id: kb.renderer_id || 'default', 
+            _kb_id: kb.id,
+            component: {} as any,
+            capabilities: []
+        };
+
+        if (!groups[groupId]) groups[groupId] = [];
+        groups[groupId].push(dockItem);
+    });
+
+    const processedItems: any[] = [];
+
+    // Process Groups
+    Object.keys(groups).forEach(key => {
+        const items = groups[key];
+        if (items.length > 1) {
+             // Create a Group Item if > 2 items of same type
+             // (Constraint: User said "multiple instances... group multiple instances")
+             // Let's use > 1 to be aggressive with grouping 
+             const first = items[0];
+             processedItems.push({
+                 id: `group_${key}`,
+                 dock: {
+                     label: key.charAt(0).toUpperCase() + key.slice(1) + 's', // e.g. Memos
+                     icon: first.dock.icon, // Use same icon
+                     order: 10
+                 },
+                 children: items
+             });
+        } else {
+            // Add as singles
+            processedItems.push(...items);
+        }
+    });
+
+    return [libraryPlugin, ...processedItems];
+});
+
+// Resolution Logic
+const currentDockItem = computed(() => {
+    // Search in top level
+    const top = dockItems.value.find(i => i.id === currentModuleId.value);
+    if (top) return top;
+
+    // Search in children
+    for (const item of dockItems.value) {
+        if ((item as any).children) {
+            const child = (item as any).children.find((c: any) => c.id === currentModuleId.value);
+            if (child) return child;
+        }
+    }
+    return null;
+});
+
+const CurrentComponent = computed(() => {
+    const item = currentDockItem.value;
+    if (!item) return null;
+
+    // A. It's a real plugin (Library)
+    if (pluginStore.getPlugin(item.id)) {
+        return pluginStore.getPlugin(item.id)?.component;
+    }
+
+    // B. It's a Pinned KB
+    // Resolve Component based on renderer_id
+    // We look up the 'base plugin' for that renderer
+    const renderer = (item as any)._renderer_id;
+    
+    if (renderer === 'memo') return pluginStore.getPlugin('memos')?.component;
+    // For English/Vocab, we map to 'vocabulary' plugin
+    if (renderer === 'english' || renderer === 'vocabulary') return pluginStore.getPlugin('vocabulary')?.component;
+    
+    // Default fallback is KnowledgeModule (Library) but in Detail Mode
+    return pluginStore.getPlugin('knowledge')?.component;
+});
+
+const currentKbId = computed(() => {
+    const item = currentDockItem.value;
+    if (item && (item as any)._kb_id) return (item as any)._kb_id;
+    return undefined;
+});
+
+const currentModuleLabel = computed(() => currentDockItem.value?.dock.label || 'Self Space');
+const currentHeaderIcon = computed(() => currentDockItem.value?.dock.icon);
+
+const CurrentHeaderActions = computed(() => {
+    const item = currentDockItem.value;
+    if (!item) return null;
+
+    // A. It's a real plugin (Library)
+    if (pluginStore.getPlugin(item.id)) {
+        return pluginStore.getPlugin(item.id)?.header?.actions;
+    }
+
+    // B. It's a Pinned KB - Loopup Base
+    const renderer = (item as any)._renderer_id;
+    if (renderer === 'memo') return pluginStore.getPlugin('memos')?.header?.actions;
+    if (renderer === 'english' || renderer === 'vocabulary') return pluginStore.getPlugin('vocabulary')?.header?.actions;
+    
+    return null;
+});
+
+// -- Refactored Switch --
 const switchModule = (id: string) => {
     currentModuleId.value = id;
 };
 
-// Global Safety Net Removed: Relies on module-level onDeactivated cleanup
-
-// Ensure we have a valid selection on mount if plugins are ready
-if (pluginStore.plugins.length > 0 && !pluginStore.getPlugin(currentModuleId.value)) {
-    currentModuleId.value = pluginStore.plugins[0].id;
-}
-// Navigation
+// -- Navigation --
 const goBack = () => {
     if (window.history.state && window.history.state.back) {
         router.back();
@@ -97,12 +243,12 @@ const goBack = () => {
                 leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100 translate-y-0"
                 leave-to-class="opacity-0 -translate-y-4">
                 <KeepAlive>
-                    <component :is="CurrentComponent" class="flex-1 h-full" :headless="true" />
+                    <component :is="CurrentComponent" :kbId="currentKbId" :key="currentModuleId" class="flex-1 h-full" :headless="true" />
                 </KeepAlive>
             </Transition>
         </main>
 
         <!-- Dock Navigation -->
-        <ModuleSwitcher :active-module="currentModuleId" :modules="pluginStore.plugins" @switch="switchModule" />
+        <ModuleSwitcher :active-module="currentModuleId" :modules="dockItems" @switch="switchModule" />
     </div>
 </template>
