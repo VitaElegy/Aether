@@ -51,10 +51,10 @@
                     
                     <button 
                         @click="$emit('close')"
-                        class="px-3 py-1.5 rounded-lg hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-500 hover:text-zinc-800 dark:text-zinc-400 dark:hover:text-zinc-200 text-xs font-bold uppercase tracking-widest"
+                        class="p-2 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors text-zinc-400 hover:text-zinc-800 dark:hover:text-zinc-200"
                         title="Close"
                     >
-                        Close
+                        <i class="ri-close-line text-2xl leading-none"></i>
                     </button>
                 </div>
             </div>

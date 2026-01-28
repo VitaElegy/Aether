@@ -650,7 +650,7 @@ const handleViewDetailsFromArticle = (payload: any) => {
         <!-- Implicit Library Toggle (Top Right) -->
         <!-- Navigation Teleports -->
         <Teleport to="#nav-center-portal">
-             <div v-if="isActive" class="flex items-center gap-3 font-serif text-sm pointer-events-auto">
+             <div v-if="isActive && !isDetailView && !isSpotlightActive" class="flex items-center gap-3 font-serif text-sm pointer-events-auto">
                 <button 
                     @click="activeTab = 'vocabulary'"
                     class="transition-all duration-300 relative group"
@@ -679,7 +679,7 @@ const handleViewDetailsFromArticle = (payload: any) => {
 
         <Teleport to="#nav-right-portal">
             <!-- Library Toggle (Only for Vocab Tab) -->
-            <template v-if="isActive">
+            <template v-if="isActive && !isDetailView && !isSpotlightActive">
                 <button 
                     v-if="activeTab === 'vocabulary'"
                 @click="showLibrary = !showLibrary"
@@ -1109,7 +1109,7 @@ const handleViewDetailsFromArticle = (payload: any) => {
 
         <!-- Full Screen Detail Overlay -->
         <Transition name="fade">
-            <div v-if="isDetailView && previewEntry" class="fixed inset-0 z-[100] bg-white flex flex-col overflow-hidden">
+            <div v-if="isDetailView && previewEntry" class="fixed inset-0 z-[200] bg-white flex flex-col overflow-hidden">
                 <!-- Header -->
                 <div class="px-8 py-6 border-b border-ink/5 flex justify-between items-center bg-white/80 backdrop-blur z-20">
                     <div class="flex items-center gap-4">
