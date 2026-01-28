@@ -8,6 +8,11 @@
 ### 1.2 Dashboard Registry ("Mixed Mode")
 - Custom Dashboards (Minisites) MUST wrap standard content management.
 
+### 1.3 Navigation Topology (Smart Trace)
+- **Concept**: User navigation (Back) follows "Logical Trace", not "Browser History".
+- **Spec**: See `AI/context/specs/navigation_topology_v1.md` for algorithm.
+- **Implementation**: Scoped Stacks in `navigationStack.ts`.
+
 ## 2. Project Organization
 - **Directory Structure**: See `AI/const/project_spec.md` for the directory map.
 - **Scripts**: All scripts centralized in `scripts/`.
