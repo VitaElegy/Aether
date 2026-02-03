@@ -1,14 +1,14 @@
 use axum::{
     extract::{Path, State},
     response::IntoResponse,
-    routing::{get, post, put, delete},
+    routing::{get, put},
     Json, Router,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use uuid::Uuid;
 use chrono::Utc;
 use crate::AppState;
-use crate::domain::models::{LayoutTemplate, permissions, User};
+use crate::domain::models::{LayoutTemplate, permissions};
 use crate::infrastructure::persistence::repositories::layout_template_repository::LayoutTemplateRepository;
 use crate::interface::api::auth::AuthenticatedUser;
 
@@ -22,6 +22,7 @@ pub struct CreateTemplateDto {
 }
 
 #[derive(Deserialize)]
+#[allow(dead_code)]
 pub struct UpdateTemplateDto {
     pub renderer_id: Option<String>,
     pub title: Option<String>,

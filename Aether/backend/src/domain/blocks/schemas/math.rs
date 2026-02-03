@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 use serde_json::json;
 
 pub fn get_axiom_schema() -> serde_json::Value {

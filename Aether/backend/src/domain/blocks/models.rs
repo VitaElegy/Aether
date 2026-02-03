@@ -3,6 +3,7 @@ use serde_json::Value;
 use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct Block {
     pub id: Uuid,
     pub document_id: Uuid,
@@ -17,12 +18,14 @@ pub struct Block {
 use std::sync::Arc;
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct BlockDefinition {
     pub type_name: String,
     pub validation_schema: Arc<jsonschema::JSONSchema>, // Compiled schema
     pub complexity_score: u8,
 }
 
+#[allow(dead_code)]
 pub trait SearchableBlock {
     fn to_search_text(&self, payload: &Value) -> String;
 }

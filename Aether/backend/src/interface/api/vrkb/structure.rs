@@ -3,7 +3,7 @@ use axum::{
     Json,
 };
 use uuid::Uuid;
-use std::sync::Arc;
+
 use serde_json::Value;
 
 use crate::domain::graph::computed_tree::ComputedTreeService;

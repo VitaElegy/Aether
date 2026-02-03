@@ -13,6 +13,7 @@ impl BlockRepository {
         Self { db }
     }
 
+    #[allow(dead_code)]
     pub async fn save_blocks(&self, document_id: Uuid, blocks: Vec<Block>) -> Result<(), DbErr> {
         let txn = self.db.begin().await?;
 
@@ -51,6 +52,7 @@ impl BlockRepository {
         Ok(())
     }
     
+    #[allow(dead_code)]
     pub async fn find_by_document_id(&self, document_id: Uuid) -> Result<Vec<Block>, DbErr> {
         let models = blocks::Entity::find()
             .filter(blocks::Column::DocumentId.eq(document_id))

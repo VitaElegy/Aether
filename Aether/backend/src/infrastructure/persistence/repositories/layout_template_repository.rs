@@ -65,6 +65,7 @@ impl LayoutTemplateRepository {
         Ok(())
     }
     
+    #[allow(dead_code)]
     pub async fn count(db: &DbConn) -> Result<u64, DbErr> {
         layout_template::Entity::find().count(db).await
     }

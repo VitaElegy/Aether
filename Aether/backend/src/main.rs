@@ -390,7 +390,10 @@ async fn main() {
         -- Recycle Bin Migration
         -- SQLite Note: Removed IF NOT EXISTS. Ignore errors.
         ALTER TABLE vrkb_docs ADD COLUMN deleted_at TIMESTAMPTZ;
-    ").await.map_err(|e| println!("Migration note (vrkb): {}", e));
+    ").await.map_err(|e| match e {
+        // Suppress "Duplicate Column" error roughly
+        _ => tracing::debug!("Migration note (vrkb): {}", e), 
+    });
 
     // --- RECYCLE BIN CLEANUP TASK ---
     let db_clone_cleanup = db.clone();
@@ -566,7 +569,7 @@ async fn main() {
 
 async fn run_bulk_migration(db: DatabaseConnection) {
     use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, Set, TransactionTrait};
-    use crate::infrastructure::persistence::entities::{article_detail, blocks, node};
+    use crate::infrastructure::persistence::entities::{article_detail, blocks};
     use crate::domain::blocks::parser::parse_markdown_to_blocks;
 
     // Fetch all articles

@@ -81,7 +81,7 @@ impl ComputedTreeService {
         // TODO: Detect cycles? If sorted_blocks.len() != blocks.len(), cycle exists.
         // For now, append remaining blocks (cycle participants) at the end.
         if sorted_blocks.len() != blocks.len() {
-             let mut processed: HashSet<Uuid> = sorted_blocks.iter().map(|b| b.id).collect();
+             let processed: HashSet<Uuid> = sorted_blocks.iter().map(|b| b.id).collect();
              for block in blocks {
                  if !processed.contains(&block.id) {
                      sorted_blocks.push(block);

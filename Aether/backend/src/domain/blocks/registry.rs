@@ -5,17 +5,20 @@ use jsonschema::JSONSchema;
 use serde_json::Value;
 
 #[derive(Clone)]
+#[allow(dead_code)]
 pub struct SchemaRegistry {
     definitions: Arc<RwLock<HashMap<String, BlockDefinition>>>,
 }
 
 impl SchemaRegistry {
+    #[allow(dead_code)]
     pub fn new() -> Self {
         Self {
             definitions: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
+    #[allow(dead_code)]
     pub fn register(&self, type_name: &str, schema_json: Value, complexity_score: u8) -> Result<(), String> {
         // Enforce Quotas (Simplistic implementation)
         if complexity_score > 100 {
@@ -36,6 +39,7 @@ impl SchemaRegistry {
         Ok(())
     }
 
+    #[allow(dead_code)]
     pub fn validate(&self, type_name: &str, payload: &Value) -> Result<(), String> {
         let registry = self.definitions.read().unwrap();
         
