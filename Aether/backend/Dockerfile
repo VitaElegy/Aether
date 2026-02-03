@@ -9,7 +9,7 @@ RUN cargo build --release
 FROM debian:testing-slim
 WORKDIR /app
 # Install OpenSSL/CA certificates
-RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y libssl-dev ca-certificates curl && rm -rf /var/lib/apt/lists/*
 
 # Copy Binary
 COPY --from=builder /app/target/release/aether_backend /app/aether_backend

@@ -12,6 +12,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - aether_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-aether} -d ${POSTGRES_DB:-aether_db}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build:
@@ -22,12 +27,19 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-aether}:${POSTGRES_PASSWORD:-aether_password}@db:5432/${POSTGRES_DB:-aether_db}
       JWT_SECRET: ${JWT_SECRET:-changeme_in_production}
       RUST_LOG: info
+      PORT: 3000
     volumes:
       - ./uploads:/app/uploads
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     networks:
       - aether_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
 
   frontend:
     build:
@@ -37,9 +49,15 @@ services:
     ports:
       - "80:80"
     depends_on:
-      - backend
+      backend:
+         condition: service_healthy
     networks:
       - aether_net
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
 
 volumes:
   postgres_data:
