@@ -13,7 +13,9 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Deserialize)]
 pub struct SearchParams {
-    q: String,
+    q: Option<String>,
+    limit: Option<u64>,
+    offset: Option<u64>,
 }
 
 #[derive(Serialize)]
@@ -29,11 +31,13 @@ pub async fn search_users_handler(
     _user: AuthenticatedUser,
     Query(params): Query<SearchParams>,
 ) -> impl IntoResponse {
-    if params.q.len() < 2 {
-        return (StatusCode::BAD_REQUEST, Json(serde_json::json!({ "error": "Query too short" }))).into_response();
-    }
+    let query = params.q.unwrap_or_default();
+    let limit = params.limit.unwrap_or(20);
+    let offset = params.offset.unwrap_or(0);
 
-    match state.repo.search_users(&params.q).await {
+    tracing::info!("Searching users: q='{}', limit={}, offset={}", query, limit, offset);
+
+    match state.repo.search_users(&query, limit, offset).await {
         Ok(users) => {
             let dtos: Vec<UserSummary> = users.into_iter().map(|u| UserSummary {
                 id: u.id.0,

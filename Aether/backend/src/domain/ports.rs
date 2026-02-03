@@ -49,7 +49,7 @@ pub trait UserRepository: Send + Sync {
     async fn find_by_username(&self, username: &str) -> Result<Option<User>, RepositoryError>;
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, RepositoryError>;
     async fn save(&self, user: User) -> Result<UserId, RepositoryError>;
-    async fn search_users(&self, query: &str) -> Result<Vec<User>, RepositoryError>;
+    async fn search_users(&self, query: &str, limit: u64, offset: u64) -> Result<Vec<User>, RepositoryError>;
 }
 
 #[async_trait]

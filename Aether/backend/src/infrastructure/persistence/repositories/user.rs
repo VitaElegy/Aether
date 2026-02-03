@@ -75,7 +75,7 @@ impl UserRepository for PostgresRepository {
         Ok(u.id)
     }
 
-    async fn search_users(&self, query: &str) -> Result<Vec<User>, RepositoryError> {
+    async fn search_users(&self, query: &str, limit: u64, offset: u64) -> Result<Vec<User>, RepositoryError> {
         let term = format!("%{}%", query);
         let users = user::Entity::find()
             .filter(
@@ -84,7 +84,8 @@ impl UserRepository for PostgresRepository {
                     .add(user::Column::DisplayName.like(&term))
                     .add(user::Column::Email.like(&term))
             )
-            .limit(10)
+            .limit(limit)
+            .offset(offset)
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
