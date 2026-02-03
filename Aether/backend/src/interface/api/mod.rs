@@ -15,3 +15,4 @@ pub mod user;
 pub mod system;
 pub mod graph;
 pub mod vrkb;
+pub mod template;

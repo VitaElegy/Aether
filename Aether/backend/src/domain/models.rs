@@ -383,3 +383,15 @@ pub struct VrkbHeatmapItem {
     pub level: i32,
     pub vulns: i64,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LayoutTemplate {
+    pub id: Uuid,
+    pub renderer_id: String,
+    pub title: String,
+    pub description: String,
+    pub thumbnail: Option<String>,
+    pub tags: Vec<String>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}

@@ -18,3 +18,4 @@ pub mod graph_node;
 
 pub mod vrkb;
 pub mod blocks;
+pub mod layout_template;
