@@ -1,12 +1,12 @@
 # Build Stage
-FROM rust:1.76-slim-bookworm as builder
+FROM rust:latest as builder
 WORKDIR /app
 COPY . .
 # Ensure we build release
 RUN cargo build --release
 
 # Runtime Stage
-FROM debian:bookworm-slim
+FROM debian:testing-slim
 WORKDIR /app
 # Install OpenSSL/CA certificates
 RUN apt-get update && apt-get install -y libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*

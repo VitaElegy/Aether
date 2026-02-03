@@ -1,0 +1,9 @@
+target/
+**/*.rs.bk
+**/*.log
+.env
+uploads/
+node_modules/
+.git/
+.DS_Store
+*.swp
