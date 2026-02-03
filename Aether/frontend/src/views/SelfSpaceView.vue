@@ -1,267 +1,141 @@
 <script setup lang="ts">
-import { ref, computed, watch } from 'vue'; // [FIXED]
+/**
+ * SelfSpaceView - The Desktop Shell
+ * 
+ * REFACTORED: Now uses useSelfSpaceOrchestrator for all state management.
+ * This component is now a thin presentation layer.
+ */
+import { onMounted, provide, onErrorCaptured, watch, computed } from 'vue';
 import { useRouter } from 'vue-router';
 import TopNavBar from '../components/TopNavBar.vue';
 import ModuleSwitcher from '../components/self-space/ModuleSwitcher.vue';
-import { usePluginStore } from '../stores/plugins';
-import { useVocabularyStore } from '../stores/vocabulary';
 import { useNavigationStore } from '../stores/navigation';
+import { usePluginStore } from '../stores/plugins';
+import { useSelfSpaceOrchestrator } from '../composables/useSelfSpaceOrchestrator';
+import { useAppStateStore } from '../stores/read_app_state';
+import { MessagePlugin } from 'tdesign-vue-next';
+import { osKey } from '../composables/useOS';
 
 const router = useRouter();
-const pluginStore = usePluginStore();
-const vocabStore = useVocabularyStore();
 const navStore = useNavigationStore();
-const prefStore = usePreferencesStore(); // [NEW]
-import { usePreferencesStore } from '../stores/preferences';
-import { knowledgeApi, type KnowledgeBase } from '../api/knowledge';
+const pluginStore = usePluginStore();
+const appStore = useAppStateStore();
 
-// Default to 'library' (the manager)
-const currentModuleId = ref('library');
+// ============================================================
+// ORCHESTRATOR (Single Source of Truth)
+// ============================================================
+const orchestrator = useSelfSpaceOrchestrator();
 
-// -- Dynamic Dock Logic --
-const pinnedKbs = ref<KnowledgeBase[]>([]);
-const allKbs = ref<KnowledgeBase[]>([]); // [NEW] Cache
-const isLoadingDock = ref(false);
+// Initialize on mount
+onMounted(async () => {
+    await orchestrator.initialize();
+});
 
-const updateDock = async () => {
-    // We fetch all KBs and filter by pinned IDs
-    // Optimization: In real app, we should have a 'get_many' endpoint or just list.
-    // List is lightweight enough.
-    isLoadingDock.value = true;
-    try {
-        const all = await knowledgeApi.list();
-        allKbs.value = all;
-        pinnedKbs.value = all.filter(kb => prefStore.isPinned(kb.id));
-    } catch (e) {
-        console.error("Dock update failed", e);
-    } finally {
-        isLoadingDock.value = false;
-    }
-};
-
-// Initial Load & Watch
-watch(() => prefStore.pinnedKbIds, updateDock, { deep: true });
-// Also fetch on mount
-updateDock();
-
-// -- V3 Shell State --
-const runningApps = ref<Set<string>>(new Set());
-
-// -- Actions --
+// ============================================================
+// ACTIONS (Delegated to Orchestrator)
+// ============================================================
+// ============================================================
+// ACTIONS (Delegated to Orchestrator + Router)
+// ============================================================
 const launchApp = async (kbId: string) => {
-    // 0. Ensure we have metadata (for new KBs)
-    if (!allKbs.value.find(k => k.id === kbId)) {
-        await updateDock();
-    }
-
-    // 1. Add to running apps (if not pinned)
-    if (!prefStore.isPinned(kbId)) {
-        runningApps.value.add(kbId);
-    }
-    // 2. Switch to it
-    currentModuleId.value = kbId;
-    // 3. Reset URL for pure launch
-    router.replace({ query: {} });
+    // 1. Update URL (Source of Truth)
+    // using replace to prevent history spam, unless it's a distinct navigation context?
+    // User requested "silky smooth", replace is usually better for tab-switching feel.
+    router.replace({ name: 'space', params: { kbId } });
 };
 
 const closeApp = (kbId: string) => {
-    // 1. Remove from running apps
-    runningApps.value.delete(kbId);
-    
-    // 2. If it was active, go home
-    if (currentModuleId.value === kbId) {
-        currentModuleId.value = 'library';
-        router.replace({ query: {} });
+    orchestrator.closeKb(kbId);
+    if (appStore.activeKbId === kbId) {
+        router.replace({ name: 'space', params: { kbId: 'library' } });
     }
-    
-    // 3. Deep Cleanup (Store Reset)
-    // We should ideally call a cleanup hook on the plugin, but for now we rely on onUnmounted
 };
 
 const goHome = () => {
-   currentModuleId.value = 'library';
-   router.replace({ query: {} });
+    router.replace({ name: 'space', params: { kbId: 'library' } });
 };
 
-
-// Compute Dock Items (V3: Pinned + Running)
-const dockItems = computed(() => {
-    // 1. The "Launchpad" (Library) - Always First
-    const libraryPlugin = pluginStore.getPlugin('knowledge') || {
-        id: 'library',
-        dock: { label: 'Launchpad', icon: 'ri-apps-2-line', order: 0 },
-        component: {} as any,
-        capabilities: []
-    } as any;
-    
-    // 2. Aggregate Items (Pinned U Running)
-    const groups: Record<string, any[]> = {};
-    
-    // Helper to process KB into DockItem
-    const processKb = (kb: KnowledgeBase) => {
-        const renderer = kb.renderer_id || 'default';
-        const manifest = pluginStore.getManifest(renderer);
-        
-        let icon = 'ri-book-2-line';
-        if (manifest) icon = manifest.identity.icon;
-        else if (renderer === 'vuln' || renderer === 'vrkb') icon = 'ri-shield-keyhole-line';
-
-        return {
-            id: kb.id,
-            dock: {
-                label: kb.title,
-                icon: icon,
-                order: 10
-            },
-            _renderer_id: renderer,
-            _kb_id: kb.id,
-            _manifest: manifest
-        };
-    };
-
-    // A. Pinned
-    const processedIds = new Set<string>();
-    
-    pinnedKbs.value.forEach(kb => {
-        processedIds.add(kb.id);
-        const item = processKb(kb);
-        const key = item._renderer_id;
-        if (!groups[key]) groups[key] = [];
-        groups[key].push(item);
-    });
-
-    // B. Running (but not Pinned)
-    runningApps.value.forEach(kbId => {
-        if (!processedIds.has(kbId)) {
-            const kb = allKbs.value.find(k => k.id === kbId);
-            if (kb) {
-                const item = processKb(kb);
-                const key = item._renderer_id;
-                if (!groups[key]) groups[key] = [];
-                groups[key].push(item);
-            }
-        }
-    });
-    
-    const processedItems: any[] = [];
-
-    // Process Groups
-    Object.keys(groups).forEach(key => {
-        const items = groups[key];
-        const manifest = pluginStore.getManifest(key);
-        
-        if (items.length > 1) {
-             const first = items[0];
-             processedItems.push({
-                 id: `group_${key}`,
-                 dock: {
-                     label: manifest ? (manifest.identity.label_strategy === 'static' ? manifest.sys_id.toUpperCase() : 'Group') : 'Stack',
-                     icon: first.dock.icon,
-                     order: 10
-                 },
-                 children: items
-             });
-        } else {
-            processedItems.push(...items);
-        }
-    });
-
-    return [libraryPlugin, ...processedItems];
-});
-
-// Resolution Logic
-const currentDockItem = computed(() => {
-    // Search in top level
-    const top = dockItems.value.find(i => i.id === currentModuleId.value);
-    if (top) return top;
-
-    // Search in children
-    for (const item of dockItems.value) {
-        if ((item as any).children) {
-            const child = (item as any).children.find((c: any) => c.id === currentModuleId.value);
-            if (child) return child;
-        }
-    }
-    return null;
-});
-
-const CurrentComponent = computed(() => {
-    const item = currentDockItem.value as any;
-    if (!item) return null;
-
-    if (item._manifest) return item._manifest.view.component;
-    if (pluginStore.getPlugin(item.id)) return pluginStore.getPlugin(item.id)?.component;
-    
-    // Legacy mapping (kept for safety)
-    const renderer = item._renderer_id;
-
-    if (renderer === 'vuln' || renderer === 'vrkb') return pluginStore.getPlugin('vrkb')?.component;
-    
-    if (renderer === 'english' || renderer === 'vocabulary' || renderer === 'english_v1') {
-        return defineAsyncComponent(() => import('../components/self-space/modules/VocabularyModule.vue'));
-    }
-    
-    if (renderer === 'memo') return pluginStore.getPlugin('memos')?.component;
-    
-    return pluginStore.getPlugin('knowledge')?.component;
-});
-
-const isV2Component = computed(() => {
-    const item = currentDockItem.value as any;
-    return !!item?._manifest;
-});
-
-// Provide Launch context to children
-import { provide, defineAsyncComponent } from 'vue';
-provide('os', {
-    launchApp,
-    closeApp
-});
-
-const currentKbId = computed(() => {
-    const item = currentDockItem.value;
-    if (item && (item as any)._kb_id) return (item as any)._kb_id;
-    return undefined;
-});
-
-const currentModuleLabel = computed(() => currentDockItem.value?.dock.label || 'Self Space');
-const currentHeaderIcon = computed(() => currentDockItem.value?.dock.icon);
-
-const CurrentHeaderActions = computed(() => {
-    // V2 Components do NOT use Shell Header Actions, they own the header.
-    if (isV2Component.value) return null;
-
-    const item = currentDockItem.value;
-    if (!item) return null;
-
-    if (pluginStore.getPlugin(item.id)) {
-        return pluginStore.getPlugin(item.id)?.header?.actions;
-    }
-
-    const renderer = (item as any)._renderer_id;
-    if (renderer === 'memo') return pluginStore.getPlugin('memos')?.header?.actions;
-    if (renderer === 'english' || renderer === 'vocabulary') return pluginStore.getPlugin('vocabulary')?.header?.actions;
-    
-    return null;
-});
-
-// -- Refactored Switch --
-const switchModule = (id: string) => {
-    currentModuleId.value = id;
-    // V2 Requirement: Deep Linking Reset
-    // When switching modules, we must clear the query params to prevent state leakage
-    // unless we are supporting background persistence via URL (which is weird).
-    router.replace({ query: {} });
-};
-
-// -- Navigation --
-const goBack = () => {
-    if (window.history.state && window.history.state.back) {
-        router.back();
+// ============================================================
+// ROUTE SYNC (The Listener)
+// ============================================================
+watch(() => router.currentRoute.value.params.kbId, async (newId) => {
+    const target = Array.isArray(newId) ? newId[0] : newId;
+    if (target) {
+        await orchestrator.switchToKb(target);
     } else {
-        router.push('/');
+        // If /space (empty), default to library
+        await orchestrator.switchToKb('library');
     }
+}, { immediate: true });
+
+// ============================================================
+// PROVIDE OS CONTEXT TO CHILDREN
+// ============================================================
+// ============================================================
+// PROVIDE OS CONTEXT TO CHILDREN
+// ============================================================
+// OS Service Injection (Standard v2)
+const osContext = {
+    launchApp,
+    closeApp,
+    toast: (content: string, theme: 'success' | 'warning' | 'error' = 'success') => MessagePlugin[theme]({ content }),
 };
+provide(osKey, osContext);
+// Legacy string inject for old components (if any)
+provide('os', osContext);
+
+// ============================================================
+// DERIVED STATE (From Orchestrator)
+// ============================================================
+const currentModuleLabel = () => orchestrator.currentDockItem.value?.dock.label || 'Self Space';
+const currentHeaderIcon = () => orchestrator.currentDockItem.value?.dock.icon;
+const currentKbId = () => orchestrator.currentDockItem.value?.id;
+
+// Header Actions Resolution
+const CurrentHeaderActions = () => {
+    const item = orchestrator.currentDockItem.value;
+    if (!item) return null;
+
+    // Library has no special header
+    if (item.id === 'library') return null;
+
+    // Try to resolve plugin header
+    const resolved = pluginStore.resolvePlugin(item._renderer_id);
+    if (resolved?.header?.actions) return resolved.header.actions;
+
+    return null;
+};
+
+// ============================================================
+// ERROR BOUNDARY (Layer 2: KB-Level)
+// ============================================================
+onErrorCaptured((err, instance, info) => {
+    console.error('[SelfSpace] Captured Component Error:', err, info);
+
+    const activeId = appStore.activeKbId;
+    if (activeId !== 'library') {
+        // Crash to Desktop - use timeout to allow error to propagate
+        setTimeout(() => {
+            // TODO: Replace alert with Toast (per spec)
+            console.error(`[SelfSpace] Application Crashed: ${activeId}`);
+            orchestrator.crashKb(activeId, err instanceof Error ? err : new Error(String(err)));
+        }, 100);
+        return false; // Prevent bubbling
+    }
+    return true; // Bubble if shell itself
+});
+
+// ============================================================
+// DEBUG WATCHERS (Remove in production)
+// ============================================================
+watch(() => appStore.activeKbId, (val) => {
+    console.log('[SelfSpace] Active KB Changed:', val);
+});
+const activeKb = computed(() => {
+    const id = currentKbId();
+    if (!id || id === 'library') return undefined; // Library doesn't use generic KB object usually
+    return orchestrator.allKbs.value.find(k => k.id === id);
+});
 </script>
 
 <template>
@@ -277,7 +151,7 @@ const goBack = () => {
                 <div class="flex items-center gap-2 pl-2">
                     <!-- Minimal Home Button -->
                     <button 
-                        v-if="currentModuleId !== 'library'"
+                        v-if="appStore.activeKbId !== 'library'"
                         @click="goHome"
                         class="w-6 h-6 rounded-md hover:bg-ink/5 text-ink/40 hover:text-ink transition-colors flex items-center justify-center"
                         title="Back to Dashboard"
@@ -289,9 +163,9 @@ const goBack = () => {
                     <div class="h-4 w-[1px] bg-ink/10 mx-2"></div>
                     
                     <!-- Current App Title -->
-                    <div v-if="currentModuleId !== 'library'" class="text-xs font-bold font-serif text-ink select-none flex items-center gap-2">
-                         <i v-if="currentHeaderIcon" :class="currentHeaderIcon" class="text-ink/60"></i>
-                         {{ currentModuleLabel }}
+                    <div v-if="appStore.activeKbId !== 'library'" class="text-xs font-bold font-serif text-ink select-none flex items-center gap-2">
+                         <i v-if="currentHeaderIcon()" :class="currentHeaderIcon()" class="text-ink/60"></i>
+                         {{ currentModuleLabel() }}
                     </div>
                 </div>
             </template>
@@ -308,7 +182,7 @@ const goBack = () => {
                 <!-- Default Right Content -->
                 <div v-show="!navStore.hasCustomRight" class="flex items-center gap-2">
                     <!-- Plugin Default Actions -->
-                    <component :is="CurrentHeaderActions" v-if="CurrentHeaderActions" />
+                    <component :is="CurrentHeaderActions()" v-if="CurrentHeaderActions()" />
 
                      <!-- Default Global Actions -->
                      <button 
@@ -322,19 +196,44 @@ const goBack = () => {
             </template>
         </TopNavBar>
 
+        <!-- Loading State (Phase 3) -->
+        <div v-if="orchestrator.isLoading.value && orchestrator.loadingKbId.value" 
+             class="flex-1 flex items-center justify-center">
+            <div class="text-center">
+                <i class="ri-loader-4-line animate-spin text-2xl text-ink/30 mb-2"></i>
+                <p class="text-sm text-ink/50">Loading...</p>
+            </div>
+        </div>
+
         <!-- Main Content Area -->
-        <main class="flex-1 relative z-10 w-full h-full flex flex-col pt-14">
+        <main v-else class="flex-1 relative z-10 w-full h-full flex flex-col pt-14">
             <Transition mode="out-in" enter-active-class="transition duration-300 ease-out"
                 enter-from-class="opacity-0 translate-y-4" enter-to-class="opacity-100 translate-y-0"
                 leave-active-class="transition duration-200 ease-in" leave-from-class="opacity-100 translate-y-0"
                 leave-to-class="opacity-0 -translate-y-4">
-                <KeepAlive>
-                    <component :is="CurrentComponent" :kbId="currentKbId" :key="currentModuleId" class="flex-1 h-full" :headless="true" />
+                <KeepAlive :max="10">
+                    <component 
+                        :is="orchestrator.currentComponent.value" 
+                        :kbId="currentKbId()" 
+                        :kb="activeKb"
+                        v-bind="orchestrator.errorState.value.get(appStore.activeKbId) ? {
+                            errorMessage: orchestrator.errorState.value.get(appStore.activeKbId)?.message,
+                            errorStack: orchestrator.errorState.value.get(appStore.activeKbId)?.stack,
+                            rendererId: orchestrator.currentDockItem.value?._renderer_id
+                        } : {}"
+                        class="flex-1 h-full" 
+                        :headless="true" 
+                    />
                 </KeepAlive>
             </Transition>
         </main>
 
         <!-- Dock Navigation -->
-        <ModuleSwitcher :active-module="currentModuleId" :modules="dockItems" @switch="switchModule" />
+        <ModuleSwitcher 
+            :active-module="appStore.activeKbId" 
+            :modules="orchestrator.dockItems.value" 
+            @switch="launchApp" 
+            @close="closeApp" 
+        />
     </div>
 </template>
