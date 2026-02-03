@@ -144,6 +144,11 @@ const save = async () => {
                         :class="activeTab === 'preferences' ? 'text-ink pl-4 border-l-2 border-ink' : 'text-neutral-400 hover:text-ink hover:pl-2'">
                         <span>Interface</span>
                     </button>
+
+                    <button @click="router.push('/admin/templates')"
+                        class="w-full text-left text-xs font-bold uppercase tracking-widest transition-all duration-300 group flex items-center justify-between text-neutral-400 hover:text-ink hover:pl-2">
+                        <span>Templates (Admin)</span>
+                    </button>
                 </nav>
             </aside>
 

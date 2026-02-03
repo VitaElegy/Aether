@@ -22,7 +22,7 @@
     </div>
 
     <!-- Kanban Board -->
-    <div class="flex-1 overflow-x-auto overflow-y-hidden p-6">
+    <div class="flex-1 overflow-x-auto overflow-y-hidden p-6" v-if="isReady">
       <div class="flex gap-6 h-full min-w-max">
         
         <!-- Column Component ( Inline for simplicity or extract ) -->
@@ -68,6 +68,14 @@
 
       </div>
     </div>
+    
+    <!-- Skeleton Loading -->
+    <div class="flex-1 p-6 flex gap-6" v-else>
+         <div v-for="i in 4" :key="i" class="w-80 h-full flex flex-col gap-4">
+              <div class="h-6 w-32 bg-bg-surface/50 rounded animate-pulse"></div>
+              <div class="h-full bg-bg-surface/20 rounded-lg animate-pulse border border-component-stroke/30"></div>
+         </div>
+    </div>
 
     <!-- Finding Editor Modal -->
     <VRFindingEditor 
@@ -80,8 +88,10 @@
   </div>
 </template>
 
+</template>
+
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, computed, onActivated } from 'vue';
 import { useRoute } from 'vue-router';
 import { vrkbApi, type VrkbProject, type VrkbFinding } from '@/api/vrkb';
 import VRFindingEditor from '@/components/vrkb/VRFindingEditor.vue';
@@ -91,22 +101,10 @@ const route = useRoute();
 const currentProject = ref<VrkbProject | null>(null);
 const findings = ref<VrkbFinding[]>([]);
 const editingFinding = ref<VrkbFinding | null>(null);
+const isReady = ref(false);
 
-// Kanban Columns
-const columns = [
-  { id: 'Pending', title: 'Pending', color: 'bg-gray-400' },
-  { id: 'Triage', title: 'Triage', color: 'bg-blue-500' },
-  { id: 'Fixing', title: 'Fixing', color: 'bg-brand-primary' },
-  { id: 'Verified', title: 'Verified', color: 'bg-green-500' },
-];
-
-const kbId = computed(() => route.params.id as string);
-
-// ... (logic remains same) ...
-
-const projectId = ref<string>('');
-
-onMounted(async () => {
+const loadData = async () => {
+    isReady.value = false;
     try {
         // 1. Fetch Projects
         const projects = await vrkbApi.listProjects();
@@ -128,8 +126,32 @@ onMounted(async () => {
         }
     } catch (e) {
         console.error("Failed to load VRKB data", e);
+    } finally {
+        isReady.value = true;
     }
+};
+
+onMounted(() => {
+    loadData();
 });
+
+onActivated(() => {
+    console.log('[VRKB] Re-activated, checking for updates...');
+    refreshFindings();
+});
+const columns = [
+  { id: 'Pending', title: 'Pending', color: 'bg-gray-400' },
+  { id: 'Triage', title: 'Triage', color: 'bg-blue-500' },
+  { id: 'Fixing', title: 'Fixing', color: 'bg-brand-primary' },
+  { id: 'Verified', title: 'Verified', color: 'bg-green-500' },
+];
+
+const kbId = computed(() => route.params.id as string);
+
+// ... (logic remains same) ...
+
+const projectId = ref<string>('');
+
 
 const refreshFindings = async () => {
     if (!projectId.value) return;

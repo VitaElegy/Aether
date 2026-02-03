@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, computed } from 'vue';
 import { knowledgeApi, type KnowledgeBase } from '@/api/knowledge';
 import { uploadApi } from '@/api/upload';
 import TagInput from '@/components/common/TagInput.vue';
+import LayoutSelectionModal from '@/components/knowledge/LayoutSelectionModal.vue';
+import { LAYOUTS } from '@/registries/read_layout_registry';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
 
 interface Props {
@@ -20,6 +22,22 @@ const form = ref({
     cover_offset_y: 50,
     visibility: 'Private' as 'Public' | 'Private' | 'Internal',
     renderer_id: 'default'
+});
+
+const showLayoutModal = ref(false);
+
+const currentLayoutMeta = computed(() => {
+    // Safety check: LAYOUTS might be empty initially
+    if (!LAYOUTS.value || LAYOUTS.value.length === 0) {
+        return { 
+            id: 'default', 
+            title: 'Loading...', 
+            description: '', 
+            thumbnail: '', 
+            tags: [] 
+        };
+    }
+    return LAYOUTS.value.find(l => l.id === form.value.renderer_id) || LAYOUTS.value[0];
 });
 
 const initForm = () => {
@@ -138,17 +156,23 @@ const deleteKb = async () => {
                         </select>
                         <p class="text-[10px] text-ink/40 mt-1">
                             Private: Only me. Internal: All logged in users. Public: Everyone.
-                        </p>
                     </div>
                     <div>
                         <label class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Layout Renderer</label>
-                        <select v-model="form.renderer_id"
-                            class="w-full bg-paper border border-ink/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-accent">
-                            <option value="default">Standard (Blog)</option>
-                            <option value="math_v1">Math Archive (Graph)</option>
-                            <option value="math_v3">Math Manuscript (Book)</option>
-                            <option value="english_v1">English Analysis (Academic)</option>
-                        </select>
+                        
+                        <div @click="showLayoutModal = true" 
+                            class="w-full bg-paper border border-ink/10 rounded px-3 py-2 cursor-pointer hover:border-accent hover:shadow-sm transition-all flex items-center justify-between group">
+                            
+                            <div class="flex items-center gap-3">
+                                <div class="w-8 h-8 rounded bg-ash/10 flex-shrink-0" :class="currentLayoutMeta.thumbnail"></div>
+                                <div class="flex flex-col">
+                                    <span class="text-sm font-medium text-ink group-hover:text-accent transition-colors">{{ currentLayoutMeta.title }}</span>
+                                    <span class="text-[10px] text-ink/40 line-clamp-1">{{ currentLayoutMeta.description }}</span>
+                                </div>
+                            </div>
+
+                            <i class="ri-arrow-right-s-line text-ink/40"></i>
+                        </div>
                     </div>
                     <div class="md:col-span-2">
                         <label class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Tags</label>
@@ -203,6 +227,13 @@ const deleteKb = async () => {
                     </div>
                 </div>
             </div>
+            </div>
         </div>
+
+        <LayoutSelectionModal 
+            :visible="showLayoutModal"
+            v-model="form.renderer_id"
+            @update:visible="showLayoutModal = $event"
+        />
     </div>
 </template>

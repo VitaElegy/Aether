@@ -120,15 +120,19 @@ const fileTree = ref<any[]>([]);
 const metrics = ref<any>({ total: 0, critical: 0, triage: 0, fixed: 0 });
 
 onMounted(async () => {
-    if (store.currentProject) {
-        try {
-            const stats = await vrkbApi.getProjectStats(store.currentProject.id);
-            metrics.value = stats.metrics;
-            modules.value = stats.modules;
-            fileTree.value = stats.heatmap;
-        } catch (e) {
-            console.error("Failed to load stats", e);
+    if (!store.currentProject || !store.currentProject.id) {
+        console.warn("OverviewDashboard mounted without project context.");
+        return;
+    }
+    try {
+        const stats = await vrkbApi.getProjectStats(store.currentProject.id);
+        if (stats) {
+            metrics.value = stats.metrics || { total: 0, critical: 0, triage: 0, fixed: 0 };
+            modules.value = stats.modules || [];
+            fileTree.value = stats.heatmap || [];
         }
+    } catch (e) {
+        console.error("Failed to load stats", e);
     }
 });
 

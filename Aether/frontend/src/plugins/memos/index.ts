@@ -1,8 +1,8 @@
+import { defineAsyncComponent } from 'vue';
 import type { SelfSpacePlugin } from '../../core/plugin';
-import MemosModule from '../../components/self-space/modules/MemosModule.vue';
 
 export const MemosPlugin: SelfSpacePlugin = {
-    id: 'memos',
+    id: 'memo',
     dock: {
         label: 'Memos',
         icon: 'ri-sticky-note-line',
@@ -15,5 +15,5 @@ export const MemosPlugin: SelfSpacePlugin = {
     capabilities: {
         articleParser: false
     },
-    component: MemosModule,
+    component: defineAsyncComponent(() => import('../../components/self-space/modules/memos/MemosModule.vue')),
 };

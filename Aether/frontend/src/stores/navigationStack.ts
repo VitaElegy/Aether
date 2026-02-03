@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref, watch, computed } from 'vue';
+import { ref, watch, computed, toRaw } from 'vue';
 import { sessionService } from '../services/session';
 
 /**
@@ -98,7 +98,7 @@ export const useNavigationStackStore = defineStore('navigation-stack', () => {
             scrollX: 0,
             scrollY: 0,
             timestamp: Date.now(),
-            formData: newVal
+            formData: toRaw(newVal)
         });
     }, { deep: true });
 

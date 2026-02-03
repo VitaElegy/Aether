@@ -3,6 +3,8 @@ import { ref, computed, onMounted, watch } from 'vue';
 
 const props = defineProps<{
     kbId?: string;
+    headless?: boolean; 
+    class?: string;
 }>();
 import { useRouter } from 'vue-router';
 import { knowledgeApi, type KnowledgeBase } from '../../../api/knowledge';
@@ -12,6 +14,8 @@ import TagInput from '../../common/TagInput.vue';
 import UserSelect from '../../common/UserSelect.vue';
 import BlockRenderer from '../renderer/BlockRenderer.vue';
 import { DialogPlugin, MessagePlugin } from 'tdesign-vue-next';
+import LayoutSelectionModal from '@/components/knowledge/LayoutSelectionModal.vue';
+import { LAYOUTS } from '@/registries/read_layout_registry';
 
 // -- V3 OS Context --
 import { inject } from 'vue';
@@ -29,7 +33,22 @@ const currentBlocks = ref<any[]>([]);
 const isLoading = ref(false);
 
 const kbFormVisible = ref(false);
-const kbForm = ref({ title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'default' });
+const kbForm = ref({ title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'knowledge' });
+const showCreateLayoutModal = ref(false);
+
+const kbFormLayoutMeta = computed(() => {
+    // Safety check: LAYOUTS might be empty initially
+    if (!LAYOUTS.value || LAYOUTS.value.length === 0) {
+        return { 
+            id: 'default', 
+            title: 'Loading...', 
+            description: '', 
+            thumbnail: '', 
+            tags: [] 
+        };
+    }
+    return LAYOUTS.value.find(l => l.id === kbForm.value.renderer_id) || LAYOUTS.value[0];
+});
 
 // Settings Form
 const settingsForm = ref({
@@ -325,25 +344,32 @@ const goBackToList = () => {
 // -- Creation --
 
 const createKb = async () => {
-    if (!kbForm.value.title) return;
+    console.log('[KnowledgeModule] createKb triggered', kbForm.value);
+    if (!kbForm.value.title) {
+        console.warn('[KnowledgeModule] Title missing');
+        return;
+    }
     try {
+        console.log('[KnowledgeModule] Sending API request...');
         await knowledgeApi.create({
             title: kbForm.value.title,
             description: kbForm.value.description,
-            tags: kbForm.value.tags.split(',').map(t => t.trim()).filter(t => t),
+            tags: kbForm.value.tags ? kbForm.value.tags.split(',').map(t => t.trim()).filter(t => t) : [],
             cover_image: kbForm.value.cover_image,
             cover_offset_y: kbForm.value.cover_offset_y,
             visibility: 'Private', // Default
             renderer_id: kbForm.value.renderer_id
         });
+        console.log('[KnowledgeModule] Creation successful');
         kbFormVisible.value = false;
-        kbForm.value = { title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'default' };
+        kbForm.value = { title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'knowledge' };
         fetchKBs();
     } catch (e: any) {
+        console.error('[KnowledgeModule] Creation Failed:', e);
         if (e.response && e.response.status === 409) {
             alert("A Knowledge Base with this title already exists.");
         } else {
-            console.error(e);
+            alert(`Creation Failed: ${e.message}`);
         }
     }
 };
@@ -468,7 +494,7 @@ const navigateToNewArticle = () => {
 };
 
 onMounted(() => {
-    if (props.kbId) {
+    if (props.kbId && props.kbId !== 'library') {
         // Direct Mode
         knowledgeApi.get(props.kbId).then(kb => {
             currentKb.value = kb;
@@ -487,7 +513,7 @@ onMounted(() => {
 
 // Watch for prop change (if switching between pinned KBs of same type)
 watch(() => props.kbId, (newId) => {
-    if (newId) {
+    if (newId && newId !== 'library') {
          knowledgeApi.get(newId).then(kb => {
             currentKb.value = kb;
             viewMode.value = 'detail';
@@ -668,10 +694,8 @@ onUnmounted(() => {
                                     class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Layout Renderer</label>
                                 <select v-model="settingsForm.renderer_id"
                                     class="w-full bg-paper border border-ink/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-accent">
-                                    <option value="default">Standard (Blog)</option>
-                                    <option value="math_v1">Math Archive (Graph)</option>
-                                    <option value="math_v3">Math Manuscript (Book)</option>
-                                    <option value="english_v1">English Analysis (Academic)</option>
+                                    <option value="knowledge">Standard (Blog)</option>
+                                    <option value="math">Math Manuscript (Book)</option>
                                     <option value="memo">Memos (Sticky Notes)</option>
                                     <option value="vocabulary">Vocabulary (English)</option>
                                     <option value="vrkb">Vulnerability Research (Kanban)</option>
@@ -839,16 +863,19 @@ onUnmounted(() => {
                 
                 <div class="mb-3">
                      <label class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Layout</label>
-                     <select v-model="kbForm.renderer_id"
-                        class="w-full bg-surface border border-ink/10 rounded px-3 py-2 text-sm focus:outline-none focus:border-accent">
-                        <option value="default">Standard (Blog)</option>
-                        <option value="math_v1">Math Archive (Graph)</option>
-                        <option value="math_v3">Math Manuscript (Book)</option>
-                        <option value="english_v1">English Analysis (Academic)</option>
-                        <option value="memo">Memos (Sticky Notes)</option>
-                        <option value="vocabulary">Vocabulary (English)</option>
-                        <option value="vrkb">Vulnerability Research (Kanban)</option>
-                    </select>
+                     <div @click="showCreateLayoutModal = true" 
+                        class="w-full bg-surface border border-ink/10 rounded px-3 py-2 cursor-pointer hover:border-accent hover:shadow-sm transition-all flex items-center justify-between group">
+                        
+                        <div class="flex items-center gap-3">
+                            <div class="w-8 h-8 rounded bg-ash/10 flex-shrink-0" :class="kbFormLayoutMeta.thumbnail"></div>
+                            <div class="flex flex-col">
+                                <span class="text-sm font-medium text-ink group-hover:text-accent transition-colors">{{ kbFormLayoutMeta.title }}</span>
+                                <span class="text-[10px] text-ink/40 line-clamp-1 truncate max-w-[200px]">{{ kbFormLayoutMeta.description }}</span>
+                            </div>
+                        </div>
+
+                        <i class="ri-arrow-right-s-line text-ink/40"></i>
+                    </div>
                 </div>
 
                 <textarea v-model="kbForm.description" placeholder="Description" rows="3"
@@ -910,5 +937,10 @@ onUnmounted(() => {
                 </div>
             </div>
         </div>
+        <LayoutSelectionModal 
+            :visible="showCreateLayoutModal" 
+            v-model="kbForm.renderer_id"
+            @update:visible="showCreateLayoutModal = $event"
+        />
     </div>
 </template>

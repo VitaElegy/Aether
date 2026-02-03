@@ -53,6 +53,12 @@ const getAuthHeaders = () => ({
 export const knowledgeApi = {
     async list(): Promise<KnowledgeBase[]> {
         const response = await axios.get(`${API_BASE}/knowledge-bases`, getAuthHeaders());
+        // [DEBUG] Inspect Raw Response
+        // console.log('[API] Knowledge List Raw:', response.data);
+        // Check first item for renderer_id
+        // if (response.data.length > 0) {
+        //     console.debug('[API] Sample KB Renderer:', response.data[0].title, response.data[0].renderer_id);
+        // }
         return response.data;
     },
 

@@ -112,7 +112,11 @@ const goArticle = (id: string) => router.push(`/article/${id}`);
 </script>
 
 <template>
+    <div v-if="!kb" class="flex items-center justify-center h-full text-ink/40 font-bold">
+        Loading Context...
+    </div>
     <KnowledgeBaseLayout 
+        v-else
         :title="kb.title" 
         :loading="false" 
         :can-edit="true"
