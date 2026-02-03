@@ -60,7 +60,7 @@ const router = createRouter({
       meta: { requiresAuth: true, transition: 'slide-right' }
     },
     {
-      path: '/space',
+      path: '/space/:kbId?',
       name: 'space',
       component: () => import('../views/SelfSpaceView.vue'),
       meta: { transition: 'fade' }
@@ -84,6 +84,8 @@ const router = createRouter({
       component: () => import('../views/MathV2Demo.vue'),
       meta: { transition: 'fade' }
     },
+    // [REMOVED] /admin/templates - Moved to internal navigation within AdminDashboard
+    // This enforces the Desktop Shell architecture.
     // Wildcard redirect for safety
     {
       path: '/:pathMatch(.*)*',

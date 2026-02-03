@@ -15,7 +15,16 @@ export interface SelfSpacePlugin {
     header?: {
         title?: string;
         icon?: string;
-        // Actions component to render in the right portal by default
+        // Declarative Actions (Preferred over 'actions' component)
+        // Allows the Shell to render buttons consistently (Mobile/Desktop/Command Palette)
+        actionDefs?: Array<{
+            id: string;
+            label: string;
+            icon: string;
+            shortcut?: string; // e.g. 'Cmd+N'
+            handler: () => void;
+        }>;
+        // Legacy: Custom Component
         actions?: Component;
     };
 
