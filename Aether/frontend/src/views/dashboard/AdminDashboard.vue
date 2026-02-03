@@ -12,35 +12,43 @@
 
         <!-- Real Content -->
         <div v-else>
-            <!-- Banner -->
-            <div class="w-full bg-surface border-b border-ink/5 p-8 flex items-end justify-between">
-                <div>
-                    <div class="flex items-center gap-2 mb-2 text-ink/40 text-xs font-bold uppercase tracking-widest">
-                        <i class="ri-shield-star-line text-accent"></i>
-                        <span>System Administrator</span>
-                    </div>
-                    <!-- Breadcrumbs / Title -->
-                    <div class="flex items-center gap-2">
-                        <h1 @click="backToDashboard" :class="currentView !== 'dashboard' ? 'cursor-pointer hover:text-accent transition-colors' : ''" class="text-4xl font-bold font-serif text-ink">Admin Control Center</h1>
-                        <span v-if="currentView === 'templates'" class="text-2xl text-ink/30">/</span>
-                        <h2 v-if="currentView === 'templates'" class="text-3xl font-serif text-ink/80">Templates</h2>
-                    </div>
-                    
-                    <p class="text-ink/60 mt-2 max-w-lg">Manage system resources, users, and templates from this centralized dashboard.</p>
-                </div>
-                
-                <div class="flex items-center gap-4">
+            <!-- Global Nav Injection -->
+            <Teleport to="#nav-right-portal">
+                <div class="flex items-center gap-4 h-full">
                      <!-- Back Button (Only when subview) -->
-                    <button v-if="currentView !== 'dashboard'" @click="backToDashboard" class="px-4 py-2 bg-ink text-white rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-ink/80 transition-colors">
+                    <button v-if="currentView !== 'dashboard'" @click="backToDashboard" class="px-3 py-1.5 bg-ink/5 hover:bg-ink/10 text-ink rounded-lg text-xs font-bold flex items-center gap-2 transition-colors">
                         <i class="ri-arrow-left-line"></i>
                         Back
                     </button>
 
-                    <div class="px-4 py-2 bg-green-500/10 text-green-600 rounded-full text-xs font-bold border border-green-500/20 flex items-center gap-2">
-                        <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                    <div class="hidden md:flex px-3 py-1.5 bg-green-500/10 text-green-600 rounded-full text-[10px] font-bold border border-green-500/20 items-center gap-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
                         System Online
                     </div>
                 </div>
+            </Teleport>
+
+            <Teleport to="#nav-center-portal">
+                 <div class="flex items-center justify-center h-full">
+                    <div class="flex items-center gap-2 text-ink/80 text-sm font-bold font-serif">
+                        <span :class="currentView === 'dashboard' ? 'text-ink' : 'text-ink/40 hover:text-ink cursor-pointer transition-colors'" @click="backToDashboard">Admin Control Center</span>
+                        
+                        <template v-if="currentView !== 'dashboard'">
+                            <span class="text-ink/30">/</span>
+                            <span>
+                                {{ currentView === 'templates' ? 'Templates' : 
+                                   currentView === 'users' ? 'User Management' : 
+                                   currentView === 'logs' ? 'System Logs' : '' }}
+                            </span>
+                        </template>
+                    </div>
+                 </div>
+            </Teleport>
+
+            <!-- Spacing Adjustments for Banner Removal -->
+            <div class="p-8 pb-0">
+                <h1 v-if="currentView === 'dashboard'" class="text-3xl font-bold font-serif text-ink mb-4">Welcome, Administrator.</h1>
+                <p class="text-ink/60 mb-8 max-w-lg">Manage system resources, users, and templates from this centralized dashboard.</p>
             </div>
 
             <!-- VIEW: Template Manager -->
@@ -48,11 +56,21 @@
                  <TemplateManager />
             </div>
 
+            <!-- VIEW: User Management -->
+            <div v-else-if="currentView === 'users'" class="animate-fade-in">
+                 <UserManagement />
+            </div>
+
+            <!-- VIEW: System Logs -->
+            <div v-else-if="currentView === 'logs'" class="animate-fade-in">
+                 <SystemLogs />
+            </div>
+
             <!-- VIEW: Dashboard Grid -->
             <div v-else class="p-8 max-w-7xl mx-auto grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-fade-in">
                 
                 <!-- Card: Templates -->
-                <div @click="openTemplates"
+                <div @click="currentView = 'templates'"
                     class="group relative bg-surface p-6 rounded-xl border border-ink/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer overflow-hidden">
                     <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <i class="ri-layout-masonry-line text-8xl"></i>
@@ -68,7 +86,8 @@
                 </div>
 
                 <!-- Card: User Management -->
-                <div class="group relative bg-surface p-6 rounded-xl border border-ink/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer overflow-hidden">
+                <div @click="currentView = 'users'"
+                    class="group relative bg-surface p-6 rounded-xl border border-ink/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer overflow-hidden">
                     <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <i class="ri-group-line text-8xl"></i>
                     </div>
@@ -83,7 +102,8 @@
                 </div>
 
                 <!-- Card: System Logs -->
-                <div class="group relative bg-surface p-6 rounded-xl border border-ink/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer overflow-hidden">
+                <div @click="currentView = 'logs'"
+                    class="group relative bg-surface p-6 rounded-xl border border-ink/5 shadow-sm hover:shadow-xl hover:-translate-y-1 transition-all cursor-pointer overflow-hidden">
                     <div class="absolute top-0 right-0 p-3 opacity-10 group-hover:opacity-20 transition-opacity">
                         <i class="ri-terminal-line text-8xl"></i>
                     </div>
@@ -104,20 +124,20 @@
 
 <script setup lang="ts">
 import { useRouter } from 'vue-router';
-import { ref, onMounted, onActivated, defineAsyncComponent, shallowRef } from 'vue';
+import { ref, onMounted, onBeforeUnmount, onActivated, defineAsyncComponent, shallowRef } from 'vue';
+import { useNavigationStore } from '@/stores/navigation';
 
 // Internal Views
 import TemplateManager from '../admin/TemplateManager.vue';
+import UserManagement from '../admin/UserManagement.vue';
+import SystemLogs from '../admin/SystemLogs.vue';
 
 const router = useRouter();
+const navStore = useNavigationStore();
 const isReady = ref(false);
 
 // [FIX] Internal Navigation State (No Jailbreak)
-const currentView = ref<'dashboard' | 'templates'>('dashboard');
-
-const openTemplates = () => {
-    currentView.value = 'templates';
-};
+const currentView = ref<'dashboard' | 'templates' | 'users' | 'logs'>('dashboard');
 
 const backToDashboard = () => {
     currentView.value = 'dashboard';
@@ -132,9 +152,18 @@ const loadData = async () => {
 
 onMounted(() => {
     loadData();
+    navStore.setCustomCenter(true);
+    navStore.setCustomRight(true);
+});
+
+onBeforeUnmount(() => {
+    navStore.reset();
 });
 
 onActivated(() => {
     console.log('[Admin] Dashboard Reactivated');
+    // Ensure flags are set if re-entering from KeepAlive
+    navStore.setCustomCenter(true);
+    navStore.setCustomRight(true);
 });
 </script>

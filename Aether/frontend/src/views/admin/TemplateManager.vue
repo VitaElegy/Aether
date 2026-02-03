@@ -54,11 +54,12 @@
                     <label class="block text-xs font-bold uppercase tracking-wider text-ink/40 mb-1">Renderer ID (Codebase)</label>
                     <select v-model="form.renderer_id" class="w-full bg-surface border border-ink/10 rounded px-3 py-2 text-sm">
                         <option value="default">Default (Blog)</option>
-                        <option value="math_v3">Math Manuscript</option>
-                        <option value="math_v1">Math Archive</option>
-                        <option value="english_v1">English Analysis</option>
+                        <option value="math_v3">Math Manuscript (V3)</option>
+                        <option value="math_v1">Math Archive (V1)</option>
+                        <option value="english_v1">English Analysis (V1)</option>
                         <option value="vrkb">Vulnerability Research (Kanban)</option>
                         <option value="memo">Memo Board</option>
+                        <option value="admin_system">System Control (Protected)</option>
                     </select>
                 </div>
 
