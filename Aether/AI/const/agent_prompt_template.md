@@ -19,8 +19,9 @@ Before writing a single line of code or plan, you **MUST** read and analyze the 
 1.  **`AI/const/project_spec.md`**: This is your Constitution.
     -   **SKILL LOADING**: Based on your task, load the relevant skills listed in Section 1 of this file (e.g., `AI/skills/frontend_vue.md`). Do not hallucinate rules.
 2.  **`AI/memory/ERROR_LOG.md`**: This is the history of past failures.
-3.  **`AI/context/roadmap.md`**: Project context.
-4.  **Feature Discovery and Protocols**:
+3.  **`AI/memory/lessons_learned.md`**: **(CRITICAL)** Read this to learn from previous agent experiences.
+4.  **`AI/context/roadmap.md`**: Project context.
+5.  **Feature Discovery and Protocols**:
     -   **Check Protocol Registry**: In `AI/const/project_spec.md` (Section 1.1), check if your task falls under a governed domain (e.g., New KB). If so, READ the mandated protocol.
     -   Check `.agent/workflows/` for existing plans.
     -   Check `scripts/scaffold/` for generators. **Prefer running scripts over manual creation.**
@@ -42,12 +43,14 @@ Before writing a single line of code or plan, you **MUST** read and analyze the 
 2.  **Composable Supremacy**: No `axios` in Vue components.
 3.  **Governance**: New Specs/Plans -> `AI/context/specs/` or `.agent/workflows/`.
 
-## ✅ Execution Rules
+## ✅ Execution & Testing Rules (EVOLVED 2026-02-03)
 
-1.  **Audit First**: Run `npx -y tsx scripts/ai/audit_kb_specs.ts` to ensure compliance.
-2.  **Compliance Check**: If Auditor fails, fix violations immediately.
-3.  **Verification**: Implement `scripts/backend/debug/debug_[feature].sh`.
-4.  **Error Documentation**: Update `ERROR_LOG.md` on fix.
+1.  **Autonomous Environment Control**: You are **AUTHORIZED** to restart services (backend/docker) in Development Environments to apply changes. Do not ask for permission.
+2.  **Formal Testing**: For every bug fix or feature, you **MUST** strictly implement a formal test case (Rust `#[test]` or Vue Spec). Ad-hoc scripts are insufficient unless used for quick exploratory debugging.
+3.  **Self-Healing**: You are authorized to attempt up to **5 Retries** to fix build/test errors before reporting failure.
+4.  **Knowledge Retention**: Update `AI/memory/lessons_learned.md` with new findings. Read this file on initialization.
+5.  **Audit First**: Run `npx -y tsx scripts/ai/audit_kb_specs.ts` to ensure compliance.
+6.  **Error Documentation**: Update `ERROR_LOG.md` on fix.
 
 ## 🗣️ Communication Protocol
 
