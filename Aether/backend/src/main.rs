@@ -23,7 +23,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, permission, user, system
+    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, permission, user, system, template
 };
 
 
@@ -416,6 +416,20 @@ async fn main() {
         }
     });
 
+    // --- DYNAMIC LAYOUTS ---
+    let _ = db.execute_unprepared("
+        CREATE TABLE IF NOT EXISTS layout_templates (
+            id UUID PRIMARY KEY,
+            renderer_id TEXT NOT NULL,
+            title TEXT NOT NULL,
+            description TEXT NOT NULL,
+            thumbnail TEXT,
+            tags JSONB,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
+    ").await.expect("Failed to init layout templates");
+
 
     // Initialize Auth Service
     let repo = Arc::new(PostgresRepository::new(db.clone()));
@@ -460,6 +474,9 @@ async fn main() {
         };
         UserRepository::save(&*repo, admin).await.expect("Failed to seed admin");
     }
+
+    // --- SYSTEM KB SEEDING ---
+    init_system_kbs(&db, &repo).await;
 
     let export_service = Arc::new(DataExportService::new(
         repo.clone() as Arc<dyn ArticleRepository>,
@@ -522,6 +539,7 @@ async fn main() {
         .merge(permission::router())
         .merge(user::router())
         .merge(system::router())
+        .merge(template::router())
         .merge(crate::interface::api::graph::router())
         .merge(crate::interface::api::vrkb::router())
         .with_state(state);
@@ -630,4 +648,56 @@ async fn run_bulk_migration(db: DatabaseConnection) {
 
 async fn health_check() -> &'static str {
     "Aether Systems Operational"
+}
+
+// Ensure the "System" KBs exist (Hidden Admin Control Panel)
+async fn init_system_kbs(db: &DatabaseConnection, repo: &Arc<PostgresRepository>) {
+    use crate::infrastructure::persistence::entities::knowledge_base;
+    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait};
+
+    let system_renderer_id = "admin_system";
+    
+    // Check if it exists
+    let existing = knowledge_base::Entity::find()
+        .filter(knowledge_base::Column::RendererId.eq(system_renderer_id))
+        .one(db)
+        .await
+        .unwrap_or_default();
+
+    if existing.is_some() {
+        tracing::info!("System KB verified.");
+        return;
+    }
+
+    tracing::info!("Initializing Admin System Knowledge Base...");
+    
+    // We need an Author ID. Ideally the Admin.
+    // We try to fetch the admin user again or just use a known UUID if we had one.
+    // For now, we query the first user with admin permissions (which we just seeded/checked).
+    let admin_user = match repo.find_by_username("admin").await { Ok(u) => u, Err(_) => None };
+    
+    if let Some(admin) = admin_user {
+        let kb_id = Uuid::new_v4();
+        let active_kb = knowledge_base::ActiveModel {
+            id: Set(kb_id),
+            author_id: Set(admin.id.0),
+            title: Set("Aether System".to_string()),
+            description: Set(Some("System Control Panel & Settings".to_string())),
+            renderer_id: Set(Some(system_renderer_id.to_string())),
+            visibility: Set("Private".to_string()), // Protected
+            tags: Set(serde_json::json!(["System"])),
+            cover_image: Set(None),
+            created_at: Set(chrono::Utc::now().into()),
+            updated_at: Set(chrono::Utc::now().into()),
+            ..Default::default()
+        };
+
+        if let Err(e) = active_kb.insert(db).await {
+             tracing::error!("Failed to create System KB: {}", e);
+        } else {
+             tracing::info!("Created System KB: {}", kb_id);
+        }
+    } else {
+        tracing::error!("Cannot create System KB: Admin user not found!");
+    }
 }
