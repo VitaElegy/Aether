@@ -28,8 +28,6 @@ Before writing a single line of code or plan, you **MUST** read and analyze the 
 ## 🎯 Task Objective
 > **User Input Required**: Replace the section below with your specific request.
 
-### User Goal
-[Describe the high-level objective here]
 
 ### User Requirements / Constraints
 - [...]
@@ -46,15 +44,19 @@ Before writing a single line of code or plan, you **MUST** read and analyze the 
 
 ## ✅ Execution Rules
 
-1.  **Audit First**: Run `python3 scripts/audit/project_auditor.py` BEFORE and AFTER your work to ensure no regression.
+1.  **Audit First**: Run `npx -y tsx scripts/ai/audit_kb_specs.ts` to ensure compliance.
 2.  **Compliance Check**: If Auditor fails, fix violations immediately.
 3.  **Verification**: Implement `scripts/backend/debug/debug_[feature].sh`.
 4.  **Error Documentation**: Update `ERROR_LOG.md` on fix.
 
 ## 🗣️ Communication Protocol
 
-1.  **Stop & Discuss**: For complex features.
-2.  **Deep Inquiry**: 5-10 questions, **One by One**.
+1.  **Process Declaration**: For complex tasks, you MUST explicitly announce your Standardization Workflow to the user:
+    -   "I will create/update Spec at `...`"
+    -   "I will enforce it using `scripts/...`"
+    -   "I will archive discussion to `...`"
+2.  **Stop & Discuss**: Do not start coding until the Spec is approved.
+3.  **Deep Inquiry**: 5-10 questions, **One by One**.
 3.  **Summarize**: `AI/memory/discussions/`.
 
 ## 📁 Directory Structure Rules (INLINE)

@@ -18,11 +18,12 @@ Instead of reading one giant file, you must **dynamically load** the skills rele
 ### 1.1 Protocol Registry (Feature Governance)
 If your task involves one of these features, you **MUST** read the corresponding protocol:
 
-| Feature Domain         | Protocol File                             | Key Rules                                     |
-| :--------------------- | :---------------------------------------- | :-------------------------------------------- |
-| **New Knowledge Base** | `AI/context/guides/new_kb_protocol_v2.md` | Schema, Search Trait, Quarantine, Migrations. |
-| **API Endpoint**       | (Pending)                                 | REST naming, Error Types.                     |
-| **UI Component**       | (Pending)                                 | Lazy loading, A11y, Theming.                  |
+| Feature Domain         | Protocol File                                   | Key Rules                                     |
+| :--------------------- | :---------------------------------------------- | :-------------------------------------------- |
+| **New Knowledge Base** | `AI/context/guides/new_kb_protocol_v2.md`       | Schema, Search Trait, Quarantine, Migrations. |
+| **API Endpoint**       | (Pending)                                       | REST naming, Error Types.                     |
+| **Navigation**         | `AI/context/specs/navigation_lifecycle_spec.md` | Loading State, Keep-Alive, Crash Boundary.    |
+| **UI Component**       | (Pending)                                       | Lazy loading, A11y, Theming.                  |
 
 ---
 
@@ -36,6 +37,7 @@ These rules apply **globally** and cannot be overridden by specific skills.
 3.  **Governance Maintenance**: New Specs/Plans MUST be saved to `AI/context/specs/` or `.agent/workflows/`.
 4.  **Protocol Discovery**: Check the **Protocol Registry** (Section 1.1) and `.agent/workflows/` before starting new features.
 5.  **Bilingualism**: English and Chinese.
+6.  **Compliance Audit**: You MUST run `npm run audit:kb` (or `npx -y tsx scripts/ai/audit_kb_specs.ts`) before marking any Frontend Dashboard task as complete.
 
 ### 2.2 Directory Structure (Source of Truth)
 
