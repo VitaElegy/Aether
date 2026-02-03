@@ -1,47 +1,3 @@
-<script setup lang="ts">
-import { useRouter } from 'vue-router';
-
-import type { SelfSpacePlugin } from '../../core/plugin';
-
-import { ref, computed } from 'vue';
-
-const props = defineProps<{
-    activeModule: string;
-    modules: any[]; // Relaxed type for groups
-}>();
-
-const emit = defineEmits<{
-    (e: 'switch', module: string): void;
-}>();
-
-const router = useRouter();
-
-// Derived State for Grouping
-const activeGroup = ref<any | null>(null);
-
-const handleClick = (mod: any) => {
-    if (mod.children && mod.children.length > 0) {
-        // Toggle Group
-        activeGroup.value = activeGroup.value?.id === mod.id ? null : mod;
-    } else {
-        // Direct Switch
-        activeGroup.value = null;
-        emit('switch', mod.id);
-    }
-};
-
-const selectSubModule = (sub: any) => {
-    emit('switch', sub.id);
-    // Keep group open
-};
-
-const isModuleActive = (mod: any) => {
-    if (props.activeModule === mod.id) return true;
-    if (mod.children && mod.children.some((c: any) => c.id === props.activeModule)) return true;
-    return false;
-};
-
-</script>
 
 <template>
     <div class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 flex flex-col items-center gap-2">
@@ -73,10 +29,15 @@ const isModuleActive = (mod: any) => {
         <!-- Main Dock -->
         <div
             class="flex items-center gap-2 bg-paper/80 backdrop-blur-xl border border-ash/50 px-2 py-2 rounded-full shadow-2xl transition-all hover:scale-105 duration-300">
-            <button v-for="mod in modules" :key="mod.id" 
-                @click="handleClick(mod)"
-                class="relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group"
-                :class="isModuleActive(mod) ? 'bg-ink text-paper' : 'hover:bg-ash/50 text-ink/50 hover:text-ink'"
+            
+            <!-- Pinned Zone -->
+            <button v-for="mod in pinnedModules" :key="mod.id" 
+                @click.stop="handleClick(mod)"
+                class="dock-item relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group"
+                :class="[
+                    isModuleActive(mod) ? 'bg-ink text-paper dock-active' : 'hover:bg-ash/50 text-ink/50 hover:text-ink',
+                    isModuleRunning(mod) ? 'dock-running' : ''
+                ]"
                 :title="mod.dock.label">
                 
                 <!-- Group Indicator -->
@@ -87,6 +48,46 @@ const isModuleActive = (mod: any) => {
 
                 <i :class="[mod.dock.icon, 'text-xl']"></i>
                 
+
+
+                <!-- Tooltip -->
+                <span
+                    class="absolute -top-12 left-1/2 -translate-x-1/2 bg-ink text-paper text-[10px] uppercase font-bold tracking-widest px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50 shadow-xl">
+                    {{ mod.dock.label }} {{ mod.dock.icon === 'ri-error-warning-fill' ? '(Config Error)' : '' }}
+                </span>
+            </button>
+
+            <!-- Zone Divider -->
+            <div v-if="openModules.length > 0" class="w-px h-6 bg-ash/50 mx-1"></div>
+
+            <!-- Open Zone (Non-Pinned Running Apps) -->
+            <button v-for="mod in openModules" :key="mod.id" 
+                @click.stop="handleClick(mod)"
+                class="dock-item relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group"
+                :class="[
+                    isModuleActive(mod) ? 'bg-ink text-paper dock-active' : 'hover:bg-ash/50 text-ink/50 hover:text-ink',
+                    'dock-running'
+                ]"
+                :title="mod.dock.label">
+                
+                <!-- Group Indicator -->
+                <div v-if="mod.children && mod.children.length > 1" 
+                     class="absolute top-0 right-0 w-3 h-3 bg-accent text-[8px] font-bold text-white rounded-full flex items-center justify-center z-10 border border-paper pointer-events-none">
+                    {{ mod.children.length }}
+                </div>
+
+                <!-- Close Button (Hover) -->
+                <button v-if="!isPinned(mod) && !mod.children"
+                    @click.stop="emit('close', mod.id)"
+                    class="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white flex items-center justify-center text-[10px] opacity-0 group-hover:opacity-100 transition-opacity z-20 hover:scale-110 shadow-sm"
+                    title="Close">
+                    <i class="ri-close-line"></i>
+                </button>
+
+                <i :class="[mod.dock.icon, 'text-xl']"></i>
+                
+
+
                 <!-- Tooltip -->
                 <span
                     class="absolute -top-10 left-1/2 -translate-x-1/2 bg-ink text-paper text-[10px] uppercase font-bold tracking-widest px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
@@ -106,3 +107,104 @@ const isModuleActive = (mod: any) => {
         </div>
     </div>
 </template>
+
+<script setup lang="ts">
+import { useRouter } from 'vue-router';
+import { ref, computed } from 'vue';
+
+const props = defineProps<{
+    activeModule: string;
+    modules: any[]; 
+}>();
+
+const emit = defineEmits<{
+    (e: 'switch', module: string): void;
+    (e: 'close', module: string): void;
+}>();
+
+const router = useRouter();
+
+// Helper to check pinned
+const isPinned = (mod: any) => {
+    if (mod.pinned) return true;
+    if (mod.children) {
+        return mod.children.some((c: any) => c.pinned);
+    }
+    return false;
+};
+
+// Helper to check running state (new property from Orchestrator)
+const isModuleRunning = (mod: any) => {
+    // Check if module has isRunning property (from Orchestrator DockItem)
+    if (mod.isRunning !== undefined) return mod.isRunning;
+    // Fallback: check children
+    if (mod.children) {
+        return mod.children.some((c: any) => c.isRunning);
+    }
+    return false;
+};
+
+const pinnedModules = computed(() => props.modules.filter(m => isPinned(m)));
+const openModules = computed(() => props.modules.filter(m => !isPinned(m)));
+
+// Derived State for Grouping
+const activeGroup = ref<any | null>(null);
+
+const handleClick = (mod: any) => {
+    console.log('[ModuleSwitcher] Clicked:', mod.id, mod);
+    if (mod.children && mod.children.length > 0) {
+        activeGroup.value = activeGroup.value?.id === mod.id ? null : mod;
+    } else {
+        activeGroup.value = null;
+        console.log('[ModuleSwitcher] Emitting switch:', mod.id);
+        emit('switch', mod.id);
+    }
+};
+
+const selectSubModule = (sub: any) => {
+    emit('switch', sub.id);
+};
+
+const isModuleActive = (mod: any) => {
+    // Single source of truth: props.activeModule from parent (SelfSpaceView)
+    if (props.activeModule === mod.id) return true;
+    
+    // Check children (for grouped modules)
+    if (mod.children && mod.children.some((c: any) => c.id === props.activeModule)) return true;
+    
+    return false;
+};
+</script>
+
+<style scoped>
+/* Running state: Subtle bottom glow (Removed per user request) */
+/* .dock-item.dock-running::after { ... } */
+
+/* Active state: Ring glow effect */
+.dock-item.dock-active {
+    box-shadow: 0 0 0 3px rgba(var(--color-ink-rgb, 0, 0, 0), 0.1);
+}
+
+/* Active + Running: Subtle pulse animation */
+.dock-item.dock-active.dock-running::before {
+    content: '';
+    position: absolute;
+    inset: -4px;
+    border-radius: 50%;
+    background: transparent;
+    border: 2px solid currentColor;
+    opacity: 0.2;
+    animation: dock-pulse 2s ease-in-out infinite;
+}
+
+@keyframes dock-pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 0.2;
+    }
+    50% {
+        transform: scale(1.1);
+        opacity: 0.1;
+    }
+}
+</style>
