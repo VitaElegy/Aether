@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-aether}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aether_password}
+      POSTGRES_DB: ${POSTGRES_DB:-aether_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - aether_net
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: always
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER:-aether}:${POSTGRES_PASSWORD:-aether_password}@db:5432/${POSTGRES_DB:-aether_db}
+      JWT_SECRET: ${JWT_SECRET:-changeme_in_production}
+      RUST_LOG: info
+    volumes:
+      - ./uploads:/app/uploads
+    depends_on:
+      - db
+    networks:
+      - aether_net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    restart: always
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - aether_net
+
+volumes:
+  postgres_data:
+
+networks:
+  aether_net:
