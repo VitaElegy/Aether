@@ -1,9 +1,10 @@
 use axum::{
-    Json, extract::{State, Query}, response::IntoResponse, http::StatusCode,
+    Json, extract::{State, Query, Path}, response::IntoResponse, http::StatusCode,
 };
 use crate::interface::state::AppState;
 use serde::Deserialize;
 use uuid::Uuid;
+use crate::interface::api::auth::AuthenticatedUser;
 
 
 #[derive(Deserialize)]
@@ -13,53 +14,92 @@ pub struct CheckPermissionParams {
     action: String,
 }
 
+// Open endpoint for checking (Internal use mainly)
 pub async fn check_permission_handler(
     State(state): State<AppState>,
     Query(params): Query<CheckPermissionParams>,
 ) -> impl IntoResponse {
-    // Note: This endpoint is OPEN (no auth) to allow internal/debug checks easily.
-    // In production, you might want to protect it or restrict it.
-    
-    // We use service directly.
-    // Note: PermissionService is generic over R, but AppState has specific type.
-    // Ideally we should use the field directly.
     let service = &state.permission_service;
-    
     match service.check_permission(params.user_id, params.entity_id, &params.action).await {
         Ok(allowed) => (StatusCode::OK, Json(serde_json::json!({ "allowed": allowed }))).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
 
+// --- Management API ---
+
 #[derive(Deserialize)]
-pub struct TupleRequest {
-    entity_type: String,
+pub struct GrantRequest {
+    user_id: Uuid,
     entity_id: Uuid,
     relation: String,
-    subject_type: String,
-    subject_id: Uuid,
 }
 
-pub async fn add_tuple_handler(
+pub async fn list_user_permissions_handler(
     State(state): State<AppState>,
-    Json(payload): Json<TupleRequest>,
+    Path(user_id): Path<Uuid>,
+    // Auth guard needed? For now open to Authenticated users (via router layer usually)
+    // but here we just implement logic
 ) -> impl IntoResponse {
-    use crate::domain::ports::PermissionRepository; // Import trait to use add_relation
-    
-    let repo = &state.repo; // PostgresRepository implements PermissionRepository
-    
-    match repo.add_relation(
-        payload.entity_id, &payload.entity_type, &payload.relation, 
-        payload.subject_id, &payload.subject_type
-    ).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "message": "Tuple added" }))).into_response(),
+    match state.permission_service.get_user_explicit_permissions(user_id).await {
+        Ok(data) => (StatusCode::OK, Json(data)).into_response(),
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
+
+pub async fn grant_permission_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<GrantRequest>,
+) -> impl IntoResponse {
+    match state.permission_service.grant_permission(payload.user_id, payload.entity_id, &payload.relation).await {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "message": "Permission granted" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+pub async fn revoke_permission_handler(
+    State(state): State<AppState>,
+    Json(payload): Json<GrantRequest>,
+) -> impl IntoResponse {
+    match state.permission_service.revoke_permission(payload.user_id, payload.entity_id, &payload.relation).await {
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "message": "Permission revoked" }))).into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+pub struct BreakGlassRequest {
+    entity_id: Uuid,
+    relation: String,
+}
+
+pub async fn break_glass_handler(
+    State(state): State<AppState>,
+    auth_user: AuthenticatedUser, // Correct extractor
+    Json(payload): Json<BreakGlassRequest>,
+) -> impl IntoResponse {
+    match state.permission_service.break_glass_access(auth_user.id, payload.entity_id, &payload.relation).await {
+
+        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "message": "Break-Glass access granted. Audit log recorded." }))).into_response(),
+        Err(e) => {
+            if e.to_string().contains("Unauthorized") {
+                (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
+            } else {
+                (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response()
+            }
+        }
+    }
+}
+
+// Deprecated direct tuple handler (wrapped by grant/revoke now)
+// kept if needed but not exposing in router unless necessary
 
 pub fn router() -> axum::Router<AppState> {
     use axum::routing::{get, post};
     axum::Router::new()
         .route("/api/permissions/check", get(check_permission_handler))
-        .route("/api/permissions/tuple", post(add_tuple_handler))
+        .route("/api/permissions/user/:id", get(list_user_permissions_handler))
+        .route("/api/permissions/grant", post(grant_permission_handler))
+        .route("/api/permissions/revoke", post(revoke_permission_handler))
+        .route("/api/permissions/break-glass", post(break_glass_handler))
 }

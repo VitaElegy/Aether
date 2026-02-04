@@ -392,6 +392,12 @@ pub struct LayoutTemplate {
     pub description: String,
     pub thumbnail: Option<String>,
     pub tags: Vec<String>,
+    #[serde(default = "default_config")]
+    pub config: serde_json::Value,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+fn default_config() -> serde_json::Value {
+    serde_json::json!({})
 }

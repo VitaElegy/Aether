@@ -63,8 +63,18 @@ watch(() => router.currentRoute.value.params.kbId, async (newId) => {
     if (target) {
         await orchestrator.switchToKb(target);
     } else {
-        // If /space (empty), default to library
-        await orchestrator.switchToKb('library');
+        // If /space (empty), check if we have an active session to restore
+        const currentActive = appStore.activeKbId;
+        if (currentActive && currentActive !== 'library') {
+            console.log(`[SelfSpace] Restoring session: ${currentActive}`);
+            // Restore session visually
+            await orchestrator.switchToKb(currentActive);
+            // Fix URL to reflect reality (silent replace)
+            router.replace({ name: 'space', params: { kbId: currentActive } });
+        } else {
+            // No active session, default to library
+            await orchestrator.switchToKb('library');
+        }
     }
 }, { immediate: true });
 

@@ -58,6 +58,19 @@
                         <p class="text-xs text-ink/40 truncate">@{{ user.username }}</p>
                         <p class="text-[10px] text-ink/20 font-mono mt-1 truncate">{{ user.id }}</p>
                     </div>
+
+                    <!-- Actions -->
+                    <div class="ml-auto">
+                        <t-dropdown 
+                            :options="[
+                                { content: 'Permissions', value: 'permissions', prefixIcon: () => h(UserSettingIcon) }, 
+                                { content: 'Delete', value: 'delete', theme: 'danger', prefixIcon: () => h(DeleteIcon) }
+                            ]" 
+                            @click="(data: any) => handleUserAction(data, user)"
+                        >
+                            <t-button variant="text" shape="circle"><t-icon name="more" /></t-button>
+                        </t-dropdown>
+                    </div>
                 </div>
             </div>
 
@@ -76,18 +89,71 @@
                  <p v-if="!hasMore && users.length > 0" class="text-xs text-ink/20 mt-4">End of list</p>
             </div>
         </div>
+
+
+        <!-- Permissions Drawer -->
+        <UserPermissionDrawer 
+            v-model:visible="showPermissionsDrawer"
+            :user="selectedUser || undefined"
+        />
     </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, h } from 'vue';
 import { userApi, type UserSummary } from '@/api/user';
-import { MessagePlugin } from 'tdesign-vue-next';
+import { MessagePlugin, DialogPlugin } from 'tdesign-vue-next';
+import { UserSettingIcon, DeleteIcon } from 'tdesign-icons-vue-next'; 
+import axios from 'axios';
+import UserPermissionDrawer from '@/components/admin/UserPermissionDrawer.vue';
 
 const users = ref<UserSummary[]>([]);
 const loading = ref(false);
 const searchQuery = ref('');
 const hasSearched = ref(false); // Used to toggle between "Initial" and "Results" view, but now we auto-load.
+
+// Permission Drawer State
+const showPermissionsDrawer = ref(false);
+const selectedUser = ref<UserSummary | null>(null);
+
+const openPermissions = (user: UserSummary) => {
+    selectedUser.value = user;
+    showPermissionsDrawer.value = true;
+};
+
+const handleUserAction = (action: any, user: UserSummary) => {
+    if (action.value === 'permissions') {
+        openPermissions(user);
+    } else if (action.value === 'delete') {
+        confirmDeleteUser(user);
+    }
+};
+
+const confirmDeleteUser = (user: UserSummary) => {
+    const confirmDialog = DialogPlugin.confirm({
+        header: 'Delete User',
+        body: `Are you sure you want to delete ${user.username}? This action cannot be undone.`,
+        theme: 'danger',
+        onConfirm: async () => {
+            try {
+                await axios.delete(`/api/users/${user.id}`);
+                MessagePlugin.success('User deleted successfully');
+                loadUsers(true); // Reload list
+                confirmDialog.hide();
+            } catch (e: any) {
+                console.error(e);
+                const msg = e.response?.data?.error || 'Failed to delete user';
+                if (msg.includes('Insufficient system permissions')) {
+                     MessagePlugin.error('Permission Denied: You need system-level access.');
+                } else {
+                     MessagePlugin.error(msg);
+                }
+                confirmDialog.hide();
+            }
+        }
+    });
+};
+
 
 // Pagination State
 const offset = ref(0);

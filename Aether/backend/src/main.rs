@@ -16,6 +16,7 @@ mod domain;
 mod infrastructure;
 mod interface;
 
+
 use crate::domain::ports::{ArticleRepository, CommentRepository, MemoRepository, UserRepository, PermissionRepository};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
@@ -23,7 +24,7 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::domain::models::User;
 use crate::interface::state::AppState;
 use crate::interface::api::{
-    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, permission, user, system, template
+    auth, content, comment, memo, export, upload, tags, vocabulary, dictionary, knowledge_base, permission, user, system, template, group
 };
 
 
@@ -45,6 +46,8 @@ async fn main() {
     // User approved "Fresh Start". We destroy old tables to rebuild the "Linux Kernel" architecture.
     // --- DROPPING TABLES FOR SCHEMA RESET (Phase 1 Refactor) ---
     // User approved "Fresh Start". We destroy old tables to rebuild the "Linux Kernel" architecture.
+    // [PERSISTENCE ENABLED] Dropping tables is now disabled.
+    /*
     let _ = db.execute_unprepared("
         DROP TABLE IF EXISTS comments;
         DROP TABLE IF EXISTS content_versions;
@@ -58,6 +61,7 @@ async fn main() {
         DROP TABLE IF EXISTS nodes;
         DROP TABLE IF EXISTS users;
     ").await;
+    */
 
     // --- RECREATING SCHEMA ---
 // ... (Lines 59-165 kept implicitly as we only replace the block around line 44-56 and the memos table)
@@ -102,6 +106,15 @@ async fn main() {
 
         CREATE INDEX IF NOT EXISTS idx_rels_entity ON relationships(entity_type, entity_id, relation);
         CREATE INDEX IF NOT EXISTS idx_rels_subject ON relationships(subject_type, subject_id, relation);
+
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id UUID PRIMARY KEY,
+            action TEXT NOT NULL,
+            actor_id UUID NOT NULL,
+            target_resource TEXT NOT NULL,
+            details JSONB NOT NULL,
+            created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+        );
     ").await.expect("Failed to initialize users table");
 
     let _ = db.execute_unprepared("
@@ -428,10 +441,16 @@ async fn main() {
             description TEXT NOT NULL,
             thumbnail TEXT,
             tags JSONB,
+            config JSONB DEFAULT '{}', -- Added for extra settings like cover_offset_y
             created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
             updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
     ").await.expect("Failed to init layout templates");
+
+    // --- MIGRATION: Ensure config exists (if table already existed) ---
+    // This is a dev-mode hack to avoid writing a full migration file for this session.
+    // SQLite does not support IF NOT EXISTS in ADD COLUMN. We try to add, if it fails (exists), we ignore.
+    let _ = db.execute_unprepared("ALTER TABLE layout_templates ADD COLUMN config JSONB DEFAULT '{}'").await;
 
 
     // Initialize Auth Service
@@ -477,6 +496,9 @@ async fn main() {
         };
         UserRepository::save(&*repo, admin).await.expect("Failed to seed admin");
     }
+
+    // --- TEMPLATE SEEDING ---
+    seed_layout_templates(&db).await;
 
     // --- SYSTEM KB SEEDING ---
     init_system_kbs(&db, &repo).await;
@@ -541,6 +563,7 @@ async fn main() {
         // .merge(draft::router()) // Removed
         .merge(permission::router())
         .merge(user::router())
+        .merge(group::router())
         .merge(system::router())
         .merge(template::router())
         .merge(crate::interface::api::graph::router())
@@ -563,7 +586,7 @@ async fn main() {
 
     let addr = "0.0.0.0:3000";
     let listener = TcpListener::bind(addr).await.unwrap();
-    tracing::info!("Aether Core online at {}", addr);
+    tracing::info!("Aether Core online at {} (Config Enabled)", addr);
     axum::serve(listener, app).await.unwrap();
 }
 
@@ -651,6 +674,49 @@ async fn run_bulk_migration(db: DatabaseConnection) {
 
 async fn health_check() -> &'static str {
     "Aether Systems Operational"
+}
+
+// Ensure Standard Templates exist
+async fn seed_layout_templates(db: &DatabaseConnection) {
+    use crate::infrastructure::persistence::entities::layout_template;
+    use sea_orm::{EntityTrait, QueryFilter, ColumnTrait, Set, ActiveModelTrait};
+    
+    tracing::info!("Checking Layout Templates...");
+    
+    let templates = vec![
+        ("default", "Blog Standard", "Standard single-column layout for general writing.", "bg-gradient-to-br from-blue-500 to-cyan-500", vec!["General", "Writing"]),
+        ("math_v3", "Math Manuscript V3", "Latex-heavy two-column layout for mathematical proofs.", "bg-gradient-to-br from-indigo-500 to-purple-500", vec!["Math", "Academic"]),
+        ("vrkb", "Vulnerability Research", "Kanban-style board for tracking finding and assets.", "bg-gradient-to-br from-orange-500 to-red-500", vec!["Security", "Workflow"]),
+        ("memo", "Memo Board", "Grid layout for quick notes and thoughts.", "bg-gradient-to-br from-yellow-400 to-orange-400", vec!["Personal", "Notes"]),
+        ("admin_system", "System Control", "Protected interface for system administration.", "bg-gradient-to-br from-gray-700 to-black", vec!["Admin", "System"]),
+    ];
+
+    for (rid, title, desc, thumb, tags) in templates {
+        let exists = layout_template::Entity::find()
+            .filter(layout_template::Column::RendererId.eq(rid))
+            .one(db)
+            .await
+            .unwrap_or_default()
+            .is_some();
+
+        if !exists {
+             tracing::info!("Seeding Template: {}", title);
+             let active = layout_template::ActiveModel {
+                 id: Set(Uuid::new_v4()),
+                 renderer_id: Set(rid.to_string()),
+                 title: Set(title.to_string()),
+                 description: Set(desc.to_string()),
+                 thumbnail: Set(Some(thumb.to_string())),
+                 tags: Set(Some(serde_json::to_value(tags).unwrap())),
+                 config: Set(Some(serde_json::json!({}))),
+                 created_at: Set(chrono::Utc::now().into()),
+                 updated_at: Set(chrono::Utc::now().into()),
+             };
+             if let Err(e) = active.insert(db).await {
+                 tracing::error!("Failed to seed template {}: {}", title, e);
+             }
+        }
+    }
 }
 
 // Ensure the "System" KBs exist (Hidden Admin Control Panel)

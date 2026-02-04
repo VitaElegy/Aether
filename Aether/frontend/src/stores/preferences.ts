@@ -69,6 +69,8 @@ export const usePreferencesStore = defineStore('preferences', () => {
         else pinKb(id);
     };
 
+
+
     // Persistence
     watch(readViewShowTree, (v) => localStorage.setItem('aether_read_show_tree', v.toString()));
     watch(readViewShowOutline, (v) => localStorage.setItem('aether_read_show_outline', v.toString()));

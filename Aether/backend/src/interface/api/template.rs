@@ -19,6 +19,7 @@ pub struct CreateTemplateDto {
     pub description: String,
     pub thumbnail: Option<String>,
     pub tags: Vec<String>,
+    pub config: Option<serde_json::Value>,
 }
 
 #[derive(Deserialize)]
@@ -29,6 +30,7 @@ pub struct UpdateTemplateDto {
     pub description: Option<String>,
     pub thumbnail: Option<String>,
     pub tags: Option<Vec<String>>,
+    pub config: Option<serde_json::Value>,
 }
 
 pub fn router() -> Router<AppState> {
@@ -60,6 +62,7 @@ async fn create_template(
         description: payload.description,
         thumbnail: payload.thumbnail,
         tags: payload.tags,
+        config: payload.config.unwrap_or(serde_json::json!({})),
         created_at: Utc::now(),
         updated_at: Utc::now(),
     };
@@ -77,15 +80,11 @@ async fn update_template(
     State(state): State<AppState>,
     user: AuthenticatedUser,
     Path(id): Path<Uuid>,
-    Json(payload): Json<CreateTemplateDto>, // Simplified: Require full object for now or reuse DTO
+    Json(payload): Json<CreateTemplateDto>, // Full replacement model
 ) -> impl IntoResponse {
    if !user.has_permission(permissions::ADMIN) {
         return Err(axum::http::StatusCode::FORBIDDEN);
     }
-
-    // Reuse CreateTemplateDto for full update, or we could fetch and patch. 
-    // For simplicity, let's treat this as a replacement or patch logic here.
-    // Actually repository update expects a full struct.
     
     let template = LayoutTemplate {
         id: id,
@@ -94,10 +93,11 @@ async fn update_template(
         description: payload.description,
         thumbnail: payload.thumbnail,
         tags: payload.tags,
+        config: payload.config.unwrap_or(serde_json::json!({})),
         created_at: Utc::now(), // Repo ignores this
         updated_at: Utc::now(),
     };
-
+    
      match LayoutTemplateRepository::update(&state.repo.db, id, template.clone()).await {
         Ok(_) => Ok(Json(template)),
         Err(e) => {

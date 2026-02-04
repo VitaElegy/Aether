@@ -23,6 +23,7 @@ If your task involves one of these features, you **MUST** read the corresponding
 | **New Knowledge Base** | `AI/context/guides/new_kb_protocol_v2.md`       | Schema, Search Trait, Quarantine, Migrations. |
 | **API Endpoint**       | (Pending)                                       | REST naming, Error Types.                     |
 | **Navigation**         | `AI/context/specs/navigation_lifecycle_spec.md` | Loading State, Keep-Alive, Crash Boundary.    |
+| **Permission**         | `AI/skills/rebac_schema.md`                     | **STANDARD**: Zanzibar-style Tuples, Groups.  |
 | **UI Component**       | (Pending)                                       | Lazy loading, A11y, Theming.                  |
 
 ---

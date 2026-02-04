@@ -4,8 +4,22 @@ use uuid::Uuid;
 use thiserror::Error; // Added back
 use crate::domain::models::{
     Article, Vocabulary, Memo, User, UserId, AuthClaims, Comment, CommentId,
-    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, ContentItem, ContentDiff
+    ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, ContentItem, ContentDiff,
+    VrkbProject, // Implicitly needed if I use it
 };
+use crate::infrastructure::persistence::entities::audit_log; // Import model directly or use domain model if I had one. 
+// I'll stick to using the entity model for simplicity or define a domain struct. 
+// Define domain struct for AuditLog to be clean.
+#[derive(Debug, Clone, Serialize)]
+pub struct AuditLog {
+    pub id: Uuid,
+    pub action: String,
+    pub actor_id: Uuid,
+    pub target_resource: String,
+    pub details: serde_json::Value,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+}
+
 
 #[derive(Debug, Clone, Serialize, Error)] // Added Error
 pub enum RepositoryError {
@@ -50,6 +64,7 @@ pub trait UserRepository: Send + Sync {
     async fn find_by_id(&self, id: &UserId) -> Result<Option<User>, RepositoryError>;
     async fn save(&self, user: User) -> Result<UserId, RepositoryError>;
     async fn search_users(&self, query: &str, limit: u64, offset: u64) -> Result<Vec<User>, RepositoryError>;
+    async fn delete(&self, id: &UserId) -> Result<(), RepositoryError>;
 }
 
 #[async_trait]
@@ -148,6 +163,9 @@ pub trait PermissionRepository: Send + Sync {
     
     // Querying
     async fn get_collaborators(&self, entity_id: Uuid, entity_type: &str, relation: &str) -> Result<Vec<Uuid>, RepositoryError>;
+    
+    // Management
+    async fn get_direct_relations(&self, subject_id: Uuid) -> Result<Vec<(Uuid, String, String)>, RepositoryError>; // Returns (EntityId, EntityType, Relation)
 }
 
 
@@ -225,4 +243,12 @@ pub trait VrkbRepository: Send + Sync {
     
     // Stats
     async fn get_project_stats(&self, project_id: &Uuid) -> Result<crate::domain::models::VrkbStats, RepositoryError>;
+
+}
+
+#[async_trait]
+pub trait AuditRepository: Send + Sync {
+    async fn log_event(&self, action: &str, actor_id: Uuid, target: &str, details: serde_json::Value) -> Result<(), RepositoryError>;
+    async fn get_logs_by_target(&self, target: &str) -> Result<Vec<AuditLog>, RepositoryError>;
+    async fn get_logs_by_actor(&self, actor_id: Uuid) -> Result<Vec<AuditLog>, RepositoryError>;
 }

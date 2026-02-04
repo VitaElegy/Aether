@@ -113,4 +113,23 @@ impl PermissionRepository for PostgresRepository {
 
         Ok(rels.into_iter().map(|r| r.subject_id).collect())
     }
+
+    async fn get_direct_relations(&self, subject_id: Uuid) -> Result<Vec<(Uuid, String, String)>, RepositoryError> {
+        let rels = relationship::Entity::find()
+            .filter(relationship::Column::SubjectId.eq(subject_id))
+            .filter(relationship::Column::SubjectType.eq("user"))
+            // Exclude group memberships (handled by separate query if distinct)
+            // But actually, get_subject_groups handles group memberships.
+            // Direct relations usually means "editor of file X".
+            // Group membership is "member of Group Y".
+            // We should filter out "member" relations to groups to avoid duplication if desired, 
+            // or include them. The UI wants specific resource grants.
+            // Let's exclude 'member' relation to 'group' entity.
+            .filter(relationship::Column::EntityType.ne("group")) 
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+
+        Ok(rels.into_iter().map(|r| (r.entity_id, r.entity_type, r.relation)).collect())
+    }
 }

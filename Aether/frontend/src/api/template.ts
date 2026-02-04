@@ -7,6 +7,7 @@ export interface LayoutTemplate {
     description: string;
     thumbnail?: string;
     tags: string[];
+    config?: any;
     created_at: string;
 }
 
@@ -16,6 +17,7 @@ export interface CreateTemplateDto {
     description: string;
     thumbnail?: string;
     tags: string[];
+    config?: any;
 }
 
 export interface UpdateTemplateDto {
@@ -24,6 +26,7 @@ export interface UpdateTemplateDto {
     description?: string;
     thumbnail?: string;
     tags?: string[];
+    config?: any;
 }
 
 export const templateApi = {

@@ -88,6 +88,12 @@ const router = createRouter({
     // This enforces the Desktop Shell architecture.
     // Wildcard redirect for safety
     {
+      path: '/admin/teams',
+      name: 'admin-teams',
+      component: () => import('../views/admin/UserTeams.vue'),
+      meta: { requiresAuth: true, transition: 'fade' }
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/'
     }

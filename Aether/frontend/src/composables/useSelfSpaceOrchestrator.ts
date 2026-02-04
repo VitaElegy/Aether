@@ -260,6 +260,11 @@ export function useSelfSpaceOrchestrator() {
         syncDock();
     }
 
+    // Reactivity: Sync dock when preferences change
+    watch(() => prefStore.pinnedKbIds, () => {
+        syncDock();
+    }, { deep: true });
+
     // Error State Management
     const errorState = ref<Map<string, { message: string, stack?: string }>>(new Map());
 

@@ -1,12 +1,19 @@
 <script setup lang="ts">
-import { LAYOUTS } from '@/registries/read_layout_registry';
+import { LAYOUTS, fetchLayouts } from '@/registries/read_layout_registry';
 import { type LayoutTemplate } from '@/api/template';
-import { computed } from 'vue';
+import { computed, onMounted, watch } from 'vue';
 
 const props = defineProps<{
     modelValue: string;
     visible: boolean;
 }>();
+
+// Force refresh whenever modal opens
+watch(() => props.visible, (val) => {
+    if (val) {
+        fetchLayouts();
+    }
+});
 
 const emit = defineEmits(['update:modelValue', 'update:visible', 'confirm']);
 
@@ -22,6 +29,18 @@ const handleConfirm = () => {
 const getThumbnailClass = (layout: LayoutTemplate) => {
     return layout.thumbnail || 'bg-ash/10';
 };
+
+const ICON_MAP: Record<string, string> = {
+    default: 'ri-article-line',
+    math_v3: 'ri-function-line',
+    math_v1: 'ri-compass-3-line',
+    english_v1: 'ri-book-read-line',
+    vrkb: 'ri-bug-line',
+    memo: 'ri-sticky-note-line',
+    admin_system: 'ri-settings-line'
+};
+
+const getIconForRenderer = (id: string) => ICON_MAP[id] || 'ri-layout-grid-line';
 </script>
 
 <template>
@@ -61,17 +80,21 @@ const getThumbnailClass = (layout: LayoutTemplate) => {
                             </div>
 
                             <!-- Thumbnail Preview -->
-                            <div class="aspect-video w-full rounded-t-sm overflow-hidden relative">
-                                <!-- Actual Thumbnail (Class-based for now) -->
-                                <div class="w-full h-full" :class="getThumbnailClass(layout)"></div>
+                            <div class="aspect-video w-full rounded-t-sm overflow-hidden relative bg-ash/10">
+                                <!-- Image Logic -->
+                                <img v-if="layout.thumbnail && (layout.thumbnail.startsWith('http') || layout.thumbnail.startsWith('/'))" 
+                                    :src="layout.thumbnail" 
+                                    class="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105"
+                                    :style="{ objectPosition: `center ${layout.config?.cover_offset_y || 50}%` }"
+                                />
                                 
-                                <!-- Icon Overlay -->
-                                <div class="absolute inset-0 flex items-center justify-center">
-                                    <i v-if="layout.id.includes('math')" class="ri-functions-line text-4xl opacity-20"></i>
-                                    <i v-else-if="layout.id.includes('english')" class="ri-translate-2 text-4xl opacity-20"></i>
-                                    <i v-else-if="layout.id.includes('vr')" class="ri-bug-line text-4xl opacity-20"></i>
-                                    <i v-else-if="layout.id.includes('memo')" class="ri-sticky-note-line text-4xl opacity-20"></i>
-                                    <i v-else class="ri-article-line text-4xl opacity-20"></i>
+                                <!-- Default Identity (CSS Class + Icon) -->
+                                <div v-else class="w-full h-full relative" :class="getThumbnailClass(layout)">
+                                    <!-- Icon Centered -->
+                                    <div class="absolute inset-0 flex items-center justify-center">
+                                        <!-- Different styling if it's a dark background? We can assume opacity-20 mixed with text color works for most -->
+                                        <i :class="[getIconForRenderer(layout.renderer_id), 'text-6xl opacity-40 mix-blend-overlay']"></i>
+                                    </div>
                                 </div>
                             </div>
 
@@ -111,3 +134,5 @@ const getThumbnailClass = (layout: LayoutTemplate) => {
         </div>
     </transition>
 </template>
+
+

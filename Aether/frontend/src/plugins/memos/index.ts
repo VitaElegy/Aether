@@ -10,7 +10,8 @@ export const MemosPlugin: SelfSpacePlugin = {
     },
     header: {
         title: 'Memos',
-        icon: 'ri-sticky-note-line'
+        icon: 'ri-sticky-note-line',
+        actions: defineAsyncComponent(() => import('../../components/self-space/modules/memos/MemosHeaderActions.vue'))
     },
     capabilities: {
         articleParser: false

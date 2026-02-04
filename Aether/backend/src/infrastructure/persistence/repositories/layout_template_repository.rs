@@ -15,6 +15,7 @@ impl LayoutTemplateRepository {
             description: Set(template.description.clone()),
             thumbnail: Set(template.thumbnail.clone()),
             tags: Set(Some(serde_json::to_value(template.tags.clone()).unwrap())),
+            config: Set(Some(template.config.clone())),
             created_at: Set(template.created_at),
             updated_at: Set(template.updated_at),
         };
@@ -34,6 +35,7 @@ impl LayoutTemplateRepository {
             description: m.description,
             thumbnail: m.thumbnail,
             tags: m.tags.map(|t| serde_json::from_value(t).unwrap_or_default()).unwrap_or_default(),
+            config: m.config.unwrap_or(serde_json::json!({})),
             created_at: m.created_at,
             updated_at: m.updated_at,
         }).collect();
@@ -53,6 +55,7 @@ impl LayoutTemplateRepository {
         active_model.description = Set(template.description.clone());
         active_model.thumbnail = Set(template.thumbnail.clone());
         active_model.tags = Set(Some(serde_json::to_value(template.tags.clone()).unwrap()));
+        active_model.config = Set(Some(template.config.clone()));
         active_model.updated_at = Set(Utc::now());
 
         active_model.update(db).await?;

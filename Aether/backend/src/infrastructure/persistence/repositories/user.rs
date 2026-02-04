@@ -102,4 +102,12 @@ impl UserRepository for PostgresRepository {
             experience: m.experience.and_then(|v| serde_json::from_value(v).ok()),
         }).collect())
     }
+
+    async fn delete(&self, id: &UserId) -> Result<(), RepositoryError> {
+        let _res = user::Entity::delete_by_id(id.0)
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        Ok(())
+    }
 }

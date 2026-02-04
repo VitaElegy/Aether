@@ -33,6 +33,7 @@
             <!-- Pinned Zone -->
             <button v-for="mod in pinnedModules" :key="mod.id" 
                 @click.stop="handleClick(mod)"
+                @contextmenu.prevent="handleContextMenu(mod)"
                 class="dock-item relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group"
                 :class="[
                     isModuleActive(mod) ? 'bg-ink text-paper dock-active' : 'hover:bg-ash/50 text-ink/50 hover:text-ink',
@@ -63,6 +64,7 @@
             <!-- Open Zone (Non-Pinned Running Apps) -->
             <button v-for="mod in openModules" :key="mod.id" 
                 @click.stop="handleClick(mod)"
+                @contextmenu.prevent="handleContextMenu(mod)"
                 class="dock-item relative w-12 h-12 rounded-full flex items-center justify-center transition-all duration-300 group"
                 :class="[
                     isModuleActive(mod) ? 'bg-ink text-paper dock-active' : 'hover:bg-ash/50 text-ink/50 hover:text-ink',
@@ -144,11 +146,34 @@ const isModuleRunning = (mod: any) => {
     return false;
 };
 
+// ============================================================
+// CONTEXT MENU (Pinning)
+// ============================================================
+import { usePreferencesStore } from '../../stores/preferences';
+const prefStore = usePreferencesStore();
+
+const handleContextMenu = (mod: any) => {
+    // Prevent default context menu
+    // Toggle Pin State
+    if (isPinned(mod)) {
+        prefStore.unpinKb(mod.id);
+    } else {
+        prefStore.pinKb(mod.id);
+    }
+};
+
+
+
+
+
+// Also export pinnedModules / openModules
 const pinnedModules = computed(() => props.modules.filter(m => isPinned(m)));
 const openModules = computed(() => props.modules.filter(m => !isPinned(m)));
+// ... rest of script
 
 // Derived State for Grouping
 const activeGroup = ref<any | null>(null);
+
 
 const handleClick = (mod: any) => {
     console.log('[ModuleSwitcher] Clicked:', mod.id, mod);

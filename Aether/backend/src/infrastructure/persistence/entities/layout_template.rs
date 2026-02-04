@@ -13,6 +13,8 @@ pub struct Model {
     pub thumbnail: Option<String>,
     #[sea_orm(column_type = "JsonBinary", nullable)]
     pub tags: Option<Json>,
+    #[sea_orm(column_type = "JsonBinary", nullable)]
+    pub config: Option<Json>,
     pub created_at: DateTimeUtc,
     pub updated_at: DateTimeUtc,
 }

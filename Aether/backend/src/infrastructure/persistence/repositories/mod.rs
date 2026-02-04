@@ -11,3 +11,4 @@ pub mod graph_repo;
 pub mod vrkb;
 pub mod block_repository;
 pub mod layout_template_repository;
+pub mod audit;

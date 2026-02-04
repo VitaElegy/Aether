@@ -32,22 +32,41 @@ const currentArticle = ref<any>(null);
 const currentBlocks = ref<any[]>([]);
 const isLoading = ref(false);
 
-const kbFormVisible = ref(false);
-const kbForm = ref({ title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'knowledge' });
+const kbFormVisible = ref(false); // KB Creation Form Data
+const kbForm = ref({ title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'default' });
+const selectedTemplateId = ref('default_std'); // Tracks the UI selection (UUID)
+
+// Sync Selection -> Form
+watch(selectedTemplateId, (newVal) => {
+    if (!LAYOUTS.value) return;
+    const template = LAYOUTS.value.find(l => l.id === newVal);
+    if (template) {
+        // Crucial Fix: Map Template ID (UUID) -> Renderer ID (Plugin Key)
+        kbForm.value.renderer_id = template.renderer_id;
+        
+        // Auto-fill Logic
+        if (template.thumbnail && (template.thumbnail.startsWith('http') || template.thumbnail.startsWith('/'))) {
+            kbForm.value.cover_image = template.thumbnail;
+             // @ts-ignore
+            kbForm.value.cover_offset_y = template.config?.cover_offset_y || 50;
+        }
+    }
+});
 const showCreateLayoutModal = ref(false);
 
 const kbFormLayoutMeta = computed(() => {
-    // Safety check: LAYOUTS might be empty initially
     if (!LAYOUTS.value || LAYOUTS.value.length === 0) {
-        return { 
-            id: 'default', 
-            title: 'Loading...', 
-            description: '', 
-            thumbnail: '', 
-            tags: [] 
+        return {
+            id: 'default',
+            renderer_id: 'default',
+            title: 'Standard',
+            description: 'Default Layout',
+            thumbnail: 'bg-ash/10',
+            tags: []
         };
     }
-    return LAYOUTS.value.find(l => l.id === kbForm.value.renderer_id) || LAYOUTS.value[0];
+    // Loop up by selectedTemplateId (UI State)
+    return LAYOUTS.value.find(l => l.id === selectedTemplateId.value) || LAYOUTS.value[0];
 });
 
 // Settings Form
@@ -866,11 +885,18 @@ onUnmounted(() => {
                      <div @click="showCreateLayoutModal = true" 
                         class="w-full bg-surface border border-ink/10 rounded px-3 py-2 cursor-pointer hover:border-accent hover:shadow-sm transition-all flex items-center justify-between group">
                         
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded bg-ash/10 flex-shrink-0" :class="kbFormLayoutMeta.thumbnail"></div>
-                            <div class="flex flex-col">
-                                <span class="text-sm font-medium text-ink group-hover:text-accent transition-colors">{{ kbFormLayoutMeta.title }}</span>
-                                <span class="text-[10px] text-ink/40 line-clamp-1 truncate max-w-[200px]">{{ kbFormLayoutMeta.description }}</span>
+                        <div class="flex items-center gap-3 w-full overflow-hidden">
+                             <!-- Expanded Preview Logic -->
+                            <div class="w-12 h-8 rounded bg-ash/10 flex-shrink-0 overflow-hidden relative border border-ink/5">
+                                <img v-if="kbFormLayoutMeta.thumbnail && (kbFormLayoutMeta.thumbnail.startsWith('http') || kbFormLayoutMeta.thumbnail.startsWith('/'))" 
+                                    :src="kbFormLayoutMeta.thumbnail" 
+                                    class="w-full h-full object-cover" />
+                                <div v-else class="w-full h-full" :class="kbFormLayoutMeta.thumbnail"></div>
+                            </div>
+
+                            <div class="flex flex-col min-w-0 flex-1">
+                                <span class="text-sm font-medium text-ink group-hover:text-accent transition-colors truncate">{{ kbFormLayoutMeta.title }}</span>
+                                <span class="text-[10px] text-ink/40 line-clamp-1 truncate">{{ kbFormLayoutMeta.description }}</span>
                             </div>
                         </div>
 
@@ -939,7 +965,7 @@ onUnmounted(() => {
         </div>
         <LayoutSelectionModal 
             :visible="showCreateLayoutModal" 
-            v-model="kbForm.renderer_id"
+            v-model="selectedTemplateId"
             @update:visible="showCreateLayoutModal = $event"
         />
     </div>

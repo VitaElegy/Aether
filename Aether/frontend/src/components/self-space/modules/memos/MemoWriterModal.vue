@@ -1,15 +1,15 @@
 <template>
   <Transition name="fade" appear>
-    <div v-if="isOpen" class="fixed inset-0 z-[100] flex items-center justify-center sm:items-end sm:justify-end sm:p-8">
+    <div v-if="isOpen" class="fixed inset-0 z-[100] flex items-center justify-center p-4">
         <!-- Backdrop -->
         <div 
-            class="absolute inset-0 bg-neutral-900/40 backdrop-blur-sm transition-opacity" 
+            class="absolute inset-0 bg-neutral-900/60 backdrop-blur-sm transition-opacity" 
             @click="close"
         ></div>
 
         <!-- Writer Card -->
         <div 
-            class="relative w-full max-w-xl bg-surface-0 dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden border border-border/50 ring-1 ring-black/5 transform transition-all duration-300"
+            class="relative w-full max-w-xl bg-paper dark:bg-zinc-900 rounded-3xl shadow-2xl overflow-hidden border border-border/50 ring-1 ring-black/5 transform transition-all duration-300"
             :class="{ 'scale-100 opacity-100': isOpen, 'scale-95 opacity-0': !isOpen }"
         >
             <!-- Header (Minimal) -->
