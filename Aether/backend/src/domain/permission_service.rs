@@ -1,6 +1,6 @@
 use std::sync::Arc;
 use uuid::Uuid;
-use crate::domain::ports::{PermissionRepository, UserRepository, AuditRepository, RepositoryError};
+use crate::domain::ports::{PermissionRepository, UserRepository, AuditRepository};
 use async_recursion::async_recursion;
 
 

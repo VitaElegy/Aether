@@ -7,7 +7,7 @@ use axum::{
 use serde::Deserialize;
 use uuid::Uuid;
 use chrono::Utc;
-use crate::AppState;
+use crate::interface::state::AppState;
 use crate::domain::models::{LayoutTemplate, permissions};
 use crate::infrastructure::persistence::repositories::layout_template_repository::LayoutTemplateRepository;
 use crate::interface::api::auth::AuthenticatedUser;

@@ -20,3 +20,7 @@ pub mod vrkb;
 pub mod blocks;
 pub mod layout_template;
 pub mod audit_log;
+pub mod prkb_feeds;
+pub mod prkb_inbox;
+pub mod prkb_papers;
+pub mod system_setting;

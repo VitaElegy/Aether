@@ -34,7 +34,7 @@ export const templateApi = {
         // Axios returns the whole response object, we need to match the expected return type of the caller.
         // In registry we did: const { data } = await templateApi.list();
         // So this should return the AxiosResponse or similar structure
-        return axios.get<LayoutTemplate[]>('/api/templates');
+        return axios.get<LayoutTemplate[]>('/api/templates?t=' + Date.now());
     },
     create: (data: CreateTemplateDto) => axios.post<LayoutTemplate>('/api/templates', data),
     update: (id: string, data: UpdateTemplateDto) => axios.put<LayoutTemplate>(`/api/templates/${id}`, data),

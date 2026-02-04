@@ -1,6 +1,7 @@
 #[cfg(test)]
 mod tests {
-    use crate::domain::kb::{Block, Document, SchemaRegistry, BlockSchema};
+    use crate::domain::kb::ast::{Block, Document};
+    use crate::domain::kb::registry::{SchemaRegistry, BlockSchema};
     use serde_json::json;
     use serde_json::Value; // Added this import
     use anyhow::Result;

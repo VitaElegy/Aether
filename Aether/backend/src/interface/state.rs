@@ -20,6 +20,9 @@ pub struct AppState {
     pub graph_service: Arc<crate::domain::graph_service::GraphService>,
     pub asset_storage: Arc<crate::infrastructure::storage::service::AssetStorageService>,
     pub schema_registry: crate::domain::kb::SchemaRegistry,
+    pub arxiv_service: Arc<crate::infrastructure::services::arxiv::ArxivService>,
+    pub rss_service: Arc<crate::infrastructure::services::rss::RssService>, // Added
+    pub system_settings_repository: Arc<crate::infrastructure::persistence::repositories::system_settings_repository::SystemSettingsRepository>,
 }
 
 impl FromRef<AppState> for Arc<dyn AuthService> {
@@ -97,5 +100,11 @@ impl FromRef<AppState> for Arc<dyn VrkbRepository> {
 impl FromRef<AppState> for Arc<crate::infrastructure::storage::service::AssetStorageService> {
     fn from_ref(state: &AppState) -> Self {
         state.asset_storage.clone()
+    }
+}
+
+impl FromRef<AppState> for Arc<crate::infrastructure::persistence::repositories::system_settings_repository::SystemSettingsRepository> {
+    fn from_ref(state: &AppState) -> Self {
+        state.system_settings_repository.clone()
     }
 }
