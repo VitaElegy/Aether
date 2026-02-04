@@ -20,6 +20,10 @@
                         <i class="ri-arrow-left-line"></i>
                         Back
                     </button>
+                    <!-- Settings Button (Shortcut) -->
+                    <button v-if="currentView === 'dashboard'" @click="currentView = 'settings'" class="w-8 h-8 rounded-full bg-ink/5 hover:bg-ink/10 text-ink/70 flex items-center justify-center transition-colors">
+                        <i class="ri-settings-4-line"></i>
+                    </button>
 
                     <div class="hidden md:flex px-3 py-1.5 bg-green-500/10 text-green-600 rounded-full text-[10px] font-bold border border-green-500/20 items-center gap-2">
                         <span class="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
@@ -38,7 +42,8 @@
                             <span>
                                 {{ currentView === 'templates' ? 'Templates' : 
                                    currentView === 'users' ? 'User Management' : 
-                                   currentView === 'logs' ? 'System Logs' : '' }}
+                                   currentView === 'logs' ? 'System Logs' : 
+                                   currentView === 'settings' ? 'Global Settings' : '' }}
                             </span>
                         </template>
                     </div>
@@ -64,6 +69,11 @@
             <!-- VIEW: System Logs -->
             <div v-else-if="currentView === 'logs'" class="animate-fade-in">
                  <SystemLogs />
+            </div>
+
+            <!-- VIEW: Settings -->
+            <div v-else-if="currentView === 'settings'" class="animate-fade-in">
+                 <SystemSettings />
             </div>
 
             <!-- VIEW: Dashboard Grid -->
@@ -131,13 +141,14 @@ import { useNavigationStore } from '@/stores/navigation';
 import TemplateManager from '../admin/TemplateManager.vue';
 import UserManagement from '../admin/UserManagement.vue';
 import SystemLogs from '../admin/SystemLogs.vue';
+import SystemSettings from '../admin/SystemSettings.vue';
 
 const router = useRouter();
 const navStore = useNavigationStore();
 const isReady = ref(false);
 
 // [FIX] Internal Navigation State (No Jailbreak)
-const currentView = ref<'dashboard' | 'templates' | 'users' | 'logs'>('dashboard');
+const currentView = ref<'dashboard' | 'templates' | 'users' | 'logs' | 'settings'>('dashboard');
 
 const backToDashboard = () => {
     currentView.value = 'dashboard';

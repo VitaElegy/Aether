@@ -97,4 +97,9 @@ pluginStore.registerPlugin(Object.assign({}, VrkbPlugin, { id: 'vulnerability_re
 import { VrkbManifest } from './components/self-space/modules/vrkb/manifest'
 pluginStore.registerManifest(VrkbManifest)
 
+// 8. PRKB (Paper Research)
+import { PrkbPlugin } from './plugins/prkb'
+pluginStore.registerPlugin(PrkbPlugin)
+
+
 app.mount('#app')

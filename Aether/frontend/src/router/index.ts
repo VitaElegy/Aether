@@ -94,6 +94,12 @@ const router = createRouter({
       meta: { requiresAuth: true, transition: 'fade' }
     },
     {
+      path: '/app/research',
+      name: 'research-space',
+      component: () => import('../views/prkb/ResearchSpace.vue'),
+      meta: { requiresAuth: true, transition: 'fade' }
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/'
     }

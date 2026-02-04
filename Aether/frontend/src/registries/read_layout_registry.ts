@@ -133,6 +133,24 @@ const DEFAULTS: LayoutTemplate[] = [
         thumbnail: 'bg-slate-800 text-green-500',
         tags: ['Security'],
         created_at: new Date().toISOString()
+    },
+    {
+        id: 'english_std',
+        renderer_id: 'english',
+        title: 'English Learning',
+        description: 'Vocabulary, dictionary, and flashcard workspace.',
+        thumbnail: 'bg-gradient-to-br from-green-400 to-teal-500',
+        tags: ['Language', 'Study'],
+        created_at: new Date().toISOString()
+    },
+    {
+        id: 'prkb_std',
+        renderer_id: 'prkb',
+        title: 'Paper Research',
+        description: 'Track ArXiv feeds, read papers, and manage research library.',
+        thumbnail: 'bg-gradient-to-br from-purple-600 to-pink-500',
+        tags: ['Research', 'Academic'],
+        created_at: new Date().toISOString()
     }
 ];
 
