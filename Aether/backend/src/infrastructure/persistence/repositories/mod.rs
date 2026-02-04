@@ -12,3 +12,5 @@ pub mod vrkb;
 pub mod block_repository;
 pub mod layout_template_repository;
 pub mod audit;
+pub mod prkb;
+pub mod system_settings_repository;

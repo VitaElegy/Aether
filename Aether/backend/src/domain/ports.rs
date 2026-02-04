@@ -5,9 +5,9 @@ use thiserror::Error; // Added back
 use crate::domain::models::{
     Article, Vocabulary, Memo, User, UserId, AuthClaims, Comment, CommentId,
     ContentVersionSnapshot, Node, KnowledgeBase, KnowledgeBaseId, ContentItem, ContentDiff,
-    VrkbProject, // Implicitly needed if I use it
+    // VrkbProject removed
 };
-use crate::infrastructure::persistence::entities::audit_log; // Import model directly or use domain model if I had one. 
+// use crate::infrastructure::persistence::entities::audit_log; // Removed unused import if I had one. 
 // I'll stick to using the entity model for simplicity or define a domain struct. 
 // Define domain struct for AuditLog to be clean.
 #[derive(Debug, Clone, Serialize)]

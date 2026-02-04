@@ -54,6 +54,9 @@ anyhow = "1.0.100"
 fst = { version = "0.4.7", features = ["levenshtein"] }
 moka = { version = "0.12", features = ["future"] }
 strsim = "0.10"
+quick-xml = { version = "0.39.0", features = ["serialize"] }
+feed-rs = "1.5" # 🚀 Added for generic RSS/Atom support
+
 
 [workspace]
 members = ["."]

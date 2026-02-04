@@ -10,3 +10,4 @@ pub mod memos;
 pub mod blocks;
 pub mod graph;
 
+pub mod prkb;
