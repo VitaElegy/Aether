@@ -5,7 +5,12 @@ use axum::{
     http::StatusCode,
 };
 use std::process::Command;
-use serde::{Serialize};
+use serde::{Deserialize, Serialize};
+use crate::interface::state::AppState;
+use std::sync::Arc;
+use crate::infrastructure::persistence::repositories::system_settings_repository::SystemSettingsRepository;
+use axum::extract::{State, Json as AxumJson};
+use serde_json::Value;
 
 #[derive(Serialize, Debug)]
 pub struct GitCommit {
@@ -14,6 +19,34 @@ pub struct GitCommit {
     pub author: String,
     pub date: String,
     pub message: String,
+}
+
+#[derive(Serialize, Deserialize)]
+pub struct UpdateSettingDto {
+    pub value: Value,
+}
+
+pub async fn get_settings_handler(
+    State(repo): State<Arc<SystemSettingsRepository>>,
+) -> impl IntoResponse {
+    let max_upload = repo.get_int("max_upload_size_mb", 5).await;
+    let settings = serde_json::json!({
+        "max_upload_size_mb": max_upload
+    });
+    (StatusCode::OK, AxumJson(settings)).into_response()
+}
+
+pub async fn update_setting_handler(
+    State(repo): State<Arc<SystemSettingsRepository>>,
+    AxumJson(payload): AxumJson<serde_json::Map<String, Value>>,
+) -> impl IntoResponse {
+    for (key, value) in payload {
+        if let Err(e) = repo.set(&key, value).await {
+             tracing::error!("Failed to update setting {}: {}", key, e);
+             return (StatusCode::INTERNAL_SERVER_ERROR, AxumJson(serde_json::json!({ "error": "Failed to update setting" }))).into_response();
+        }
+    }
+    (StatusCode::OK, AxumJson(serde_json::json!({ "status": "updated" }))).into_response()
 }
 
 pub async fn get_git_log_handler() -> impl IntoResponse {
@@ -33,7 +66,7 @@ pub async fn get_git_log_handler() -> impl IntoResponse {
                             short_hash: parts[1].to_string(),
                             author: parts[2].to_string(),
                             date: parts[3].to_string(),
-                            message: parts[4..].join("|"), // Rejoin if message contained |
+                            message: parts[4..].join("|"),
                         })
                     } else {
                         None
@@ -53,7 +86,8 @@ pub async fn get_git_log_handler() -> impl IntoResponse {
     }
 }
 
-pub fn router() -> axum::Router<crate::interface::state::AppState> {
+pub fn router() -> axum::Router<AppState> {
     axum::Router::new()
         .route("/api/system/git-log", get(get_git_log_handler))
+        .route("/api/system/settings", get(get_settings_handler).put(update_setting_handler))
 }

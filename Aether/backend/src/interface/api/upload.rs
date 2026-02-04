@@ -1,5 +1,5 @@
 use axum::{
-    Json, extract::Multipart, response::IntoResponse, http::StatusCode,
+    Json, extract::{Multipart, State}, response::IntoResponse, http::StatusCode,
 };
 use crate::interface::api::auth::AuthenticatedUser;
 use std::path::Path;
@@ -7,10 +7,12 @@ use tokio::fs;
 use uuid::Uuid;
 
 pub async fn upload_handler(
+    State(repo): State<std::sync::Arc<crate::infrastructure::persistence::repositories::system_settings_repository::SystemSettingsRepository>>,
     _user: AuthenticatedUser,
     mut multipart: Multipart,
 ) -> impl IntoResponse {
-    const MAX_FILE_SIZE: usize = 5 * 1024 * 1024; // 5 MB
+    let max_mb = repo.get_int("max_upload_size_mb", 5).await;
+    let max_file_size = (max_mb as usize) * 1024 * 1024;
 
     while let Ok(Some(field)) = multipart.next_field().await {
         let name = field.name().unwrap_or("").to_string();
@@ -29,8 +31,8 @@ pub async fn upload_handler(
             let mut stream = field;
 
             while let Ok(Some(chunk)) = stream.chunk().await {
-                if data.len() + chunk.len() > MAX_FILE_SIZE {
-                    return (StatusCode::PAYLOAD_TOO_LARGE, Json(serde_json::json!({ "error": "File size exceeds 5MB limit" }))).into_response();
+                if data.len() + chunk.len() > max_file_size {
+                    return (StatusCode::PAYLOAD_TOO_LARGE, Json(serde_json::json!({ "error": format!("File size exceeds {}MB limit", max_mb) }))).into_response();
                 }
                 data.extend_from_slice(&chunk);
             }
