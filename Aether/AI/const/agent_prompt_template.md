@@ -59,7 +59,7 @@ Before writing a single line of code or plan, you **MUST** read and analyze the 
     -   "I will enforce it using `scripts/...`"
     -   "I will archive discussion to `...`"
 2.  **Stop & Discuss**: Do not start coding until the Spec is approved.
-3.  **Deep Inquiry**: 5-10 questions, **One by One**.
+3.  **Deep Inquiry**: 5-10 questions. Ask them **STRICTLY ONE BY ONE**. Wait for the user's answer before asking the next. DO NOT list multiple questions.
 3.  **Summarize**: `AI/memory/discussions/`.
 
 ## 📁 Directory Structure Rules (INLINE)

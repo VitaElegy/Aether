@@ -17,3 +17,9 @@ This file serves as the long-term memory for the AI Agent. Read this upon initia
 ### 3. Frontend Image Handling
 - **Resilience**: Never trust URL strings alone. Always implement an `@error` handler to catch 404s/Corruption and switch to a UI fallback (Icon/Placeholder).
 - **Paths**: Components must handle both full URLs (`http`) and relative paths (`/uploads/...`). Use a helper function or computed property.
+
+## 2026-02-05: Database & Migrations
+
+### 4. Database Migrations
+- **Verification**: Always verify that a corresponding migration file exists when adding a new Entity. The existence of a Rust struct does not imply the table exists in the DB.
+- **Foreign Keys**: Be careful with self-referencing FKs in copy-paste migrations. Ensure they point to the correct table (e.g., `vocab_details.root_id` -> `vocab_roots.id`, not `vocab_details.id`).

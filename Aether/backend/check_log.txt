@@ -1,0 +1,54 @@
+    Checking aether_backend v0.1.0 (/Users/elegy/Documents/READING/LINUX/Aether/Aether/backend)
+error[E0433]: failed to resolve: could not find `export` in `infrastructure`
+ --> src/infrastructure/bootstrap/services.rs:9:28
+  |
+9 | use crate::infrastructure::export::service::DataExportService;
+  |                            ^^^^^^ could not find `export` in `infrastructure`
+
+error[E0432]: unresolved import `crate::infrastructure::auth::arg2_jwt`
+ --> src/infrastructure/bootstrap/services.rs:8:34
+  |
+8 | use crate::infrastructure::auth::arg2_jwt::Arg2JwtAuthService;
+  |                                  ^^^^^^^^ could not find `arg2_jwt` in `auth`
+
+error[E0432]: unresolved import `crate::AppState`
+  --> src/interface/api/template.rs:10:5
+   |
+10 | use crate::AppState;
+   |     ^^^^^^^^^^^^^^^ no `AppState` in the root
+   |
+help: consider importing this struct instead
+   |
+10 | use crate::interface::state::AppState;
+   |            ++++++++++++++++++
+
+warning: unused import: `RepositoryError`
+ --> src/domain/permission_service.rs:3:83
+  |
+3 | use crate::domain::ports::{PermissionRepository, UserRepository, AuditRepository, RepositoryError};
+  |                                                                                   ^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `VrkbProject`
+ --> src/domain/ports.rs:8:5
+  |
+8 |     VrkbProject, // Implicitly needed if I use it
+  |     ^^^^^^^^^^^
+
+warning: unused import: `crate::infrastructure::persistence::entities::audit_log`
+  --> src/domain/ports.rs:10:5
+   |
+10 | use crate::infrastructure::persistence::entities::audit_log; // Import model directly or use domain model if I had one. 
+   |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `Serialize`
+ --> src/interface/api/prkb.rs:6:26
+  |
+6 | use serde::{Deserialize, Serialize};
+  |                          ^^^^^^^^^
+
+Some errors have detailed explanations: E0432, E0433.
+For more information about an error, try `rustc --explain E0432`.
+warning: `aether_backend` (bin "aether_backend") generated 4 warnings
+error: could not compile `aether_backend` (bin "aether_backend") due to 3 previous errors; 4 warnings emitted
