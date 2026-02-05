@@ -20,3 +20,6 @@ pub mod system;
 
 // router function removed as it is handled by bootstrap/router.rs
 pub mod prkb;
+pub mod assets;
+pub mod backup;
+pub mod portability;

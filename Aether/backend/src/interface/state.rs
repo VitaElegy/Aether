@@ -2,7 +2,8 @@ use std::sync::Arc;
 use axum::extract::FromRef;
 use crate::domain::ports::{
     AuthService, CommentRepository, ArticleRepository, ExportService,
-    MemoRepository, UserRepository, VocabularyRepository, NodeRepository, VrkbRepository
+    MemoRepository, UserRepository, VocabularyRepository, NodeRepository, VrkbRepository,
+    KnowledgeBaseRepository // Added
 };
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::dictionary::loader::DictionaryLoader;
@@ -21,7 +22,10 @@ pub struct AppState {
     pub asset_storage: Arc<crate::infrastructure::storage::service::AssetStorageService>,
     pub schema_registry: crate::domain::kb::SchemaRegistry,
     pub arxiv_service: Arc<crate::infrastructure::services::arxiv::ArxivService>,
-    pub rss_service: Arc<crate::infrastructure::services::rss::RssService>, // Added
+    pub rss_service: Arc<crate::infrastructure::services::rss::RssService>,
+    pub asset_manager: Arc<crate::infrastructure::services::asset_manager::AssetManager>,
+    pub backup_service: Arc<crate::infrastructure::services::backup_service::BackupService>,
+    pub portability_service: Arc<crate::infrastructure::services::portability_service::PortabilityService>,
     pub system_settings_repository: Arc<crate::infrastructure::persistence::repositories::system_settings_repository::SystemSettingsRepository>,
 }
 
@@ -106,5 +110,11 @@ impl FromRef<AppState> for Arc<crate::infrastructure::storage::service::AssetSto
 impl FromRef<AppState> for Arc<crate::infrastructure::persistence::repositories::system_settings_repository::SystemSettingsRepository> {
     fn from_ref(state: &AppState) -> Self {
         state.system_settings_repository.clone()
+    }
+}
+
+impl FromRef<AppState> for Arc<crate::infrastructure::services::asset_manager::AssetManager> {
+    fn from_ref(state: &AppState) -> Self {
+        state.asset_manager.clone()
     }
 }

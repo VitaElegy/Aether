@@ -4,13 +4,14 @@ use axum::{
     response::IntoResponse,
     http::StatusCode,
 };
-use std::sync::Arc;
 use uuid::Uuid;
 use chrono::Utc;
+use std::sync::Arc;
 use crate::domain::models::{KnowledgeBase, KnowledgeBaseId, UserId, Visibility};
 use crate::domain::ports::KnowledgeBaseRepository;
 use crate::domain::ports::{PermissionRepository, UserRepository};
 use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
+use crate::interface::state::AppState;
 use serde::{Deserialize, Serialize};
 
 #[derive(serde::Deserialize)]
@@ -43,6 +44,7 @@ pub struct ListKnowledgeBasesRequest {
 }
 
 pub async fn list_knowledge_bases_handler(
+    State(state): State<AppState>,
     State(repo): State<Arc<dyn KnowledgeBaseRepository>>,
     user: MaybeAuthenticatedUser,
     Query(params): Query<ListKnowledgeBasesRequest>,
@@ -71,13 +73,50 @@ pub async fn list_knowledge_bases_handler(
         return (StatusCode::OK, Json(Vec::<KnowledgeBase>::new())).into_response();
     }
 
+    // Save user ID and clone values before moving them
+    let user_id_for_assets = viewer_id.as_ref().map(|uid| uid.0);
+    let is_own_list = user_id_for_assets.is_some() && 
+                      target_author_id.as_ref().map(|id| id.0) == user_id_for_assets;
+    let viewer_id_clone = viewer_id.clone();
+    let target_author_id_clone = target_author_id.clone();
+
+    // Ensure "My Assets" KB exists for logged-in users listing their own KBs
+    if let Some(uid) = user_id_for_assets {
+        if is_own_list {
+            // User is listing their own KBs - ensure asset KB exists
+            // Note: We ignore errors here to avoid blocking the list if asset KB creation fails
+            if let Err(e) = state.asset_manager.ensure_my_assets_kb(uid).await {
+                tracing::warn!("Failed to ensure asset KB for user {}: {}", uid, e);
+            }
+        }
+    }
+
+    // Query knowledge bases (after ensuring asset KB exists)
     match repo.list(viewer_id, target_author_id).await {
-        Ok(kbs) => (StatusCode::OK, Json(kbs)).into_response(),
+        Ok(mut kbs) => {
+            // Double-check: If user is listing their own KBs and asset KB is missing, try to create it again
+            if let Some(uid) = user_id_for_assets {
+                if is_own_list {
+                    let has_asset_kb = kbs.iter().any(|kb| kb.renderer_id.as_deref() == Some("assets_v1"));
+                    if !has_asset_kb {
+                        tracing::info!("Asset KB missing from list, attempting to create for user {}", uid);
+                        if state.asset_manager.ensure_my_assets_kb(uid).await.is_ok() {
+                            // Re-query to include the newly created asset KB
+                            if let Ok(refreshed_kbs) = repo.list(viewer_id_clone, target_author_id_clone).await {
+                                kbs = refreshed_kbs;
+                            }
+                        }
+                    }
+                }
+            }
+            (StatusCode::OK, Json(kbs)).into_response()
+        },
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
     }
 }
 
 pub async fn create_knowledge_base_handler(
+    State(_state): State<AppState>,
     State(repo): State<Arc<dyn KnowledgeBaseRepository>>,
     user: AuthenticatedUser,
     Json(payload): Json<CreateKnowledgeBaseRequest>,
@@ -148,6 +187,7 @@ pub async fn delete_knowledge_base_handler(
 }
 
 pub async fn update_knowledge_base_handler(
+    State(_state): State<AppState>,
     State(repo): State<Arc<dyn KnowledgeBaseRepository>>,
     user: AuthenticatedUser,
     Path(id): Path<Uuid>,
@@ -209,7 +249,7 @@ pub async fn update_knowledge_base_handler(
 
 // TODO: Import/Export handlers (Need generic Service or specific implementation)
 
-pub fn router() -> axum::Router<crate::interface::state::AppState> {
+pub fn router() -> axum::Router<AppState> {
     use axum::routing::{get, post, delete};
     axum::Router::new()
         .route("/api/knowledge-bases", post(create_knowledge_base_handler).get(list_knowledge_bases_handler))

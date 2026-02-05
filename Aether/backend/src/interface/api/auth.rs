@@ -173,8 +173,13 @@ pub async fn register_handler(
         experience: None,
     };
 
-    match state.repo.save(user).await {
-        Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({ "message": "User created" }))),
+    match state.repo.save(user.clone()).await {
+        Ok(_) => {
+            // Automatically create "My Assets" KB for new users
+            let _ = state.asset_manager.ensure_my_assets_kb(user.id.0).await;
+            
+            (StatusCode::CREATED, Json(serde_json::json!({ "message": "User created" })))
+        },
         Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))),
     }
 }
