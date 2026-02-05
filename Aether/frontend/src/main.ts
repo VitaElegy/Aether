@@ -101,5 +101,10 @@ pluginStore.registerManifest(VrkbManifest)
 import { PrkbPlugin } from './plugins/prkb'
 pluginStore.registerPlugin(PrkbPlugin)
 
+// 9. Assets (My Assets)
+import { AssetsPlugin } from './plugins/assets'
+pluginStore.registerPlugin(AssetsPlugin) // id: 'assets_v1'
+pluginStore.registerPlugin(Object.assign({}, AssetsPlugin, { id: 'assets' })) // Alias
+
 
 app.mount('#app')

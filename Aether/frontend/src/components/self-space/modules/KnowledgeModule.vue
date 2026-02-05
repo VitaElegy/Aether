@@ -10,6 +10,7 @@ import { useRouter } from 'vue-router';
 import { knowledgeApi, type KnowledgeBase } from '../../../api/knowledge';
 import { contentApi, type Content } from '../../../api/content';
 import { uploadApi } from '../../../api/upload';
+import { backupApi } from '../../../api/backup';
 import TagInput from '../../common/TagInput.vue';
 import UserSelect from '../../common/UserSelect.vue';
 import BlockRenderer from '../renderer/BlockRenderer.vue';
@@ -21,6 +22,8 @@ import { LAYOUTS } from '@/registries/read_layout_registry';
 import { inject } from 'vue';
 const os = inject<{ launchApp: (id: string) => void }>('os');
 
+import ExportModal from '@/components/portability/ExportModal.vue';
+
 // -- State --
 const router = useRouter();
 const viewMode = ref<'list' | 'detail' | 'settings' | 'article'>('list');
@@ -31,6 +34,8 @@ const contents = ref<Content[]>([]); // Current folder contents
 const currentArticle = ref<any>(null);
 const currentBlocks = ref<any[]>([]);
 const isLoading = ref(false);
+const showExportModal = ref(false);
+const exportKbId = ref('');
 
 const kbFormVisible = ref(false); // KB Creation Form Data
 const kbForm = ref({ title: '', description: '', tags: '', cover_image: '', cover_offset_y: 50, renderer_id: 'default' });
@@ -451,6 +456,11 @@ const handleKbContextMenu = (e: MouseEvent, kb: KnowledgeBase) => {
     contextMenuVisible.value = true;
 };
 
+const handleExportKb = async (kb: KnowledgeBase) => {
+    exportKbId.value = kb.id;
+    showExportModal.value = true;
+};
+
 const closeContextMenu = () => {
     contextMenuVisible.value = false;
     contextMenuTarget.value = null;
@@ -626,17 +636,29 @@ onUnmounted(() => {
                             :style="{ objectPosition: `50% ${kb.cover_offset_y || 50}%` }" />
                         <div v-else
                             class="w-full h-full flex items-center justify-center bg-gradient-to-br from-ash/20 to-ash/5 text-ink/10">
-                            <i class="ri-book-mark-fill text-6xl"></i>
+                            <!-- Special icon for Assets KB -->
+                            <i v-if="kb.renderer_id === 'assets_v1' || kb.renderer_id === 'assets'" 
+                                class="ri-folder-3-line text-6xl"></i>
+                            <i v-else class="ri-book-mark-fill text-6xl"></i>
                         </div>
                     </div>
 
-                    <!-- Pin Button (Top Right) -->
-                    <button @click.stop="prefStore.togglePin(kb.id)"
-                        class="absolute top-3 right-3 z-20 w-8 h-8 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/40 transition-colors"
-                        :class="{ 'bg-accent/80 text-white': prefStore.isPinned(kb.id) }"
-                        title="Pin to Dock">
-                        <i :class="prefStore.isPinned(kb.id) ? 'ri-pushpin-fill' : 'ri-pushpin-line'"></i>
-                    </button>
+                    <!-- Action Buttons (Top Right) -->
+                    <div class="absolute top-3 right-3 z-20 flex gap-2">
+                        <!-- Export Button -->
+                        <button @click.stop="handleExportKb(kb)"
+                            class="w-8 h-8 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+                            title="导出知识库">
+                            <i class="ri-download-line"></i>
+                        </button>
+                        <!-- Pin Button -->
+                        <button @click.stop="prefStore.togglePin(kb.id)"
+                            class="w-8 h-8 rounded-full bg-black/20 backdrop-blur-md flex items-center justify-center text-white hover:bg-black/40 transition-colors"
+                            :class="{ 'bg-accent/80 text-white': prefStore.isPinned(kb.id) }"
+                            title="Pin to Dock">
+                            <i :class="prefStore.isPinned(kb.id) ? 'ri-pushpin-fill' : 'ri-pushpin-line'"></i>
+                        </button>
+                    </div>
 
                     <!-- Gradient Overlay -->
                     <div
@@ -855,6 +877,10 @@ onUnmounted(() => {
                     class="text-left px-4 py-2 text-sm text-ink hover:bg-ash/50 transition-colors flex items-center gap-2">
                     <i class="ri-settings-3-line"></i> Properties
                 </button>
+                <button @click="handleExportKb(contextMenuKbTarget); closeContextMenu()" 
+                    class="text-left px-4 py-2 text-sm text-ink hover:bg-ash/50 transition-colors flex items-center gap-2">
+                    <i class="ri-download-line"></i> 导出
+                </button>
                 <div class="h-[1px] bg-ink/5 my-1"></div>
                 <button @click="deleteKb" 
                     class="text-left px-4 py-2 text-sm text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2">
@@ -967,6 +993,12 @@ onUnmounted(() => {
             :visible="showCreateLayoutModal" 
             v-model="selectedTemplateId"
             @update:visible="showCreateLayoutModal = $event"
+        />
+        <ExportModal 
+            v-if="showExportModal" 
+            :isOpen="showExportModal" 
+            :kbId="exportKbId" 
+            @close="showExportModal = false" 
         />
     </div>
 </template>

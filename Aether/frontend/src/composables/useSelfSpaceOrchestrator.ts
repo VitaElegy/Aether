@@ -32,7 +32,7 @@ export interface DockItem {
 }
 
 // Special Renderers that should only appear ONCE in the dock
-const SINGLETON_RENDERERS = new Set(['math', 'system', 'admin_system', 'admin', 'vocabulary', 'memo', 'vrkb']);
+const SINGLETON_RENDERERS = new Set(['math', 'system', 'admin_system', 'admin', 'vocabulary', 'memo', 'vrkb', 'assets_v1', 'assets']);
 
 export function useSelfSpaceOrchestrator() {
     const appStore = useAppStateStore();

@@ -15,7 +15,7 @@
           class="w-full flex items-center px-3 py-2 text-sm font-medium rounded-md group"
         >
           <span class="mr-3 text-gray-500">📥</span> Inbox 
-          <span v-if="store.inbox.length > 0" class="ml-auto bg-gray-200 py-0.5 px-2 rounded-full text-xs text-gray-600">{{ store.inbox.length }}</span>
+          <span v-if="store.inboxTotalCount > 0" class="ml-auto bg-gray-200 py-0.5 px-2 rounded-full text-xs text-gray-600">{{ store.inboxTotalCount }}</span>
         </button>
         <button 
           @click="$emit('update:activeTab', 'library')"
@@ -71,6 +71,22 @@
                 </button>
             </div>
         </div>
+
+        <!-- VENUES FACET -->
+        <div class="mt-8 px-3 mb-2 flex items-center justify-between text-xs font-semibold text-gray-400 uppercase tracking-wider">
+            <span>Venues</span>
+        </div>
+        <div v-if="store.venues && store.venues.length === 0" class="px-3 py-2 text-sm text-gray-500 italic">
+            No venues found.
+        </div>
+        <div v-for="venue in (store.venues || [])" :key="venue.id" 
+            class="group flex items-center justify-between px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-gray-50 transition-colors cursor-pointer"
+            :class="{'bg-blue-50 text-blue-700': selectedVenueId === venue.id}"
+            @click="selectVenue(venue.id)"
+        >
+            <span class="truncate">{{ venue.name }}</span>
+            <span v-if="venue.tier" class="text-[10px] bg-gray-100 text-gray-500 px-1 rounded">{{ venue.tier }}</span>
+        </div>
       </nav>
 
       <div class="p-4 border-t border-gray-200">
@@ -91,6 +107,19 @@
             <h2 class="text-2xl font-serif font-semibold text-gray-900 capitalize">{{ activeTab }}</h2>
             <div class="flex space-x-2 items-center">
                 <slot name="tools" />
+                
+                <!-- Filter Dropdown -->
+                <div class="relative inline-block text-left w-48">
+                    <select 
+                        v-model="selectedPublication" 
+                        @change="handleFilterChange" 
+                        class="block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-gray-500 focus:border-gray-500 sm:text-sm rounded-md"
+                    >
+                        <option value="">All Publications</option>
+                        <option v-for="pub in store.publications" :key="pub" :value="pub">{{ pub }}</option>
+                    </select>
+                </div>
+
                 <input type="text" placeholder="Search papers..." class="px-4 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-1 focus:ring-gray-400 w-64">
             </div>
         </div>
@@ -106,20 +135,52 @@
 
 <script setup lang="ts">
 import { usePrkbStore } from '@/stores/prkb';
+import { ref, onMounted, watch } from 'vue';
 
-defineProps<{
+const props = defineProps<{
   activeTab: string
 }>();
 
-defineEmits(['update:activeTab', 'add-feed']);
+const emit = defineEmits(['update:activeTab', 'add-feed']);
 
 const store = usePrkbStore();
+const selectedPublication = ref("");
+const selectedVenueId = ref<string | undefined>(undefined);
 
 const deleteFeed = async (id: string) => {
     if (confirm('Are you sure you want to remove this feed?')) {
         await store.deleteFeed(id);
     }
 };
+
+const handleFilterChange = () => {
+    store.fetchInbox(false, selectedPublication.value || undefined);
+};
+
+const selectVenue = (id: string) => {
+    if (selectedVenueId.value === id) {
+        selectedVenueId.value = undefined;
+    } else {
+        selectedVenueId.value = id;
+    }
+    emit('update:activeTab', 'library');
+    store.fetchLibrary(selectedVenueId.value);
+};
+
+// Clear venue filter when switching tabs manually if desired, or keep it.
+watch(() => props.activeTab, (newTab) => {
+    if (newTab !== 'library') {
+        selectedVenueId.value = undefined;
+    } else if (selectedVenueId.value) {
+        // If returning to library with active filter, ensure it's applied (or already state)
+        // store.fetchLibrary(selectedVenueId.value);
+    }
+});
+
+onMounted(() => {
+    if (store.fetchPublications) store.fetchPublications();
+    if (store.fetchVenues) store.fetchVenues();
+});
 </script>
 
 

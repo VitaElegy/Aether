@@ -100,6 +100,12 @@ const router = createRouter({
       meta: { requiresAuth: true, transition: 'fade' }
     },
     {
+      path: '/my-assets',
+      name: 'my-assets',
+      component: () => import('../views/apps/MyAssets.vue'),
+      meta: { requiresAuth: true, transition: 'fade' }
+    },
+    {
       path: '/:pathMatch(.*)*',
       redirect: '/'
     }

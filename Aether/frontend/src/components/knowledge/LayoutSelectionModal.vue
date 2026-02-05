@@ -37,7 +37,9 @@ const ICON_MAP: Record<string, string> = {
     english_v1: 'ri-book-read-line',
     vrkb: 'ri-bug-line',
     memo: 'ri-sticky-note-line',
-    admin_system: 'ri-settings-line'
+    admin_system: 'ri-settings-line',
+    assets_v1: 'ri-folder-3-line',
+    assets: 'ri-folder-3-line'
 };
 
 const getIconForRenderer = (id: string) => ICON_MAP[id] || 'ri-layout-grid-line';
@@ -69,7 +71,8 @@ const getIconForRenderer = (id: string) => ICON_MAP[id] || 'ri-layout-grid-line'
                 <!-- Body (Scrollable) -->
                 <div class="flex-1 overflow-y-auto p-6 bg-ash/5">
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        <div v-for="layout in LAYOUTS" :key="layout.id"
+                        <!-- Filter out system-managed renderers (assets_v1, admin_system, etc.) -->
+                        <div v-for="layout in LAYOUTS.filter(l => !['assets_v1', 'assets', 'admin_system'].includes(l.renderer_id))" :key="layout.id"
                             @click="selectLayout(layout)"
                             class="group relative bg-paper rounded-lg border-2 overflow-hidden cursor-pointer transition-all duration-300 flex flex-col h-full"
                             :class="modelValue === layout.id ? 'border-accent ring-2 ring-accent/20' : 'border-transparent hover:border-ink/10 hover:shadow-lg'">

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { useRouter } from 'vue-router';
+import BackupManager from '../components/settings/BackupManager.vue';
 import { useAuthStore, type ExperienceItem } from '../stores/auth';
 import { usePreferencesStore } from '../stores/preferences';
 import axios from 'axios';
@@ -9,7 +10,7 @@ const router = useRouter();
 const authStore = useAuthStore();
 const prefStore = usePreferencesStore();
 
-const activeTab = ref<'profile' | 'preferences'>('profile');
+const activeTab = ref<'profile' | 'preferences' | 'backups'>('profile');
 
 const form = ref({
     display_name: '',
@@ -143,6 +144,12 @@ const save = async () => {
                         class="w-full text-left text-xs font-bold uppercase tracking-widest transition-all duration-300 group flex items-center justify-between"
                         :class="activeTab === 'preferences' ? 'text-ink pl-4 border-l-2 border-ink' : 'text-neutral-400 hover:text-ink hover:pl-2'">
                         <span>Interface</span>
+                    </button>
+
+                    <button @click="activeTab = 'backups'"
+                        class="w-full text-left text-xs font-bold uppercase tracking-widest transition-all duration-300 group flex items-center justify-between"
+                        :class="activeTab === 'backups' ? 'text-ink pl-4 border-l-2 border-ink' : 'text-neutral-400 hover:text-ink hover:pl-2'">
+                        <span>Data Retention</span>
                     </button>
 
                     <button @click="router.push('/admin/templates')"
@@ -344,6 +351,18 @@ const save = async () => {
                         </div>
 
                     </div>
+                </div>
+
+                <!-- TAB: Backups -->
+                <div v-if="activeTab === 'backups'"
+                    class="space-y-12 max-w-lg animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div class="border-b border-neutral-100 pb-4">
+                        <h2 class="text-3xl font-bold tracking-tight text-ink">Data Retention</h2>
+                        <p class="text-xs text-neutral-400 font-mono uppercase tracking-widest mt-2">
+                            Backup and Restore your Knowledge Bases
+                        </p>
+                    </div>
+                    <BackupManager />
                 </div>
 
             </main>

@@ -26,12 +26,15 @@
                 </div>
             </div>
 
-            <PaperCard 
-                v-else
-                v-for="paper in store.inbox" 
-                :key="paper.external_id || paper.id" 
-                :paper="paper" 
-            />
+            <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                <PaperCard 
+                    v-for="paper in store.inbox" 
+                    :key="paper.external_id || paper.id" 
+                    :paper="paper" 
+                    @save="store.savePaper"
+                    @trash="store.trashPaper" 
+                />
+            </div>
         </div>
 
         <!-- Library View -->
@@ -45,6 +48,8 @@
                 :key="paper.id" 
                 :paper="paper" 
                 class="h-full"
+                @update="store.updatePaper"
+                @trash="store.trashPaper"
             />
         </div>
 

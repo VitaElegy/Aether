@@ -54,7 +54,7 @@ export interface CreateContentPayload {
 }
 
 export const contentApi = {
-    list: async (params?: { offset?: number; limit?: number; author_id?: string; knowledge_base_id?: string; tag?: string }): Promise<Content[]> => {
+    list: async (params?: { offset?: number; limit?: number; author_id?: string; knowledge_base_id?: string; tag?: string; category?: string }): Promise<Content[]> => {
         const res = await axios.get('/api/content', { params });
         return res.data;
     },
