@@ -604,6 +604,22 @@ impl ArticleRepository for PostgresRepository {
         }
         Ok(())
     }
+
+    async fn count(&self, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>) -> Result<u64, RepositoryError> {
+        let mut query = node::Entity::find()
+            .filter(node::Column::Type.eq("Article"));
+
+        if let Some(uid) = author_id {
+            query = query.filter(node::Column::AuthorId.eq(uid.0));
+        }
+
+        if let Some(kb_id) = knowledge_base_id {
+            query = query.filter(node::Column::KnowledgeBaseId.eq(kb_id));
+        }
+
+        let count = query.count(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(count)
+    }
 }
 
 fn map_article(n: node::Model, d: article_detail::Model, match_user: Option<crate::infrastructure::persistence::entities::user::Model>) -> Article {

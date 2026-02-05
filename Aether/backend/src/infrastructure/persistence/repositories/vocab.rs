@@ -275,6 +275,19 @@ impl VocabularyRepository for PostgresRepository {
         self.db.execute(stmt).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
         Ok(())
     }
+
+    async fn count(&self, user_id: &UserId, knowledge_base_id: Option<Uuid>) -> Result<u64, RepositoryError> {
+        let mut query = node::Entity::find()
+            .filter(node::Column::Type.eq("Vocabulary"))
+            .filter(node::Column::AuthorId.eq(user_id.0));
+
+        if let Some(kbid) = knowledge_base_id {
+            query = query.filter(node::Column::KnowledgeBaseId.eq(kbid));
+        }
+
+        let count = query.count(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(count)
+    }
 }
 
 fn map_vocab(n: node::Model, d: vocab_detail::Model, root: Option<String>, examples: Vec<crate::domain::models::VocabularyExample>) -> Vocabulary {

@@ -22,6 +22,8 @@ struct AtomEntry {
     published: String,
     author: Vec<AtomAuthor>,
     link: Vec<AtomLink>,
+    #[serde(rename = "journal_ref", default)]
+    journal_ref: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -98,6 +100,7 @@ impl ArxivService {
                     is_read: false,
                     is_saved: false,
                     fetched_at: Utc::now(),
+                    publication: entry.journal_ref,
                 });
             }
         }

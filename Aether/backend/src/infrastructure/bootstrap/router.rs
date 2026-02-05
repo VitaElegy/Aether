@@ -3,7 +3,7 @@ use tower_http::trace::TraceLayer;
 use crate::interface::state::AppState;
 use crate::interface::api::{
     auth, content, comment, memo, knowledge_base, export, upload, 
-    tags, vocabulary, dictionary, permission, user, system, template, group, prkb, graph, vrkb
+    tags, vocabulary, dictionary, permission, user, system, template, group, prkb, graph, vrkb, assets, backup, portability
 };
 
 pub fn build_router(state: AppState) -> Router {
@@ -26,6 +26,9 @@ pub fn build_router(state: AppState) -> Router {
         .merge(template::router())
         .merge(graph::router())
         .merge(vrkb::router())
+        .nest("/api/assets", assets::router())
+        .nest("/api/backups", backup::router())
+        .nest("/api/portability", portability::router())
         .with_state(state);
 
     Router::new()

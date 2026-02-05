@@ -92,6 +92,7 @@ pub trait ArticleRepository: Send + Sync {
     async fn find_drafts_by_article_ids(&self, article_ids: Vec<Uuid>) -> Result<Vec<(Uuid, String, serde_json::Value, chrono::DateTime<chrono::Utc>)>, RepositoryError>;
     async fn find_draft_by_id(&self, article_id: &Uuid) -> Result<Option<(String, serde_json::Value)>, RepositoryError>;
     async fn save_draft(&self, article_id: Uuid, title: String, body: serde_json::Value) -> Result<(), RepositoryError>;
+    async fn count(&self, author_id: Option<UserId>, knowledge_base_id: Option<Uuid>) -> Result<u64, RepositoryError>;
 }
 
 #[async_trait]
@@ -105,6 +106,7 @@ pub trait VocabularyRepository: Send + Sync {
     async fn delete_many(&self, ids: &[Uuid]) -> Result<(), RepositoryError>; 
     async fn increment_query_count(&self, id: &Uuid) -> Result<(), RepositoryError>;
     async fn set_importance(&self, id: &Uuid, is_important: bool) -> Result<(), RepositoryError>;
+    async fn count(&self, user_id: &UserId, knowledge_base_id: Option<Uuid>) -> Result<u64, RepositoryError>;
 }
 
 #[async_trait]

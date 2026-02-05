@@ -23,4 +23,8 @@ pub mod audit_log;
 pub mod prkb_feeds;
 pub mod prkb_inbox;
 pub mod prkb_papers;
+pub mod prkb_authors;
+pub mod prkb_venues;
+pub mod prkb_signals;
+pub mod prkb_papers_authors;
 pub mod system_setting;

@@ -42,6 +42,7 @@ impl RssService {
                 .unwrap_or_else(|| Utc::now());
 
             items.push(InboxItem {
+                publication: None,
                 id: Uuid::new_v4(),
                 feed_id: Uuid::nil(), // Caller sets this
                 external_id: entry.id, // RSS GUID/ID

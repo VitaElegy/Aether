@@ -14,10 +14,12 @@ pub struct Model {
     pub abstract_text: String,
     pub url: String,
     pub pdf_url: Option<String>,
+    pub publication: Option<String>,
     pub publish_date: DateTimeUtc,
     pub is_read: bool,
     pub is_saved: bool,
     pub fetched_at: DateTimeUtc,
+    pub state: String,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

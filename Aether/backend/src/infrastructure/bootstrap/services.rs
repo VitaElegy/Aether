@@ -4,9 +4,14 @@ use std::env;
 
 use crate::interface::state::AppState;
 use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::domain::ports::{UserRepository, ArticleRepository, MemoRepository, CommentRepository, VrkbRepository, GraphRepository};
+use crate::domain::ports::{UserRepository, ArticleRepository, MemoRepository, CommentRepository, VrkbRepository, GraphRepository, NodeRepository, KnowledgeBaseRepository};
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
 use crate::infrastructure::services::export_service::DataExportService;
+use crate::infrastructure::services::asset_manager::AssetManager;
+use crate::infrastructure::services::backup_service::BackupService;
+use crate::infrastructure::services::portability_service::PortabilityService;
+use crate::infrastructure::services::portability::english::EnglishPortabilityProvider;
+use crate::infrastructure::services::portability::default::DefaultPortabilityProvider;
 use crate::infrastructure::dictionary::loader::DictionaryLoader;
 use crate::domain::permission_service::PermissionService;
 use crate::domain::indexer_service::IndexerService;
@@ -48,6 +53,52 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
         "uploads".to_string()
     ));
 
+    let asset_manager = Arc::new(AssetManager::new(
+        repo.clone() as Arc<dyn NodeRepository>,
+        repo.clone() as Arc<dyn ArticleRepository>,
+        repo.clone() as Arc<dyn KnowledgeBaseRepository>,
+        Arc::new(permission_service.clone()),
+        ".".to_string()
+    ));
+
+    let backup_service = Arc::new(BackupService::new(
+        repo.clone() as Arc<dyn ArticleRepository>,
+        repo.clone() as Arc<dyn crate::domain::ports::KnowledgeBaseRepository>,
+        repo.clone() as Arc<dyn NodeRepository>,
+        asset_manager.clone(),
+        ".".to_string()
+    ));
+
+    let mut portability_service = PortabilityService::new();
+    
+    // Register English Provider (Standard)
+    portability_service.register_provider(Arc::new(EnglishPortabilityProvider::new(
+        repo.clone() as Arc<dyn crate::domain::ports::VocabularyRepository>,
+        repo.clone() as Arc<dyn ArticleRepository>,
+        repo.clone() as Arc<dyn crate::domain::ports::KnowledgeBaseRepository>,
+    )));
+
+    // Register English Provider (Alias: vocabulary)
+    portability_service.register_provider(Arc::new(EnglishPortabilityProvider::new(
+        repo.clone() as Arc<dyn crate::domain::ports::VocabularyRepository>,
+        repo.clone() as Arc<dyn ArticleRepository>,
+        repo.clone() as Arc<dyn crate::domain::ports::KnowledgeBaseRepository>,
+    ).with_id("vocabulary".to_string())));
+
+    // Register English Provider (Alias: english)
+    portability_service.register_provider(Arc::new(EnglishPortabilityProvider::new(
+        repo.clone() as Arc<dyn crate::domain::ports::VocabularyRepository>,
+        repo.clone() as Arc<dyn ArticleRepository>,
+        repo.clone() as Arc<dyn crate::domain::ports::KnowledgeBaseRepository>,
+    ).with_id("english".to_string())));
+
+    // Register Default Provider
+    portability_service.register_provider(Arc::new(DefaultPortabilityProvider::new(
+        backup_service.clone()
+    )));
+
+    let portability_service = Arc::new(portability_service);
+
     let arxiv_service = Arc::new(ArxivService::new());
     let rss_service = Arc::new(RssService::new());
 
@@ -63,7 +114,13 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
     schema_registry.register("markdown", crate::domain::kb::schemas::markdown::MarkdownSchema);
     schema_registry.register("math_block", crate::domain::kb::schemas::math::MathSchema);
     schema_registry.register("paper", crate::domain::kb::schemas::paper_v1::PaperSchema);
-    tracing::info!("KB Schema Registry initialized (types: markdown, math_block, paper)");
+    
+    // Register Asset Schemas
+    schema_registry.register("image_asset", crate::domain::kb::schemas::assets::ImageAssetSchema);
+    schema_registry.register("ip_asset", crate::domain::kb::schemas::assets::IpAssetSchema);
+    schema_registry.register("credential_stub", crate::domain::kb::schemas::assets::CredentialStubSchema);
+
+    tracing::info!("KB Schema Registry initialized (types: markdown, math_block, paper, assets)");
 
     let system_settings_repository = Arc::new(SystemSettingsRepository::new(Arc::new(db.clone())));
 
@@ -77,6 +134,9 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
         indexer_service,
         graph_service,
         asset_storage,
+        asset_manager,
+        backup_service,
+        portability_service,
         schema_registry,
         arxiv_service,
         rss_service,
