@@ -32,7 +32,7 @@
                                 <div class="flex items-center gap-3">
                                     <t-checkbox 
                                         :checked="userGroups.includes(group.id)"
-                                        @change="(val) => toggleGroup(group.id, val)"
+                                        @change="(val: boolean) => toggleGroup(group.id, val)"
                                         :disabled="processing"
                                     />
                                     <span>{{ group.name }}</span>

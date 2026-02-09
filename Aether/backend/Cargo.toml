@@ -63,6 +63,10 @@ tokio-stream = { version = "0.1", features = ["sync"] }
 async-stream = "0.3"
 
 
+# API Documentation
+utoipa = { version = "4.2.0", features = ["axum_extras", "uuid", "chrono"] }
+utoipa-swagger-ui = { version = "6.0.0", features = ["axum"] }
+
 [workspace]
 members = ["."]
 
