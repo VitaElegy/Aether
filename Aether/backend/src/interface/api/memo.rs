@@ -28,6 +28,8 @@ pub struct CreateMemoRequest {
 #[derive(serde::Deserialize, Debug)]
 pub struct ListMemosRequest {
     pub author_id: Option<Uuid>,
+    pub start_date: Option<DateTime<Utc>>,
+    pub end_date: Option<DateTime<Utc>>,
 }
 
 pub async fn create_memo_handler(
@@ -99,12 +101,25 @@ pub async fn list_memos_handler(
          return Json::<Vec<Memo>>(Vec::new()).into_response();
     }
 
-    match state.repo.list(viewer_id, target_author_id).await {
-         Ok(memos) => Json::<Vec<Memo>>(memos).into_response(),
-         Err(e) => {
-             tracing::error!("Failed to list memos: {:?}", e);
-             (StatusCode::INTERNAL_SERVER_ERROR, "Failed to list memos").into_response()
-         }
+    match (params.start_date, params.end_date) {
+        (Some(start), Some(end)) => {
+             match state.repo.find_by_date_range(target_author_id.unwrap(), start, end).await {
+                 Ok(memos) => Json::<Vec<Memo>>(memos).into_response(),
+                 Err(e) => {
+                     tracing::error!("Failed to list memos by date: {:?}", e);
+                     (StatusCode::INTERNAL_SERVER_ERROR, "Failed to list memos").into_response()
+                 }
+             }
+        },
+        _ => {
+            match state.repo.list(viewer_id, target_author_id).await {
+                 Ok(memos) => Json::<Vec<Memo>>(memos).into_response(),
+                 Err(e) => {
+                     tracing::error!("Failed to list memos: {:?}", e);
+                     (StatusCode::INTERNAL_SERVER_ERROR, "Failed to list memos").into_response()
+                 }
+            }
+        }
     }
 }
 

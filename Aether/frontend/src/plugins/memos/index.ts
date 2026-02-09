@@ -11,7 +11,7 @@ export const MemosPlugin: SelfSpacePlugin = {
     header: {
         title: 'Memos',
         icon: 'ri-sticky-note-line',
-        actions: defineAsyncComponent(() => import('../../components/self-space/modules/memos/MemosHeaderActions.vue'))
+        // actions: Handled internally by MemosModule via Teleport
     },
     capabilities: {
         articleParser: false

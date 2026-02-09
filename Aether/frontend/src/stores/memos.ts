@@ -52,11 +52,12 @@ export const useMemosStore = defineStore('memos', () => {
     const memos = ref<Memo[]>([]);
     const loading = ref(false);
     const error = ref<string | null>(null);
-    const currentView = ref<'masonry' | 'kanban' | 'calendar' | 'list' | 'timeline'>('masonry');
+    const currentView = ref<'masonry' | 'kanban' | 'calendar' | 'list' | 'timeline' | 'stream'>('stream'); // Default to Stream for V2
 
     // Filters
     const searchQuery = ref('');
     const filterTags = ref<string[]>([]);
+    const pinnedTags = ref<string[]>([]); // New: Pinned Tags from User Settings
     const filterProject = ref<string | null>(null); // TODO: Project support
 
     // Workflow
@@ -74,7 +75,11 @@ export const useMemosStore = defineStore('memos', () => {
             );
         }
         if (filterTags.value.length > 0) {
-            list = list.filter(m => filterTags.value.every(t => m.tags.includes(t)));
+            if (filterTags.value.includes('__untagged__')) {
+                list = list.filter(m => m.tags.length === 0);
+            } else {
+                list = list.filter(m => filterTags.value.every(t => m.tags.includes(t)));
+            }
         }
         // Sort by pinned, then date desc
         return list.sort((a, b) => {
@@ -82,6 +87,10 @@ export const useMemosStore = defineStore('memos', () => {
             if (!a.is_pinned && b.is_pinned) return 1;
             return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
         });
+    });
+
+    const untaggedCount = computed(() => {
+        return memos.value.filter(m => m.tags.length === 0).length;
     });
 
     const uniqueTags = computed(() => {
@@ -153,6 +162,39 @@ export const useMemosStore = defineStore('memos', () => {
         } catch (e) {
             console.error('Failed to save workflow', e);
         }
+    }
+
+    // --- User Settings Actions ---
+    async function fetchUserSettings() {
+        try {
+            const res = await axios.get('/api/users/settings/memos');
+            if (res.data) {
+                if (res.data.pinned_tags) pinnedTags.value = res.data.pinned_tags;
+                if (res.data.view_mode) currentView.value = res.data.view_mode;
+            }
+        } catch (e) {
+            console.warn('Failed to fetch memo settings', e);
+        }
+    }
+
+    async function saveUserSettings() {
+        try {
+            await axios.put('/api/users/settings/memos', {
+                pinned_tags: pinnedTags.value,
+                view_mode: currentView.value
+            });
+        } catch (e) {
+            console.error('Failed to save memo settings', e);
+        }
+    }
+
+    async function togglePinTag(tag: string) {
+        if (pinnedTags.value.includes(tag)) {
+            pinnedTags.value = pinnedTags.value.filter(t => t !== tag);
+        } else {
+            pinnedTags.value.push(tag);
+        }
+        await saveUserSettings();
     }
 
     async function createMemo(payload: CreateMemoPayload) {
@@ -292,6 +334,7 @@ export const useMemosStore = defineStore('memos', () => {
         filterTags,
         filteredMemos,
         uniqueTags,
+        untaggedCount,
         kanbanColumns,
         workflow, // Export State
         ui, // Export UI state
@@ -302,6 +345,10 @@ export const useMemosStore = defineStore('memos', () => {
         moveMemoToStatus,
         fetchWorkflow, // Export
         saveWorkflow,  // Export
+        fetchUserSettings,
+        saveUserSettings,
+        togglePinTag,
+        pinnedTags,
         openEditor,
         closeEditor,
         // Selection
