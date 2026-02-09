@@ -11,3 +11,4 @@ pub mod indexer_service;
 pub mod memos;
 pub mod permission_service;
 pub mod sentence_parser;
+pub mod dtos;

@@ -97,6 +97,11 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
         backup_service.clone()
     )));
 
+    // Register Assets Provider (Alias: assets_v1) -> Maps to Default for now
+    portability_service.register_provider(Arc::new(DefaultPortabilityProvider::new(
+        backup_service.clone()
+    ).with_id("assets_v1".to_string())));
+
     let portability_service = Arc::new(portability_service);
 
     let arxiv_service = Arc::new(ArxivService::new());

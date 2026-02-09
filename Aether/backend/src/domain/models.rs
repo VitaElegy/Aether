@@ -72,6 +72,7 @@ pub struct VocabularyExample {
     pub article_id: Option<Uuid>,
     pub sentence_uuid: Option<Uuid>,
     pub created_at: DateTime<Utc>,
+    pub global_sentence_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

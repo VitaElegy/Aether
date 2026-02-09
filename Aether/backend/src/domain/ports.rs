@@ -107,6 +107,8 @@ pub trait VocabularyRepository: Send + Sync {
     async fn increment_query_count(&self, id: &Uuid) -> Result<(), RepositoryError>;
     async fn set_importance(&self, id: &Uuid, is_important: bool) -> Result<(), RepositoryError>;
     async fn count(&self, user_id: &UserId, knowledge_base_id: Option<Uuid>) -> Result<u64, RepositoryError>;
+    // Shared Sentences
+    async fn search_global_sentences(&self, query: &str) -> Result<Vec<(Uuid, String, Option<String>)>, RepositoryError>;
 }
 
 #[async_trait]
