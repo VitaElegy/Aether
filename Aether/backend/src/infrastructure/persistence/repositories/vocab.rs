@@ -6,7 +6,7 @@ use crate::domain::models::{Vocabulary, Node, NodeType, PermissionMode};
 use crate::domain::models::UserId;
 use crate::domain::ports::{VocabularyRepository, RepositoryError};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::infrastructure::persistence::entities::{node, vocab_detail};
+use crate::infrastructure::persistence::entities::{node, vocab_detail, vocab_example, global_sentence, vocab_root};
 
 #[async_trait]
 impl VocabularyRepository for PostgresRepository {
@@ -16,8 +16,6 @@ impl VocabularyRepository for PostgresRepository {
         // 1. Handle Root (if present)
         let mut root_id = None;
         if let Some(r_str) = &vocab.root {
-            use crate::infrastructure::persistence::entities::vocab_root;
-            
             // Check if root exists
             let existing = vocab_root::Entity::find()
                 .filter(vocab_root::Column::Root.eq(r_str))
@@ -84,31 +82,89 @@ impl VocabularyRepository for PostgresRepository {
             )
             .exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        // 4. Save Examples
-        // First, delete existing examples (simple full overwrite for editing)
-        use crate::infrastructure::persistence::entities::vocab_example;
-        vocab_example::Entity::delete_many()
+        // 4. Save Examples (Shared/Global Logic)
+        
+        // Get current examples for this vocab to see what is being removed
+        let current_examples = vocab_example::Entity::find()
             .filter(vocab_example::Column::VocabId.eq(vocab.node.id))
-            .exec(&txn).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
-
-        if !vocab.examples.is_empty() {
-            let example_models: Vec<vocab_example::ActiveModel> = vocab.examples.into_iter().map(|ex| {
-                vocab_example::ActiveModel {
-                    id: Set(ex.id), // Use provided ID or generate? Provided from handler.
-                    vocab_id: Set(vocab.node.id),
-                    sentence: Set(ex.sentence),
-                    translation: Set(ex.translation),
-                    note: Set(ex.note),
-                    image_url: Set(ex.image_url),
-                    article_id: Set(ex.article_id),
-                    sentence_uuid: Set(ex.sentence_uuid),
-                    created_at: Set(ex.created_at.into()),
-                }
-            }).collect();
-            
-             vocab_example::Entity::insert_many(example_models)
+            .all(&txn).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        
+        let current_ids: Vec<Uuid> = current_examples.iter().map(|e| e.id).collect();
+        let input_ids: Vec<Uuid> = vocab.examples.iter().map(|e| e.id).collect();
+        
+        // Delete removed examples
+        let to_delete: Vec<Uuid> = current_ids.into_iter().filter(|id| !input_ids.contains(id)).collect();
+        if !to_delete.is_empty() {
+             vocab_example::Entity::delete_many()
+                .filter(vocab_example::Column::Id.is_in(to_delete))
                 .exec(&txn).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
         }
+
+        for ex in vocab.examples {
+            // Logic:
+            // 1. Check if ex.sentence matches an existing global_sentence (by ID or text)
+            //    - The frontend *should* send global_sentence_id if it knows it.
+            //    - But our domain model `VocabularyExample` does not have `global_sentence_id` field exposed yet?
+            //    - It has `sentence_uuid`... but that was for something else (origin).
+            //    - Let's assume we rely on text matching or existing link.
+            
+            // Try to find if this example row already exists
+            let existing_link = vocab_example::Entity::find_by_id(ex.id)
+                .one(&txn).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+            
+            let global_id = if let Some(link) = existing_link {
+                // Existing link.
+                if let Some(gid) = link.global_sentence_id {
+                    // It has a global sentence.
+                    // "Global Update" scope: Update the global sentence text.
+                    let global_s = global_sentence::ActiveModel {
+                        id: Set(gid),
+                        text: Set(ex.sentence.clone()),
+                        translation: Set(ex.translation.clone()), // Also update translation? Yes, likely desired.
+                        ..Default::default()
+                    };
+                    global_sentence::Entity::update(global_s)
+                        .exec(&txn).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+                    gid
+                } else {
+                    // Legacy record without global_sentence_id? Upgrade it.
+                    // Or it's a new global sentence.
+                    create_or_find_global_sentence(&txn, &ex).await?
+                }
+            } else {
+                // New Example
+                create_or_find_global_sentence(&txn, &ex).await?
+            };
+
+            let example_model = vocab_example::ActiveModel {
+                id: Set(ex.id),
+                vocab_id: Set(vocab.node.id),
+                sentence: Set(None), // Deprecated/Nullable
+                translation: Set(None), // Deprecated/Nullable (stored in global)
+                note: Set(ex.note), // Note is specific to the usage (e.g. grammar focus), so keep on link
+                image_url: Set(ex.image_url), // Image might be specific? Or shared? Let's keep specific for now.
+                article_id: Set(ex.article_id),
+                sentence_uuid: Set(ex.sentence_uuid),
+                created_at: Set(ex.created_at.into()),
+                global_sentence_id: Set(Some(global_id)),
+            };
+            
+            vocab_example::Entity::insert(example_model)
+                .on_conflict(
+                    sea_orm::sea_query::OnConflict::column(vocab_example::Column::Id)
+                        .update_columns([vocab_example::Column::Note, vocab_example::Column::ImageUrl, vocab_example::Column::GlobalSentenceId])
+                        .to_owned()
+                )
+                .exec(&txn).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        }
+
+        // Cleanup Orphans
+        let stmt = Statement::from_sql_and_values(
+            self.db.get_database_backend(),
+            r#"DELETE FROM global_sentences WHERE id NOT IN (SELECT DISTINCT global_sentence_id FROM vocab_examples WHERE global_sentence_id IS NOT NULL)"#,
+            vec![]
+        );
+        txn.execute(stmt).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
 
         txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(vocab.node.id)
@@ -126,16 +182,12 @@ impl VocabularyRepository for PostgresRepository {
              
              if let Some(n) = n_opt {
                  if n.author_id == user_id.0 {
-                     // Lazy Load Root and Examples
                      let root = if let Some(rid) = d.root_id {
-                         use crate::infrastructure::persistence::entities::vocab_root;
                          vocab_root::Entity::find_by_id(rid).one(&self.db).await
                             .unwrap_or(None).map(|r| r.root)
                      } else { None };
 
-                     use crate::infrastructure::persistence::entities::vocab_example;
-                     let examples = d.find_related(vocab_example::Entity).all(&self.db).await
-                         .unwrap_or_default().into_iter().map(map_example).collect();
+                     let examples = fetch_examples_for_vocab(&self.db, d.id).await?;
                      
                      return Ok(Some(map_vocab(n, d, root, examples)));
                  }
@@ -152,14 +204,11 @@ impl VocabularyRepository for PostgresRepository {
         match result {
             Some((n, Some(d))) => {
                  let root = if let Some(rid) = d.root_id {
-                     use crate::infrastructure::persistence::entities::vocab_root;
                      vocab_root::Entity::find_by_id(rid).one(&self.db).await
                         .unwrap_or(None).map(|r| r.root)
                  } else { None };
 
-                 use crate::infrastructure::persistence::entities::vocab_example;
-                 let examples = d.find_related(vocab_example::Entity).all(&self.db).await
-                     .unwrap_or_default().into_iter().map(map_example).collect();
+                 let examples = fetch_examples_for_vocab(&self.db, d.id).await?;
                 
                  Ok(Some(map_vocab(n, d, root, examples)))
             },
@@ -168,54 +217,31 @@ impl VocabularyRepository for PostgresRepository {
     }
 
     async fn list(&self, user_id: &UserId, limit: u64, offset: u64, query: Option<String>, sort_by: Option<String>, order: Option<String>, knowledge_base_id: Option<Uuid>) -> Result<Vec<Vocabulary>, RepositoryError> {
-        // Eager Loading using find_with_related is messy for 3 levels, so doing it iteratively or with find_also
-        // Let's do a basic list then fetch details.
-        
         let mut select = node::Entity::find()
             .filter(node::Column::Type.eq("Vocabulary"))
             .filter(node::Column::AuthorId.eq(user_id.0)) 
             .find_also_related(vocab_detail::Entity);
 
-        // Filter by Knowledge Base ID
         if let Some(kbid) = knowledge_base_id {
             select = select.filter(node::Column::KnowledgeBaseId.eq(kbid));
-        } else {
-            // [OPTIONAL] If no KB ID provided, do we assume "Global/Library" items (kb_id IS NULL)?
-            // OR do we return ALL items across all KBs?
-            // "My Library" usually implies "All my stuff". So we DON'T filter by NULL here.
-            // This allows the "Library" view to see everything.
         }
-            
-        // Query Search
+
         if let Some(q) = query {
-            // Filter by word (Node Title)
             select = select.filter(node::Column::Title.contains(&q));
         }
 
-        // Sorting
         let sort_col = sort_by.as_deref().unwrap_or("created_at");
         let is_desc = order.as_deref().unwrap_or("desc") == "desc";
         let order_enum = if is_desc { sea_orm::Order::Desc } else { sea_orm::Order::Asc };
         
         match sort_col {
-             "query_count" => {
-                 select = select.order_by(vocab_detail::Column::QueryCount, order_enum);
-             },
-             "is_important" => {
-                 select = select.order_by(vocab_detail::Column::IsImportant, order_enum);
-             },
-             "word" | "title" => {
-                 select = select.order_by(node::Column::Title, order_enum);
-             },
-             _ => {
-                 select = select.order_by(node::Column::CreatedAt, order_enum);
-             }
+             "query_count" => { select = select.order_by(vocab_detail::Column::QueryCount, order_enum); },
+             "is_important" => { select = select.order_by(vocab_detail::Column::IsImportant, order_enum); },
+             "word" | "title" => { select = select.order_by(node::Column::Title, order_enum); },
+             _ => { select = select.order_by(node::Column::CreatedAt, order_enum); }
         }
         
-        // Stabilize Sort
-        if sort_col != "created_at" {
-             select = select.order_by_desc(node::Column::CreatedAt);
-        }
+        if sort_col != "created_at" { select = select.order_by_desc(node::Column::CreatedAt); }
 
         let results = select
             .limit(limit)
@@ -226,15 +252,11 @@ impl VocabularyRepository for PostgresRepository {
         for (n, d) in results {
             if let Some(detail) = d {
                  let root = if let Some(rid) = detail.root_id {
-                     use crate::infrastructure::persistence::entities::vocab_root;
                      vocab_root::Entity::find_by_id(rid).one(&self.db).await
                         .unwrap_or(None).map(|r| r.root)
                  } else { None };
                  
-                 // Optimization: Could batch load examples, but for now N+1 limited by paging is acceptable for MVP
-                 use crate::infrastructure::persistence::entities::vocab_example;
-                 let examples = detail.find_related(vocab_example::Entity).all(&self.db).await
-                     .unwrap_or_default().into_iter().map(map_example).collect();
+                 let examples = fetch_examples_for_vocab(&self.db, detail.id).await?;
                 
                 vocabs.push(map_vocab(n, detail, root, examples));
             }
@@ -243,20 +265,40 @@ impl VocabularyRepository for PostgresRepository {
     }
 
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError> {
-        node::Entity::delete_by_id(*id).exec(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        let txn = self.db.begin().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        node::Entity::delete_by_id(*id).exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        
+        // Orphan Cleanup
+         let stmt = Statement::from_sql_and_values(
+            self.db.get_database_backend(),
+            r#"DELETE FROM global_sentences WHERE id NOT IN (SELECT DISTINCT global_sentence_id FROM vocab_examples WHERE global_sentence_id IS NOT NULL)"#,
+            vec![]
+        );
+        txn.execute(stmt).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        
+        txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(())
     }
 
     async fn delete_many(&self, ids: &[Uuid]) -> Result<(), RepositoryError> {
+        let txn = self.db.begin().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         node::Entity::delete_many()
             .filter(node::Column::Id.is_in(ids.to_vec()))
-            .exec(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            .exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        
+        // Orphan Cleanup
+         let stmt = Statement::from_sql_and_values(
+            self.db.get_database_backend(),
+            r#"DELETE FROM global_sentences WHERE id NOT IN (SELECT DISTINCT global_sentence_id FROM vocab_examples WHERE global_sentence_id IS NOT NULL)"#,
+            vec![]
+        );
+        txn.execute(stmt).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        
+        txn.commit().await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(())
     }
 
     async fn increment_query_count(&self, id: &Uuid) -> Result<(), RepositoryError> {
-        // use sea_orm::sea_query::{Query, Expr};
-        // Atomic increment using SeaQuery
         let stmt = sea_orm::Statement::from_sql_and_values(
             self.db.get_database_backend(),
             r#"UPDATE vocab_details SET query_count = query_count + 1 WHERE id = $1"#,
@@ -288,12 +330,78 @@ impl VocabularyRepository for PostgresRepository {
         let count = query.count(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         Ok(count)
     }
+
+    async fn search_global_sentences(&self, query: &str) -> Result<Vec<(Uuid, String, Option<String>)>, RepositoryError> {
+        let results = global_sentence::Entity::find()
+            .filter(global_sentence::Column::Text.contains(query))
+            .limit(20)
+            .all(&self.db).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        
+        Ok(results.into_iter().map(|g| (g.id, g.text, g.translation)).collect())
+    }
+}
+
+// Helpers
+
+async fn create_or_find_global_sentence<C>(db: &C, ex: &crate::domain::models::VocabularyExample) -> Result<Uuid, RepositoryError> 
+where C: ConnectionTrait 
+{
+    // 1. Try to find match by text
+    let existing = global_sentence::Entity::find()
+        .filter(global_sentence::Column::Text.eq(&ex.sentence))
+        .one(db).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        
+    if let Some(g) = existing {
+        return Ok(g.id);
+    }
+    
+    // 2. Create new
+    let new_id = Uuid::new_v4();
+    let model = global_sentence::ActiveModel {
+        id: Set(new_id),
+        text: Set(ex.sentence.clone()),
+        translation: Set(ex.translation.clone()),
+        origin_article_id: Set(ex.article_id),
+        origin_sentence_uuid: Set(ex.sentence_uuid),
+        created_at: Set(Utc::now().into()),
+    };
+    global_sentence::Entity::insert(model)
+        .exec(db).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+    
+    Ok(new_id)
+}
+
+async fn fetch_examples_for_vocab(db: &DatabaseConnection, vocab_id: Uuid) -> Result<Vec<crate::domain::models::VocabularyExample>, RepositoryError> {
+    let examples = vocab_example::Entity::find()
+        .filter(vocab_example::Column::VocabId.eq(vocab_id))
+        .find_also_related(global_sentence::Entity)
+        .all(db).await.map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
+        
+    Ok(examples.into_iter().map(|(ex, global)| {
+        let (sentence, translation, global_sentence_id) = if let Some(g) = global {
+            (g.text, g.translation, Some(g.id))
+        } else {
+            (ex.sentence.unwrap_or_default(), ex.translation, None)
+        };
+        
+        crate::domain::models::VocabularyExample {
+            id: ex.id,
+            sentence,
+            translation,
+            note: ex.note,
+            image_url: ex.image_url,
+            article_id: ex.article_id,
+            sentence_uuid: ex.sentence_uuid,
+            created_at: ex.created_at.with_timezone(&Utc),
+            global_sentence_id,
+        }
+    }).collect())
 }
 
 fn map_vocab(n: node::Model, d: vocab_detail::Model, root: Option<String>, examples: Vec<crate::domain::models::VocabularyExample>) -> Vocabulary {
     Vocabulary {
         node: Node {
-             id: n.id,
+            id: n.id,
             parent_id: n.parent_id,
             author_id: n.author_id,
             knowledge_base_id: n.knowledge_base_id,
@@ -319,18 +427,5 @@ fn map_vocab(n: node::Model, d: vocab_detail::Model, root: Option<String>, examp
         examples,
         query_count: d.query_count,
         is_important: d.is_important,
-    }
-}
-
-fn map_example(e: crate::infrastructure::persistence::entities::vocab_example::Model) -> crate::domain::models::VocabularyExample {
-    crate::domain::models::VocabularyExample {
-        id: e.id,
-        sentence: e.sentence,
-        translation: e.translation,
-        note: e.note,
-        image_url: e.image_url,
-        article_id: e.article_id,
-        sentence_uuid: e.sentence_uuid,
-        created_at: e.created_at.with_timezone(&Utc),
     }
 }

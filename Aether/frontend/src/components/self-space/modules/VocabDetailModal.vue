@@ -140,6 +140,7 @@
                                 <span>Journal</span>
                                 <div class="flex gap-4">
                                     <button v-if="initialSentence && !hasInitialSentence" @click="addInitialExample" class="hover:text-ink transition-colors text-[10px] font-bold uppercase tracking-widest"><i class="ri-download-line"></i> Import Context</button>
+                                    <button @click="showSearchModal = true" class="hover:text-ink transition-colors text-[10px] font-bold uppercase tracking-widest"><i class="ri-search-line"></i> Link Existing</button>
                                     <button @click="addNewExample" class="hover:text-ink transition-colors text-[10px] font-bold uppercase tracking-widest"><i class="ri-add-line"></i> Add Entry</button>
                                 </div>
                             </h3>
@@ -209,6 +210,11 @@
             </div>
         </Transition>
     </Teleport>
+    
+    <SentenceSearchModal 
+        v-model:visible="showSearchModal"
+        @select="handleSentenceSelect"
+    />
 </template>
 
 <script setup lang="ts">
@@ -218,6 +224,7 @@ import { dictionaryApi } from '@/api/dictionary';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { useRouter } from 'vue-router';
 import axios from 'axios';
+import SentenceSearchModal, { SentenceResult } from './SentenceSearchModal.vue';
 
 const props = defineProps<{
     visible: boolean;
@@ -236,6 +243,7 @@ const loading = ref(false);
 const saving = ref(false);
 const existing = ref(false);
 const wordInput = ref('');
+const showSearchModal = ref(false);
 
 // Dropdown State
 const activePosDropdown = ref<number>(-1);
@@ -386,6 +394,14 @@ function addInitialExample() {
 }
 function addNewExample() { formData.examples.push({ sentence: '', translation: '' }); }
 function removeExample(idx: number) { formData.examples.splice(idx, 1); }
+
+function handleSentenceSelect(item: SentenceResult) {
+    formData.examples.push({
+        sentence: item.text,
+        translation: item.translation || '',
+    });
+    MessagePlugin.success('Linked to existing sentence');
+}
 
 // Morphology
 function addMorphology() { formData.morphology.push({ type: 'Root', part: '', meaning: '' }); }

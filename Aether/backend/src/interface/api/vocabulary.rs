@@ -7,6 +7,7 @@ use axum::{
     http::StatusCode,
 };
 use serde::Deserialize;
+use utoipa::{ToSchema, IntoParams};
 use crate::{
     domain::{
         models::{Vocabulary, Node, NodeType, PermissionMode, UserId},
@@ -17,9 +18,11 @@ use crate::{
 use chrono::Utc;
 use uuid::Uuid;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct ExampleRequest {
+    #[schema(example = "This is an example sentence.")]
     pub sentence: String,
+    #[schema(example = "这是一个例句。")]
     pub translation: Option<String>,
     pub note: Option<String>,
     pub image_url: Option<String>,
@@ -27,17 +30,22 @@ pub struct ExampleRequest {
     pub sentence_uuid: Option<Uuid>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct CreateVocabularyRequest {
+    #[schema(example = "apple")]
     pub word: String,
+    #[schema(example = "A round fruit with red or green skin.")]
     pub definition: String,
+    #[schema(example = "苹果")]
     pub translation: Option<String>,
+    #[schema(example = "/ˈæp.əl/")]
     pub phonetic: Option<String>,
     
     // Deprecated but kept optional
     pub context_sentence: Option<String>,
     pub image_url: Option<String>,
     
+    #[schema(example = "en")]
     pub language: Option<String>,
     
     // New
@@ -46,7 +54,7 @@ pub struct CreateVocabularyRequest {
     pub kb_id: Option<Uuid>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, IntoParams)]
 pub struct ListVocabularyRequest {
     pub limit: Option<u64>,
     pub offset: Option<u64>,
@@ -56,7 +64,7 @@ pub struct ListVocabularyRequest {
     pub kb_id: Option<Uuid>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 pub struct BatchDeleteRequest {
     pub ids: Vec<Uuid>,
 }
@@ -69,8 +77,51 @@ pub fn router() -> Router<AppState> {
         .route("/api/vocabulary/:id/examples", post(add_example))
         .route("/api/vocabulary/:id/increment_query", post(increment_query_count))
         .route("/api/vocabulary/:id/toggle_importance", post(toggle_importance))
+        .route("/api/vocabulary/sentences/search", post(search_sentences))
 }
 
+#[derive(Deserialize, ToSchema)]
+pub struct SearchSentencesRequest {
+    #[schema(example = "apple")]
+    pub query: String,
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/vocabulary/sentences/search",
+    request_body = SearchSentencesRequest,
+    responses(
+        (status = 200, description = "Search results found", body = Vec<serde_json::Value>),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "vocabulary"
+)]
+async fn search_sentences(
+    _auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Json(payload): Json<SearchSentencesRequest>,
+) -> impl IntoResponse {
+    match state.repo.search_global_sentences(&payload.query).await {
+        Ok(results) => {
+            let mapped: Vec<serde_json::Value> = results.into_iter().map(|(id, text, translation)| {
+                serde_json::json!({ "id": id, "text": text, "translation": translation })
+            }).collect();
+            (StatusCode::OK, Json(mapped)).into_response()
+        },
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    }
+}
+
+#[utoipa::path(
+    post,
+    path = "/api/vocabulary",
+    request_body = CreateVocabularyRequest,
+    responses(
+        (status = 201, description = "Vocabulary created successfully", body = serde_json::Value),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "vocabulary"
+)]
 async fn save_vocabulary(
     auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -97,6 +148,7 @@ async fn save_vocabulary(
             article_id: e.article_id,
             sentence_uuid: e.sentence_uuid,
             created_at: Utc::now(),
+            global_sentence_id: None,
         }
     }).collect();
 
@@ -132,6 +184,18 @@ async fn save_vocabulary(
     }
 }
 
+#[utoipa::path(
+    get,
+    path = "/api/vocabulary",
+    params(
+        ListVocabularyRequest
+    ),
+    responses(
+        (status = 200, description = "List of vocabulary", body = serde_json::Value),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "vocabulary"
+)]
 async fn list_vocabulary(
     State(state): State<AppState>,
     auth: AuthenticatedUser,
@@ -146,6 +210,18 @@ async fn list_vocabulary(
     }
 }
 
+#[utoipa::path(
+    delete,
+    path = "/api/vocabulary/{id}",
+    params(
+        ("id" = Uuid, Path, description = "Vocabulary ID")
+    ),
+    responses(
+        (status = 200, description = "Vocabulary deleted"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "vocabulary"
+)]
 async fn delete_vocabulary(
     _auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -157,6 +233,16 @@ async fn delete_vocabulary(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/vocabulary/batch-delete",
+    request_body = BatchDeleteRequest,
+    responses(
+        (status = 200, description = "Batch delete successful"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "vocabulary"
+)]
 async fn batch_delete_vocabulary(
     _auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -168,11 +254,23 @@ async fn batch_delete_vocabulary(
     }
 }
 
-#[derive(Deserialize)]
-struct ImportancePayload {
-    is_important: bool
+#[derive(Deserialize, ToSchema)]
+pub struct ImportancePayload {
+    pub is_important: bool
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/vocabulary/{id}/increment_query",
+    params(
+        ("id" = Uuid, Path, description = "Vocabulary ID")
+    ),
+    responses(
+        (status = 200, description = "Query count incremented"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "vocabulary"
+)]
 async fn increment_query_count(
     _auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -184,6 +282,19 @@ async fn increment_query_count(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/vocabulary/{id}/toggle_importance",
+    params(
+        ("id" = Uuid, Path, description = "Vocabulary ID")
+    ),
+    request_body = ImportancePayload,
+    responses(
+        (status = 200, description = "Importance toggled"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "vocabulary"
+)]
 async fn toggle_importance(
     _auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -196,6 +307,21 @@ async fn toggle_importance(
     }
 }
 
+#[utoipa::path(
+    post,
+    path = "/api/vocabulary/{id}/examples",
+    params(
+        ("id" = Uuid, Path, description = "Vocabulary ID")
+    ),
+    request_body = ExampleRequest,
+    responses(
+        (status = 201, description = "Example added"),
+        (status = 404, description = "Vocabulary not found"),
+        (status = 403, description = "Access denied"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "vocabulary"
+)]
 async fn add_example(
     auth: AuthenticatedUser,
     State(state): State<AppState>,
@@ -227,6 +353,7 @@ async fn add_example(
         article_id: payload.article_id,
         sentence_uuid: payload.sentence_uuid,
         created_at: Utc::now(),
+        global_sentence_id: None,
     };
     vocab.examples.push(new_example);
 
