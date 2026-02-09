@@ -42,29 +42,28 @@ impl CustomDict {
         }
 
         // 2. Handle Dict File
-        let final_dict_path = dict_path.clone();
-        
-        if !dict_path.exists() {
-            if dz_path.exists() {
-                // Try to decompress
-                tracing::info!("Decompressing {}...", dz_path.display());
-                // gzip -dk -S .dz (keep original, specify suffix)
-                let status = Command::new("gzip")
-                    .arg("-dk")
-                    .arg("-S")
-                    .arg(".dz")
-                    .arg(&dz_path)
-                    .status();
-                
-                if status.is_err() || !status.unwrap().success() {
-                    tracing::error!("Failed to decompress {}", dz_path.display());
-                    // We can't use this dict
-                    return None;
-                }
-            } else {
+        let final_dict_path = if dict_path.exists() {
+            dict_path
+        } else if dz_path.exists() {
+            // Try to decompress
+            tracing::info!("Decompressing {}...", dz_path.display());
+            // gzip -dk -S .dz (keep original, specify suffix)
+            let status = Command::new("gzip")
+                .arg("-dk")
+                .arg("-S")
+                .arg(".dz")
+                .arg(&dz_path)
+                .status();
+            
+            if status.is_err() || !status.unwrap().success() {
+                tracing::error!("Failed to decompress {}", dz_path.display());
+                // We can't use this dict
                 return None;
             }
-        }
+            dict_path // Now it should exist
+        } else {
+            return None;
+        };
 
         Some(Self {
             name,

@@ -24,5 +24,9 @@ export const dictionaryApi = {
     fuzzy: async (word: string, signal?: AbortSignal) => {
         const res = await axios.get<string[]>('/api/dictionary/fuzzy', { params: { word }, signal });
         return res.data;
+    },
+    searchSentences: async (query: string) => {
+        const res = await axios.post('/api/vocabulary/sentences/search', { query });
+        return res.data as { id: string, text: string, translation?: string }[];
     }
 };

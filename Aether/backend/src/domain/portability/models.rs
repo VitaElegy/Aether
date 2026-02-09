@@ -39,6 +39,7 @@ pub struct ProgressEvent {
 }
 
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub enum PortabilityTaskType {
     Export,
     Import,

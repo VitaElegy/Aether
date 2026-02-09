@@ -8,9 +8,9 @@ use chrono::Utc;
 use csv::Writer;
 
 use crate::domain::portability::ports::PortabilityProvider;
-use crate::domain::portability::models::{ExportSummary, ExportSection, ImportSummary, ProgressEvent, ImportSection};
-use crate::domain::ports::{VocabularyRepository, ArticleRepository, KnowledgeBaseRepository, RepositoryError};
-use crate::domain::models::{UserId, ContentItem, ContentBody, Vocabulary};
+use crate::domain::portability::models::{ExportSummary, ExportSection, ImportSummary, ProgressEvent};
+use crate::domain::ports::{VocabularyRepository, ArticleRepository, KnowledgeBaseRepository};
+use crate::domain::models::{UserId, ContentItem, ContentBody};
 
 pub struct EnglishPortabilityProvider {
     vocab_repo: Arc<dyn VocabularyRepository>,
@@ -90,7 +90,7 @@ impl PortabilityProvider for EnglishPortabilityProvider {
         })
     }
 
-    async fn export(&self, kb_id: Uuid, task_id: Uuid, progress: Sender<ProgressEvent>) -> Result<PathBuf, String> {
+    async fn export(&self, kb_id: Uuid, _user_id: Uuid, task_id: Uuid, progress: Sender<ProgressEvent>) -> Result<PathBuf, String> {
         let _ = progress.send(ProgressEvent {
             task_id,
             stage: "Initialization".to_string(),

@@ -66,7 +66,7 @@ async fn start_export(
 
     let renderer_id = kb.renderer_id.unwrap_or_else(|| "default".to_string());
 
-    let task_id = state.portability_service.start_export(&renderer_id, kb_id)
+    let task_id = state.portability_service.start_export(&renderer_id, kb_id, user.id)
         .await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
 
     Ok(Json(serde_json::json!({ "task_id": task_id })))

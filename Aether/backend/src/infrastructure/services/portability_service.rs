@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::sync::{Arc, RwLock};
-use std::path::PathBuf;
+
 use uuid::Uuid;
-use tokio::sync::mpsc::{self, Sender, Receiver};
+use tokio::sync::mpsc::{self, Receiver};
 use crate::domain::portability::ports::PortabilityProvider;
-use crate::domain::portability::models::{ExportSummary, ImportSummary, ProgressEvent};
+use crate::domain::portability::models::{ExportSummary, ProgressEvent};
 
 pub struct PortabilityService {
     providers: HashMap<String, Arc<dyn PortabilityProvider>>,
@@ -37,7 +37,7 @@ impl PortabilityService {
         provider.analyze_export(kb_id).await
     }
 
-    pub async fn start_export(&self, kb_type: &str, kb_id: Uuid) -> Result<Uuid, String> {
+    pub async fn start_export(&self, kb_type: &str, kb_id: Uuid, user_id: Uuid) -> Result<Uuid, String> {
         let provider = self.get_provider(kb_type)?;
         let task_id = Uuid::new_v4();
         let (tx, rx) = mpsc::channel(100);
@@ -50,7 +50,7 @@ impl PortabilityService {
             // We need to handle the result, maybe store it somewhere or just log it
             // For file downloads, we usually need the final path.
             // The ProgressEvent should probably carry the final result URL/Path in the "Completed" stage.
-            let _ = provider.export(kb_id, task_id, tx.clone()).await;
+            let _ = provider.export(kb_id, user_id, task_id, tx.clone()).await;
         });
 
         Ok(task_id)

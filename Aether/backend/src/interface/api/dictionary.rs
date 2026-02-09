@@ -59,7 +59,7 @@ async fn lookup_word(
     // 1. Check Cache
     if let Some(cached_json) = state.dictionary_cache.get(&word).await {
         if let Ok(entry) = serde_json::from_str::<DictionaryEntry>(&cached_json) {
-            return (StatusCode::OK, Json(entry));
+            return (StatusCode::OK, Json(entry)).into_response();
         }
     }
     
@@ -236,13 +236,13 @@ async fn lookup_word(
     }
 
     if final_entry.source == "None" {
-        (StatusCode::NOT_FOUND, Json(final_entry))
+        (StatusCode::NOT_FOUND, Json(final_entry)).into_response()
     } else {
         // Cache the result
         if let Ok(json_str) = serde_json::to_string(&final_entry) {
             state.dictionary_cache.insert(word, json_str).await;
         }
-        (StatusCode::OK, Json(final_entry))
+        (StatusCode::OK, Json(final_entry)).into_response()
     }
 }
 

@@ -10,18 +10,24 @@ use crate::infrastructure::services::backup_service::BackupService;
 
 pub struct DefaultPortabilityProvider {
     backup_service: Arc<BackupService>,
+    id_override: Option<String>,
 }
 
 impl DefaultPortabilityProvider {
     pub fn new(backup_service: Arc<BackupService>) -> Self {
-        Self { backup_service }
+        Self { backup_service, id_override: None }
+    }
+
+    pub fn with_id(mut self, id: String) -> Self {
+        self.id_override = Some(id);
+        self
     }
 }
 
 #[async_trait]
 impl PortabilityProvider for DefaultPortabilityProvider {
     fn provider_id(&self) -> String {
-        "default".to_string()
+        self.id_override.clone().unwrap_or_else(|| "default".to_string())
     }
 
     async fn analyze_export(&self, _kb_id: Uuid) -> Result<ExportSummary, String> {
@@ -33,7 +39,7 @@ impl PortabilityProvider for DefaultPortabilityProvider {
         })
     }
 
-    async fn export(&self, kb_id: Uuid, task_id: Uuid, progress: Sender<ProgressEvent>) -> Result<PathBuf, String> {
+    async fn export(&self, kb_id: Uuid, user_id: Uuid, task_id: Uuid, progress: Sender<ProgressEvent>) -> Result<PathBuf, String> {
         let _ = progress.send(ProgressEvent {
             task_id,
             stage: "Backup".to_string(),
@@ -42,19 +48,32 @@ impl PortabilityProvider for DefaultPortabilityProvider {
             error: None,
         }).await;
 
-        // We need user_id for backup service, but export() trait doesn't have it.
-        // This is a flaw in the trait design if we reuse BackupService which requires user_id.
-        // However, we can fetch the KB to get the owner_id, assuming the requester is authorized.
-        // But wait, the Service layer calling this should have verified auth.
-        // We'll need to refactor BackupService or pass a dummy ID if we trust the caller?
-        // Actually, BackupService::create_backup checks `kb.author_id == user_id`.
-        // So we MUST pass the correct user_id.
+        // Execute Backup
+        // Note: create_backup is synchronous-ish but returns a future. It might take time.
+        // We should probably report progress inside create_backup if possible, but for now we just wrap it.
         
-        // FIX: Trait should probably accept `user_id` or `context`.
-        // For now, I'll fail or hack it. 
-        // Let's assume the caller (PortabilityService) will handle auth, but we need to pass it down.
-        
-        Err("Default Provider not fully implemented for new trait signature".to_string())
+        let _ = progress.send(ProgressEvent {
+            task_id,
+            stage: "Backup".to_string(),
+            percent: 10,
+            message: "Archiving data...".to_string(),
+            error: None,
+        }).await;
+
+        let filename = self.backup_service.create_backup(kb_id, user_id).await
+            .map_err(|e| e.to_string())?;
+
+        let file_path = self.backup_service.get_backup_path(&filename);
+
+        let _ = progress.send(ProgressEvent {
+            task_id,
+            stage: "Completed".to_string(),
+            percent: 100,
+            message: "Backup ready.".to_string(),
+            error: None,
+        }).await;
+
+        Ok(file_path)
     }
 
     async fn analyze_import(&self, _file_path: PathBuf) -> Result<ImportSummary, String> {

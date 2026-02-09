@@ -14,7 +14,7 @@ pub trait PortabilityProvider: Send + Sync {
     
     /// Execute the export, reporting progress via the channel
     /// Returns the path to the generated file (usually a temp zip)
-    async fn export(&self, kb_id: Uuid, task_id: Uuid, progress: Sender<ProgressEvent>) -> Result<PathBuf, String>;
+    async fn export(&self, kb_id: Uuid, user_id: Uuid, task_id: Uuid, progress: Sender<ProgressEvent>) -> Result<PathBuf, String>;
     
     /// Analyze an uploaded file for import
     async fn analyze_import(&self, file_path: PathBuf) -> Result<ImportSummary, String>;
