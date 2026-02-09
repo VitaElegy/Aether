@@ -2,7 +2,7 @@
 
 > **版本**: 2.0
 > **日期**: 2026-01-30
-> **状态**: 已实现 ✅
+> **状态**: 已实现 ✅ (此文件为执行计划，现已完成。活跃规范见 [self_space_architecture_v2.md](file:///Users/elegy/Documents/READING/LINUX/Aether/Aether/AI/context/specs/self_space_architecture_v2.md))
 > **讨论记录**: [self_space_refactor_discussion.md](file:///Users/elegy/Documents/READING/LINUX/Aether/Aether/AI/memory/discussions/self_space_refactor_discussion.md)
 
 ---

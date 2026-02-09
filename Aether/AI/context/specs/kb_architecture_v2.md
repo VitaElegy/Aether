@@ -1,6 +1,10 @@
 # Aether Knowledge Base Protocol V2 (Architecture Specification)
 
-**Status**: FINAL DRAFT
+> [!CAUTION]
+> **DEPRECATED**: This spec has been superseded by [kb_architecture_v3.md](file:///Users/elegy/Documents/READING/LINUX/Aether/Aether/AI/context/specs/kb_architecture_v3.md).
+> Kept for historical reference only. Do NOT use for new implementations.
+
+**Status**: ~~FINAL DRAFT~~ DEPRECATED
 **Version**: 2.1
 **Date**: 2026-01-28
 **Architect**: System Agent (Elegy)

@@ -25,6 +25,10 @@ Before writing a single line of code or plan, you **MUST** read and analyze the 
     -   **Check Protocol Registry**: In `AI/const/project_spec.md` (Section 1.1), check if your task falls under a governed domain (e.g., New KB). If so, READ the mandated protocol.
     -   Check `.agent/workflows/` for existing plans.
     -   Check `scripts/scaffold/` for generators. **Prefer running scripts over manual creation.**
+6.  **Runbook Discovery (CRITICAL)**:
+    -   **Check Runbook Registry**: In `AI/const/project_spec.md` (Section 1.2), identify if your task matches an operation type.
+    -   **If match found**: Open the runbook and **follow the checklist step-by-step**. Do NOT skip phases.
+    -   **Available Runbooks**: `AI/runbooks/database_entity.md`, `api_endpoint.md`, `skb_creation.md`, `bug_fix.md`
 
 ## 🎯 Task Objective
 > **User Input Required**: Replace the section below with your specific request.
@@ -65,11 +69,12 @@ Before writing a single line of code or plan, you **MUST** read and analyze the 
 ## 📁 Directory Structure Rules (INLINE)
 
 - **AI (`AI/`)**:
-  - `const/`: Constitution.
+  - `const/`: Constitution, SPEC_INDEX.
   - `skills/`: Modular Skills.
-  - `context/`: State.
-  - `memory/`: Logs.
+  - `runbooks/`: Step-by-step operation checklists.
+  - `context/`: State, Specs.
+  - `memory/`: Logs, Discussions.
 - **Scripts (`scripts/`)**:
-  - `audit/`: Enforcers (`project_auditor.py`).
+  - `ai/`: AI Agent Tools.
   - `scaffold/`: Generators (`new_kb.py`).
   - `backend/`: DB/Test/Debug.

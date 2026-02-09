@@ -53,7 +53,9 @@ To check if `User:U` can `read` `Article:A`:
 1.  **Direct**: Is there a tuple `(A, viewer/editor/owner, U)`?
 2.  **Group**: Is `U` in `Group:G` AND tuple `(A, viewer..., G)` exists?
 3.  **Inheritance**: Recurse check on `A.parent_id`.
-4.  **Break-Glass**: Is `U.permissions == u64::MAX`? (Wait, per Spec 4.2, we might restrict this or rely on Audit. Code currently uses `u64::MAX` as bypass. We should ensure "Force Access" adds the Tuple or use the bypass *with* logging).
+4.  **Break-Glass**: Reserved for future implementation.
+    -   **Current Code**: Uses `u64::MAX` permission bypass (Super Admin).
+    -   **TODO**: Implement proper "Force Access" button that adds an auditable Tuple and logs to `CRITICAL` level, per Spec 4.2.
 
 ### 6.2 Frontend Usage
 -   **Fetch**: `GET /api/users/:id/permissions` (Returns Groups + Direct Tuples).

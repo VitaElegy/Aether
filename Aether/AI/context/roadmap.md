@@ -28,7 +28,22 @@
     -   [x] **Backend**: `RestoreService` (ID Remapping, Smart Import, Asset Recovery).
     -   [x] **UI**: Backup Manager in Settings (Export/Import/Download).
 
-### Phase 4.2: The OS Shell Refactor (Next Up)
+### Phase 4.2: Unified UObject Architecture (IN PROGRESS)
+> **Goal**: Unify all Content Types under a single Polymorphic Data Model & Editor Host.
+
+-   [x] **Spec Ratification**:
+    -   [x] Unified Data Model (`AI/context/specs/unified_data_model.md`)
+-   [ ] **Backend Schema Migration**:
+    -   [ ] Add `public_version_id` to `nodes` table (Snapshot Pointer).
+    -   [ ] Consolidate `article_details` as the Universal Body Table.
+    -   [ ] Deprecate `drafts` table.
+-   [ ] **Editor Host Implementation**:
+    -   [ ] **Layout**: Flexbox Shell (Fix UI Overlap).
+    -   [ ] **Host**: `UniversalEditor.vue` (Polymorphic Loader).
+    -   [ ] **Adapter**: `MarkdownAdapter.vue` (Tiptap Wrapper).
+    -   [ ] **Panel**: Floating Metadata Panel.
+
+### Phase 4.3: The OS Shell Refactor (Next Up)
 > **Goal**: Implement Aether V3 Navigation Topology.
 
 -   [ ] **Shell**: Remove `KnowledgeBaseDetail` route (Legacy Detail Page).
@@ -46,6 +61,12 @@
 -   [ ] **Schema Design**: `vulnerability_report`, `exploit_script`.
 -   [ ] **Asset Integration**: Strong dependency on `My Assets` (IPs, Domains).
 -   [ ] **Scanner Integration**: (Future) Auto-import Nmap/Burp results.
+
+### Phase 6: Memos V2 (Thought Stream)
+> **Goal**: Atomic Capture & Fluid Context
+- [ ] **Chat Stream Interface**: Hybrid Bubble/Card view with Time Grouping.
+- [ ] **Smart Dock**: Cloud-synced Pinned Tags.
+- [ ] **Hybrid Input**: Bottom bar + Expandable Editor.
 
 ---
 
