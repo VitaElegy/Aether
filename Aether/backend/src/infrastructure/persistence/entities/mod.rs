@@ -1,5 +1,8 @@
 pub mod user;
 pub mod node;
+pub mod user_module_settings;
+
+pub mod prelude;
 pub mod article_detail;
 pub mod vocab_detail;
 pub mod memo_detail;
@@ -7,6 +10,7 @@ pub mod comment;
 pub mod draft;
 pub mod content_version;
 pub mod group;
+pub mod global_sentence;
 pub mod vocab_example;
 pub mod vocab_root;
 pub mod knowledge_base;

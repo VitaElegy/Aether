@@ -1,6 +1,6 @@
 // Imports removed as they were unused
 
-pub mod auth;
+pub mod auth;pub mod user_settings;
 pub mod user;
 pub mod content;
 pub mod vocabulary;
@@ -23,3 +23,4 @@ pub mod prkb;
 pub mod assets;
 pub mod backup;
 pub mod portability;
+pub mod openapi;

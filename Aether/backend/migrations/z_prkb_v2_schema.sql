@@ -42,14 +42,14 @@ CREATE TABLE IF NOT EXISTS prkb_papers_authors (
 -- SQLite does not support IF NOT EXISTS in ADD COLUMN. We use a separate block or ignore error in app logic, 
 -- but for migration file simplicity in this dev environment, we'll try to add and if it fails (duplicate), the migration runner logs it but continues (as seen in logs).
 -- However, the syntax error "near EXISTS" stops execution. We must remove "IF NOT EXISTS".
-ALTER TABLE prkb_papers ADD COLUMN venue_id UUID REFERENCES prkb_venues(id) ON DELETE SET NULL;
+-- ALTER TABLE prkb_papers ADD COLUMN venue_id UUID REFERENCES prkb_venues(id) ON DELETE SET NULL;
 
 -- 6. Add State & Local Path
-ALTER TABLE prkb_papers ADD COLUMN state TEXT NOT NULL DEFAULT 'Inbox'; -- Inbox, Screening, Reading, Archived
-ALTER TABLE prkb_papers ADD COLUMN pdf_local_path TEXT;
+-- ALTER TABLE prkb_papers ADD COLUMN state TEXT NOT NULL DEFAULT 'Inbox'; -- Inbox, Screening, Reading, Archived
+-- ALTER TABLE prkb_papers ADD COLUMN pdf_local_path TEXT;
 
 -- 7. Inbox State
-ALTER TABLE prkb_inbox ADD COLUMN state TEXT NOT NULL DEFAULT 'Inbox';
+-- ALTER TABLE prkb_inbox ADD COLUMN state TEXT NOT NULL DEFAULT 'Inbox';
 
 -- Indexes for performance
 CREATE INDEX IF NOT EXISTS idx_prkb_authors_name ON prkb_authors(name);

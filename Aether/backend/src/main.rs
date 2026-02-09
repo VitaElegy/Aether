@@ -13,8 +13,12 @@ async fn main() {
     dotenv().ok();
     
     // 1. Logger
+    // Force aggressive filtering: Only show INFO for our app, ERROR for everything else.
+    // This overrides RUST_LOG env var to ensure silence as requested.
+    let filter = "error,aether_backend=info".parse::<tracing_subscriber::EnvFilter>().unwrap();
+
     tracing_subscriber::fmt()
-        .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
+        .with_env_filter(filter)
         .init();
 
     // 2. Database

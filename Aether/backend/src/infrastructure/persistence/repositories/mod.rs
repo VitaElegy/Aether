@@ -1,7 +1,7 @@
 pub mod node;
 pub mod article;
 pub mod vocab;
-pub mod memo;
+pub mod memo;pub mod settings;
 pub mod user;
 pub mod comment;
 pub mod tag;
