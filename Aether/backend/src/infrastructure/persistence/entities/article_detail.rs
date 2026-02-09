@@ -14,6 +14,8 @@ pub struct Model {
     pub tags: String, // Kept as simple storage for now
     #[sea_orm(nullable)]
     pub derived_data: Option<Json>,
+    #[sea_orm(nullable)]
+    pub public_version_id: Option<Uuid>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

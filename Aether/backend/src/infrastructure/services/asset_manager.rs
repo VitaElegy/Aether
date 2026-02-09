@@ -16,7 +16,7 @@ use crate::infrastructure::persistence::postgres::PostgresRepository;
 
 #[derive(Clone)]
 pub struct AssetManager {
-    node_repo: Arc<dyn NodeRepository>,
+    _node_repo: Arc<dyn NodeRepository>,
     article_repo: Arc<dyn ArticleRepository>,
     kb_repo: Arc<dyn KnowledgeBaseRepository>,
     perm_service: Arc<PermissionService<PostgresRepository>>,
@@ -32,7 +32,7 @@ impl AssetManager {
         storage_root: String,
     ) -> Self {
         Self {
-            node_repo,
+            _node_repo: node_repo,
             article_repo,
             kb_repo,
             perm_service,

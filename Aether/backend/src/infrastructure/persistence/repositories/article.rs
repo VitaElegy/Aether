@@ -76,6 +76,7 @@ impl ArticleRepository for PostgresRepository {
             body: Set(body_json.clone()),
             tags: Set(serde_json::to_string(&article.tags).unwrap_or_default()),
             derived_data: Set(article.derived_data.clone()),
+            public_version_id: Set(None),
         };
         article_detail::Entity::insert(detail_model)
             .on_conflict(
@@ -116,8 +117,9 @@ impl ArticleRepository for PostgresRepository {
         };
 
         if should_save_version {
+            let version_id = Uuid::new_v4();
             let version_model = content_version::ActiveModel {
-                 id: Set(Uuid::new_v4()),
+                 id: Set(version_id),
                  node_id: Set(article.node.id),
                  version: Set(new_version),
                  title: Set(article.node.title),
@@ -128,6 +130,16 @@ impl ArticleRepository for PostgresRepository {
                  created_at: Set(Utc::now().into()),
             };
             content_version::Entity::insert(version_model).exec(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+            // Update Public Pointer if Published
+            if let crate::domain::models::ContentStatus::Published = article.status {
+                let mut detail_update = article_detail::ActiveModel {
+                    id: Set(article.node.id),
+                    ..Default::default()
+                };
+                detail_update.public_version_id = Set(Some(version_id));
+                detail_update.update(&txn).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            }
         }
 
         // [NEW] Dual Write Block Architecture

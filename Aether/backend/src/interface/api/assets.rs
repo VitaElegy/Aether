@@ -1,12 +1,12 @@
 use axum::{
     extract::{Path, State, Multipart, Query},
-    response::{IntoResponse, Response},
+    response::IntoResponse,
     http::{StatusCode, header},
     routing::{get, post},
     Json, Router,
     body::Body,
 };
-use std::sync::Arc;
+
 use tokio_util::io::ReaderStream;
 use tokio::fs::File;
 use uuid::Uuid;

@@ -1,4 +1,4 @@
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::collections::{HashMap, HashSet};
 use std::io::{Write, Read};
@@ -421,5 +421,9 @@ impl BackupService {
         }
 
         Ok(new_kb_id)
+    }
+
+    pub fn get_backup_path(&self, filename: &str) -> PathBuf {
+        self.backup_root.join(filename)
     }
 }

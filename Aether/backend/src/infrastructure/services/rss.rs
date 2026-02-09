@@ -1,5 +1,5 @@
 use crate::domain::prkb::models::InboxItem;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use reqwest::Client;
 use uuid::Uuid;
 

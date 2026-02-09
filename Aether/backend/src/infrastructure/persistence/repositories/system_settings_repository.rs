@@ -1,5 +1,5 @@
 use std::sync::Arc;
-use sea_orm::{DatabaseConnection, EntityTrait, ActiveValue, ColumnTrait, QueryFilter, ActiveModelTrait};
+use sea_orm::{DatabaseConnection, EntityTrait, ActiveValue, ActiveModelTrait};
 use crate::infrastructure::persistence::entities::system_setting;
 use serde_json::Value;
 

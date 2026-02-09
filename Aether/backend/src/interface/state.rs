@@ -3,7 +3,7 @@ use axum::extract::FromRef;
 use crate::domain::ports::{
     AuthService, CommentRepository, ArticleRepository, ExportService,
     MemoRepository, UserRepository, VocabularyRepository, NodeRepository, VrkbRepository,
-    KnowledgeBaseRepository // Added
+
 };
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use crate::infrastructure::dictionary::loader::DictionaryLoader;
