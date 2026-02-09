@@ -79,7 +79,6 @@ export interface Paper {
     is_read: boolean;
     state: string;
     tags: string[];
-    tags: string[];
     signals?: Signals;
     metadata?: PaperMetadata;
 }
