@@ -362,7 +362,7 @@ onBeforeUnmount(() => {
                 v-else
                 v-model="form.body"
                 placeholder="# Start typing..."
-                class="w-full h-full min-h-[500px] resize-none text-base leading-relaxed text-neutral-700 dark:text-neutral-200 placeholder:text-neutral-200 focus:outline-none bg-transparent font-mono pb-32"
+                class="w-full h-full min-h-[500px] resize-none text-base leading-relaxed text-neutral-700 dark:text-neutral-200 placeholder:text-neutral-200 focus:outline-none bg-transparent font-mono"
               ></textarea>
             </div>
          </div>
