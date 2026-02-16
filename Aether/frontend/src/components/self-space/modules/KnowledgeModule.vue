@@ -697,7 +697,7 @@ onUnmounted(() => {
                 </div>
             </div>
             <!-- SETTINGS VIEW -->
-            <div v-else-if="viewMode === 'settings'" class="max-w-2xl mx-auto pb-32">
+            <div v-else-if="viewMode === 'settings'" class="max-w-2xl mx-auto">
                 <div class="bg-surface rounded-lg border border-ink/5 p-8">
                     <h3 class="text-xl font-bold font-serif mb-6 pb-4 border-b border-ink/5">Knowledge Base Settings
                     </h3>
@@ -805,7 +805,7 @@ onUnmounted(() => {
             </div>
 
             <!-- ARTICLE READ VIEW -->
-            <div v-else-if="viewMode === 'article'" class="max-w-4xl mx-auto pb-32">
+            <div v-else-if="viewMode === 'article'" class="max-w-4xl mx-auto">
                  <div class="mb-8 border-b border-ink/5 pb-6">
                     <h1 class="text-4xl font-serif font-bold mb-4">{{ currentArticle?.title }}</h1>
                     <div class="flex items-center gap-4 text-xs text-ink/40 font-mono">

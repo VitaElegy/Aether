@@ -1,5 +1,5 @@
 <template>
-  <div class="h-full overflow-x-auto overflow-y-hidden p-6 pb-32 flex gap-6 custom-scrollbar bg-surface-0/50">
+  <div class="h-full overflow-x-auto overflow-y-hidden p-6 flex gap-6 custom-scrollbar bg-surface-0/50">
     <div 
       v-for="(memos, status) in columns" 
       :key="status"

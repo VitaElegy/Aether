@@ -1,6 +1,6 @@
 <template>
   <div class="h-full overflow-y-auto px-4 py-8 custom-scrollbar">
-    <div class="max-w-2xl mx-auto pb-32">
+    <div class="max-w-2xl mx-auto">
         <div class="space-y-4">
             <div v-for="(group, dateLabel) in groupedMemos" :key="dateLabel">
                 <!-- Day Node Accordion Header -->
