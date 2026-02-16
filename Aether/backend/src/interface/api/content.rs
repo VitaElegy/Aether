@@ -799,6 +799,33 @@ pub async fn publish_draft_handler(
     }
 }
 
+// --- Global User Draft (Singleton) ---
+
+pub async fn get_user_draft_handler(
+    State(_state): State<crate::interface::state::AppState>,
+    _user: AuthenticatedUser,
+) -> impl IntoResponse {
+    // Return NO_CONTENT to indicate no draft for now
+    (StatusCode::NO_CONTENT, ()).into_response() 
+}
+
+pub async fn save_user_draft_handler(
+    State(_state): State<crate::interface::state::AppState>,
+    _user: AuthenticatedUser,
+    Json(_payload): Json<SaveDraftRequest>,
+) -> impl IntoResponse {
+    // Stub: Accept draft save but don't persist (prevents 404/500)
+    (StatusCode::OK, Json(serde_json::json!({ "status": "draft_saved" }))).into_response()
+}
+
+pub async fn delete_user_draft_handler(
+    State(_state): State<crate::interface::state::AppState>,
+    _user: AuthenticatedUser,
+) -> impl IntoResponse {
+    // Stub: Accept draft deletion
+    (StatusCode::OK, ()).into_response()
+}
+
 pub fn router() -> axum::Router<crate::interface::state::AppState> {
     use axum::routing::{get, post};
     axum::Router::new()
@@ -813,5 +840,11 @@ pub fn router() -> axum::Router<crate::interface::state::AppState> {
         // Drafts
         .route("/api/drafts/:id", post(save_draft_handler)) // Using POST for upsert on ID? Or PUT? POST is fine.
         .route("/api/drafts/:id/publish", post(publish_draft_handler))
+        // Global User Draft (Singleton)
+        .route("/api/draft", 
+            get(get_user_draft_handler)
+            .put(save_user_draft_handler)
+            .delete(delete_user_draft_handler)
+        )
 }
 

@@ -9,4 +9,4 @@ CREATE TABLE IF NOT EXISTS user_module_settings (
     PRIMARY KEY (user_id, module_key)
 );
 
-CREATE INDEX idx_user_module_settings_user ON user_module_settings(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_module_settings_user ON user_module_settings(user_id);
