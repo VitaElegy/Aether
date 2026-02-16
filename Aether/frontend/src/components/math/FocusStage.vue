@@ -20,7 +20,7 @@ const mapToSemanticNode = (n: any) => ({
   <div class="w-full h-full flex flex-col items-center overflow-y-auto p-12 bg-pattern custom-scrollbar">
       <div v-if="nodes.length === 0" class="text-ink/30 italic mt-20 font-serif">No semantic content extracted.</div>
       
-      <div v-else class="w-full max-w-4xl space-y-12 pb-24">
+      <div v-else class="w-full max-w-4xl space-y-12">
           <div v-for="node in nodes" :key="node.id" :id="node.client_id" class="relative group pl-8">
               <!-- Organic Connection Line -->
               <div class="absolute left-0 top-0 bottom-0 w-[1px] bg-gradient-to-b from-ink/5 via-ink/10 to-transparent group-hover:via-accent/30 transition-all duration-500"></div>

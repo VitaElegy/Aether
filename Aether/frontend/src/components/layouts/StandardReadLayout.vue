@@ -177,7 +177,7 @@ const handleEdit = () => {
             <main
                 class="flex-1 overflow-y-auto relative custom-scrollbar flex flex-col bg-paper transition-all duration-300">
                 <div class="max-w-4xl mx-auto px-12 py-20 w-full">
-                    <div class="mb-20 border-b border-ash pb-16">
+                    <div class="border-b border-ash">
                         <div class="flex flex-wrap gap-4 mb-10">
                             <span v-if="article.category"
                                 class="text-[10px] font-black uppercase tracking-[0.2em] bg-accent text-paper px-4 py-1.5 rounded-sm shadow-lg shadow-accent/20">{{ article.category }}</span>
