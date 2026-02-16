@@ -8,6 +8,17 @@ import App from './App.vue'
 import 'tdesign-vue-next/es/style/index.css';
 import 'remixicon/fonts/remixicon.css' // Import RemixIcon
 import './style.css'
+import axios from 'axios'
+
+// --- Axios Configuration for Mobile ---
+// When running as an APK (production build), we can't use the Vite proxy.
+// We must point to the backend server directly.
+// 10.0.2.2 is the special alias for "localhost" inside the Android Emulator.
+// If testing on a REAL PHONE, replace this with your computer's LAN IP (e.g., http://192.168.1.5:3000)
+if (import.meta.env.PROD) {
+    axios.defaults.baseURL = 'http://10.0.2.2:3000';
+    console.log('[Main] Axios Base URL set to:', axios.defaults.baseURL);
+}
 
 const app = createApp(App)
 
