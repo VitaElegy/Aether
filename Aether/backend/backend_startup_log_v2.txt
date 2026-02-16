@@ -1,0 +1,78 @@
+   Compiling aether_backend v0.1.0 (/Users/elegy/Documents/READING/LINUX/Aether/Aether/backend)
+warning: unused import: `super::memo_detail::Entity as MemoDetail`
+ --> src/infrastructure/persistence/entities/prelude.rs:6:9
+  |
+6 | pub use super::memo_detail::Entity as MemoDetail; 
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `super::node::Entity as Node`
+ --> src/infrastructure/persistence/entities/prelude.rs:7:9
+  |
+7 | pub use super::node::Entity as Node; 
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::user::Entity as User`
+ --> src/infrastructure/persistence/entities/prelude.rs:8:9
+  |
+8 | pub use super::user::Entity as User;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::user_module_settings::Entity as UserModuleSettings`
+  --> src/infrastructure/persistence/entities/prelude.rs:11:9
+   |
+11 | pub use super::user_module_settings::Entity as UserModuleSettings;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::domain::dtos::user::UserSettingsDto`
+ --> src/infrastructure/persistence/repositories/settings.rs:1:5
+  |
+1 | use crate::domain::dtos::user::UserSettingsDto;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `domain::dtos::user::UserSettingsDto`
+ --> src/interface/api/user_settings/mod.rs:9:5
+  |
+9 |     domain::dtos::user::UserSettingsDto,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: `aether_backend` (bin "aether_backend") generated 6 warnings (run `cargo fix --bin "aether_backend"` to apply 6 suggestions)
+    Finished `dev` profile [unoptimized + debuginfo] target(s) in 41.03s
+warning: the following packages contain code that will be rejected by a future version of Rust: sqlx-postgres v0.7.2
+note: to see what the problems were, use the option `--future-incompat-report`, or run `cargo report future-incompatibilities --id 6`
+     Running `target/debug/aether_backend`
+[2m2026-02-09T08:19:35.020643Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Database Connection Established
+[2m2026-02-09T08:19:35.020946Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Running Schema Migrations from ./migrations directory...
+[2m2026-02-09T08:19:35.021493Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: schema.sql
+[2m2026-02-09T08:19:35.024694Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_add_public_version_id.sql
+[2m2026-02-09T08:19:35.025011Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_add_publication_column.sql
+[2m2026-02-09T08:19:35.025426Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_create_missing_tables.sql
+[2m2026-02-09T08:19:35.025839Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_create_user_settings.sql
+[2m2026-02-09T08:19:35.026206Z[0m [31mERROR[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Migration failed for z_create_user_settings.sql: Execution Error: error returned from database: (code: 1) index idx_user_module_settings_user already exists
+[2m2026-02-09T08:19:35.026267Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_create_vocab_examples.sql
+[2m2026-02-09T08:19:35.026546Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_fix_vocab_schema.sql
+[2m2026-02-09T08:19:35.031661Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_fix_vrkb_schema.sql
+[2m2026-02-09T08:19:35.042489Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_prkb_v2_schema.sql
+[2m2026-02-09T08:19:35.042979Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: z_shared_sentences.sql
+[2m2026-02-09T08:19:35.044594Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Applying migration: zz_fix_uuid_format.sql
+[2m2026-02-09T08:19:35.045514Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::database[0m[2m:[0m Schema Migrations Complete.
+[2m2026-02-09T08:19:35.045592Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::services[0m[2m:[0m Initializing Services...
+[2m2026-02-09T08:19:35.055899Z[0m [32m INFO[0m [2maether_backend::infrastructure::dictionary::loader[0m[2m:[0m Initializing DictionaryLoader from: data/dictionary
+[2m2026-02-09T08:19:36.758193Z[0m [32m INFO[0m [2maether_backend::infrastructure::dictionary::loader[0m[2m:[0m Building FST Index with 446050 words...
+[2m2026-02-09T08:19:40.006518Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::services[0m[2m:[0m KB Schema Registry initialized (types: markdown, math_block, paper, assets)
+[2m2026-02-09T08:19:40.006606Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Starting Seeding Process...
+[2m2026-02-09T08:19:40.006631Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Checking for admin user...
+[2m2026-02-09T08:19:40.008622Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Updating admin user...
+[2m2026-02-09T08:19:40.009954Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Seeding Layout Templates...
+[2m2026-02-09T08:19:40.009990Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Processing template: Blog Standard (default)
+[2m2026-02-09T08:19:40.011578Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Processing template: Math Manuscript V3 (math_v3)
+[2m2026-02-09T08:19:40.012340Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Processing template: Vulnerability Research (vrkb)
+[2m2026-02-09T08:19:40.013099Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Processing template: English Learning (english)
+[2m2026-02-09T08:19:40.014009Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Processing template: Paper Research (prkb)
+[2m2026-02-09T08:19:40.014825Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Processing template: Memo Board (memo)
+[2m2026-02-09T08:19:40.015666Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Processing template: System Control (admin_system)
+[2m2026-02-09T08:19:40.017065Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Checking for System Admin Knowledge Base...
+[2m2026-02-09T08:19:40.017921Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Seeding PRKB Feeds...
+[2m2026-02-09T08:19:40.019571Z[0m [32m INFO[0m [2maether_backend::infrastructure::bootstrap::seeding[0m[2m:[0m Seeding Process Complete.
+[2m2026-02-09T08:19:40.025527Z[0m [32m INFO[0m [2maether_backend[0m[2m:[0m Aether Core online at 0.0.0.0:3000 (Refactored)

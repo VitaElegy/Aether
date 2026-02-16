@@ -1,0 +1,103 @@
+   Compiling aether_backend v0.1.0 (/Users/elegy/Documents/READING/LINUX/Aether/Aether/backend)
+warning: unused import: `super::memo_detail::Entity as MemoDetail`
+ --> src/infrastructure/persistence/entities/prelude.rs:6:9
+  |
+6 | pub use super::memo_detail::Entity as MemoDetail; 
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  |
+  = note: `#[warn(unused_imports)]` on by default
+
+warning: unused import: `super::node::Entity as Node`
+ --> src/infrastructure/persistence/entities/prelude.rs:7:9
+  |
+7 | pub use super::node::Entity as Node; 
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::user::Entity as User`
+ --> src/infrastructure/persistence/entities/prelude.rs:8:9
+  |
+8 | pub use super::user::Entity as User;
+  |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `super::user_module_settings::Entity as UserModuleSettings`
+  --> src/infrastructure/persistence/entities/prelude.rs:11:9
+   |
+11 | pub use super::user_module_settings::Entity as UserModuleSettings;
+   |         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `crate::domain::dtos::user::UserSettingsDto`
+ --> src/infrastructure/persistence/repositories/settings.rs:1:5
+  |
+1 | use crate::domain::dtos::user::UserSettingsDto;
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+warning: unused import: `domain::dtos::user::UserSettingsDto`
+ --> src/interface/api/user_settings/mod.rs:9:5
+  |
+9 |     domain::dtos::user::UserSettingsDto,
+  |     ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0609]: no field `db` on type `AppState`
+  --> src/interface/api/user_settings/mod.rs:35:60
+   |
+35 |     let settings = SettingsRepository::get_settings(&state.db, crate::domain::models::UserId(user.id), &module_key)
+   |                                                            ^^ unknown field
+   |
+help: some of the expressions' fields have a field of the same name
+   |
+35 |     let settings = SettingsRepository::get_settings(&state.permission_service.repo.db, crate::domain::models::UserId(user.id), &module_key)
+   |                                                            ++++++++++++++++++++++++
+35 |     let settings = SettingsRepository::get_settings(&state.repo.db, crate::domain::models::UserId(user.id), &module_key)
+   |                                                            +++++
+
+error[E0308]: mismatched types
+  --> src/interface/api/user_settings/mod.rs:35:64
+   |
+35 |     let settings = SettingsRepository::get_settings(&state.db, crate::domain::models::UserId(user.id), &module_key)
+   |                    --------------------------------            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Uuid`, found `UserId`
+   |                    |
+   |                    arguments to this function are incorrect
+   |
+note: associated function defined here
+  --> src/infrastructure/persistence/repositories/settings.rs:11:18
+   |
+11 |     pub async fn get_settings(
+   |                  ^^^^^^^^^^^^
+12 |         db: &DatabaseConnection,
+13 |         user_id: Uuid,
+   |         -------------
+
+error[E0609]: no field `db` on type `AppState`
+  --> src/interface/api/user_settings/mod.rs:61:62
+   |
+61 |     let updated = SettingsRepository::update_settings(&state.db, crate::domain::models::UserId(user.id), &module_key, payload)
+   |                                                              ^^ unknown field
+   |
+help: some of the expressions' fields have a field of the same name
+   |
+61 |     let updated = SettingsRepository::update_settings(&state.permission_service.repo.db, crate::domain::models::UserId(user.id), &module_key, payload)
+   |                                                              ++++++++++++++++++++++++
+61 |     let updated = SettingsRepository::update_settings(&state.repo.db, crate::domain::models::UserId(user.id), &module_key, payload)
+   |                                                              +++++
+
+error[E0308]: mismatched types
+  --> src/interface/api/user_settings/mod.rs:61:66
+   |
+61 |     let updated = SettingsRepository::update_settings(&state.db, crate::domain::models::UserId(user.id), &module_key, payload)
+   |                   -----------------------------------            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ expected `Uuid`, found `UserId`
+   |                   |
+   |                   arguments to this function are incorrect
+   |
+note: associated function defined here
+  --> src/infrastructure/persistence/repositories/settings.rs:25:18
+   |
+25 |     pub async fn update_settings(
+   |                  ^^^^^^^^^^^^^^^
+26 |         db: &DatabaseConnection,
+27 |         user_id: Uuid,
+   |         -------------
+
+Some errors have detailed explanations: E0308, E0609.
+For more information about an error, try `rustc --explain E0308`.
+warning: `aether_backend` (bin "aether_backend") generated 6 warnings
+error: could not compile `aether_backend` (bin "aether_backend") due to 4 previous errors; 6 warnings emitted
