@@ -317,8 +317,9 @@ async function init() {
         } else {
             // Create Mode - Dictionary Lookup
             currentId.value = '';
-            const dictData = await dictionaryApi.lookup(props.initialWord);
-            if (dictData) {
+            const dictEntries = await dictionaryApi.lookup(props.initialWord);
+            if (dictEntries && dictEntries.length > 0) {
+                const dictData = dictEntries[0];
                 formData.phonetic = dictData.phonetic || '';
                 formData.meanings = [{ pos: 'n.', translation: '', definition: '' }];
             }

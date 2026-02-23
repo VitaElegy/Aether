@@ -34,9 +34,9 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
             console.log(`[Store] Searching for word: ${word}`);
             const res = await axios.get(`/api/vocabulary?query=${word}&limit=1`);
             console.log('[Store] Search response:', res.data);
-            
+
             const list = Array.isArray(res.data) ? res.data : (res.data?.data || []);
-            
+
             if (list.length > 0) {
                 // Return first match
                 return list[0];
@@ -58,6 +58,7 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
         }
     }
 
+
     async function addExample(vocabId: string, example: any) {
         try {
             await axios.post(`/api/vocabulary/${vocabId}/examples`, example);
@@ -65,6 +66,20 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
         } catch (e) {
             console.error(e);
             throw e;
+        }
+    }
+
+    async function fetchVocabulary(params: { limit?: number; offset?: number; query?: string; kb_id?: string }) {
+        try {
+            loading.value = true;
+            const res = await axios.get('/api/vocabulary', { params });
+            // API returns array directly
+            return res.data;
+        } catch (e) {
+            console.error('[Store] Fetch vocabulary failed', e);
+            throw e;
+        } finally {
+            loading.value = false;
         }
     }
 
@@ -77,6 +92,7 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
         fontMode,
         searchWord,
         saveVocabulary,
-        addExample
+        addExample,
+        fetchVocabulary
     };
 });
