@@ -1,0 +1,18 @@
+[package]
+name = "aether_desktop"
+version = "0.1.0"
+description = "Aether Desktop"
+authors = ["Elegy"]
+license = ""
+edition = "2021"
+
+[features]
+custom-protocol = ["tauri/custom-protocol"]
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+tauri = { version = "1.6", features = [ "shell-sidecar", "shell-open", "process-command-api", "custom-protocol"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
