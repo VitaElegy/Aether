@@ -1,5 +1,7 @@
 use axum::Router;
 use tower_http::trace::TraceLayer;
+use tower_http::cors::{CorsLayer, Any};
+use axum::http::{Method, HeaderValue};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
 use crate::interface::state::AppState;
@@ -42,6 +44,29 @@ pub fn build_router(state: AppState) -> Router {
         .merge(api_routes)
         .layer(axum::extract::DefaultBodyLimit::max(500 * 1024 * 1024)) // 500MB Dynamic Ceiling
         .layer(TraceLayer::new_for_http())
+        .layer(
+            CorsLayer::new()
+                .allow_origin([
+                    "tauri://localhost".parse::<HeaderValue>().unwrap(),
+                    "https://tauri.localhost".parse::<HeaderValue>().unwrap(),
+                    "http://localhost:5173".parse::<HeaderValue>().unwrap(),
+                    "http://localhost:3000".parse::<HeaderValue>().unwrap(),
+                ])
+                .allow_methods([
+                    Method::GET,
+                    Method::POST,
+                    Method::PUT,
+                    Method::DELETE,
+                    Method::PATCH,
+                    Method::OPTIONS,
+                ])
+                .allow_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                    axum::http::header::ACCEPT,
+                ])
+                .allow_credentials(true)
+        )
 }
 
 async fn health_check() -> &'static str {
