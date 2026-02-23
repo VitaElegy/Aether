@@ -2,10 +2,23 @@
 import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import { Editor } from '@tiptap/vue-3';
 import { NodeSelection, TextSelection } from '@tiptap/pm/state';
+import { DOMSerializer } from '@tiptap/pm/model';
 import { Icon } from 'tdesign-vue-next';
 
 const props = defineProps<{
     editor: Editor;
+}>();
+
+const emit = defineEmits<{
+    (e: 'drop-indicator', value: { 
+        visible: boolean; 
+        top: number; 
+        left: number; 
+        width: number;
+        pos?: number;
+        height?: number;
+        html?: string;
+    }): void;
 }>();
 
 const menuRef = ref<HTMLElement | null>(null);
@@ -14,9 +27,71 @@ const activePos = ref<number | null>(null);
 const visible = ref(false);
 const top = ref(0);
 const left = ref(0);
+const isDragging = ref(false);
 
-// --- Positioning Logic ---
-const updatePosition = () => {
+// Block highlight overlay dimensions
+const blockHighlight = ref<{ top: number; left: number; width: number; height: number } | null>(null);
+
+// Dragged block state for preview
+const draggedBlockHeight = ref(0);
+const draggedBlockHtml = ref('');
+
+// Custom drag ghost
+const dragGhost = ref<HTMLElement | null>(null);
+
+// Hover-based handle: track hovered block separately from selection
+const hoveredPos = ref<number | null>(null);
+const hoveredNode = ref<any>(null);
+const isHoverActive = ref(false);
+
+// Throttle dragover with rAF
+// Throttle dragover with rAF
+let dragOverRAF: number | null = null;
+let latestDragX = 0;
+let latestDragY = 0;
+let lastResolveTime = 0;
+let lastEmitted: string | null = null;
+const lastMouseX = ref(0);
+const lastMouseY = ref(0);
+
+// --- Positioning Logic (hover-based) ---
+const updateHandleForBlock = (pos: number, node: any) => {
+    let view;
+    try {
+        view = props.editor.view;
+    } catch (e) {
+        return;
+    }
+    if (!view || !view.dom) return;
+
+    const dom = view.nodeDOM(pos) as HTMLElement;
+    if (!dom || !dom.getBoundingClientRect) return;
+
+    const editorRect = view.dom.getBoundingClientRect();
+    const nodeRect = dom.getBoundingClientRect();
+
+    activeNode.value = node;
+    activePos.value = pos;
+    visible.value = true;
+
+    top.value = nodeRect.top - editorRect.top + 4;
+    left.value = (nodeRect.left - editorRect.left) - 24;
+
+    // Update block highlight overlay position
+    blockHighlight.value = {
+        top: nodeRect.top - editorRect.top,
+        left: 0,
+        width: editorRect.width,
+        height: nodeRect.height,
+    };
+};
+
+const updatePositionFromSelection = () => {
+    // Selection updates (typing, cursor move) take precedence over passive hover
+    isHoverActive.value = false;
+    hoveredPos.value = null;
+    hoveredNode.value = null;
+    
     if (!props.editor || props.editor.isDestroyed) return;
 
     let view;
@@ -29,25 +104,18 @@ const updatePosition = () => {
     if (!view || !view.dom) return;
 
     const { selection } = view.state;
-    
-    // Find the current block node
-    // We want the top-level block (e.g. Paragraph, Heading, List Item)
-    // Tiptap's selection.$anchor tells us where the caret is.
     const $anchor = selection.$anchor;
-    
-    // We traverse up to find the direct child of Doc
     let depth = $anchor.depth;
+    
+    if (depth === 0) {
+        visible.value = false;
+        return;
+    }
+
     let node = $anchor.node(depth);
     let pos = $anchor.before(depth);
 
-    // Naive block finding: Go to depth 1 (child of doc)
-    // If inside a list, we might want the list item or the list itself? Notion handles list items individually.
     if (depth > 1) {
-        // e.g. Doc -> List -> ListItem -> Paragraph
-        // We want ListItem (depth 2) or Paragraph (depth 3)? 
-        // Notion puts handle on ListItem.
-        // Let's try to target depth 1 for now for simplicity, then refine.
-        // Actually, depth 1 is usually the block.
         const headerDepth = 1;
         node = $anchor.node(headerDepth);
         pos = $anchor.before(headerDepth);
@@ -55,52 +123,14 @@ const updatePosition = () => {
 
     if (!node) {
         visible.value = false;
+        blockHighlight.value = null;
         return;
     }
 
-    // Get DOM element for this node
-    const dom = view.nodeDOM(pos) as HTMLElement;
-
-    if (!dom || !dom.getBoundingClientRect) {
-        visible.value = false;
-        return;
-    }
-
-    const editorRect = view.dom.getBoundingClientRect();
-    const nodeRect = dom.getBoundingClientRect();
-
-    // Position handle to the left of the block
-    // Relative to editor container (we assume editor has relative positioning or we use fixed/absolute)
-    // Let's use absolute positioning relative to the editor wrapper.
-    // We need to calculate offset relative to the editor.
-    
-    // Check if node is empty and not focused? Notion shows handle on hover.
-    // For now, let's show on current selection (active block).
-    
-    activeNode.value = node;
-    activePos.value = pos;
-    visible.value = true;
-
-    // Calculate Top
-    // We want to align with the top of the block line-height roughly.
-    // nodeRect.top is viewport relative.
-    // We need the offset from the editor's bounding box.
-    // But DragHandle is likely inside the EditorAdapter which is relative.
-    // Let's assume DragHandle is sibling to EditorContent and parent is relative.
-    
-    // Add a small vertical offset to align center-to-center better for larger headings
-    top.value = nodeRect.top - editorRect.top + 4;
-    
-    // Calculate Left
-    // We want it in the gutter, to the left of the text block.
-    // nodeRect.left is the text start. editorRect.left is container start.
-    // Offset inside container = nodeRect.left - editorRect.left.
-    // We place handle like -24px from the text start.
-    left.value = (nodeRect.left - editorRect.left) - 24;
+    updateHandleForBlock(pos, node);
 };
 
 // --- Watchers ---
-// Watch transaction to update position on typing/selection
 watch(() => {
     try {
         return props.editor?.state?.selection;
@@ -108,13 +138,172 @@ watch(() => {
         return null;
     }
 }, () => {
-    updatePosition();
+    updatePositionFromSelection();
 });
 
 
-// --- Drag & Drop Logic (Basic) ---
+// --- Helper: resolve drop target position from mouse coords ---
+const resolveDropTarget = (clientX: number, clientY: number): { pos: number; rect: DOMRect } | null => {
+    let view;
+    try {
+        view = props.editor.view;
+    } catch {
+        return null;
+    }
+    if (!view) return null;
+
+    const posInfo = view.posAtCoords({ left: clientX, top: clientY });
+    if (!posInfo) return null;
+
+    const $drop = view.state.doc.resolve(posInfo.pos);
+    
+    if ($drop.depth === 0) return null;
+
+    const blockPos = $drop.before(1);
+    const blockDom = view.nodeDOM(blockPos) as HTMLElement;
+    if (!blockDom || !blockDom.getBoundingClientRect) return null;
+
+    const rect = blockDom.getBoundingClientRect();
+    const isLowerHalf = clientY > rect.top + rect.height / 2;
+
+    return {
+        pos: isLowerHalf ? $drop.after(1) : blockPos,
+        rect: isLowerHalf
+            ? new DOMRect(rect.left, rect.bottom, rect.width, 0)
+            : new DOMRect(rect.left, rect.top, rect.width, 0),
+    };
+};
+
+// --- Helper: resolve block at mouse position (with DOM fallback) ---
+const resolveBlockFromDOM = (clientX: number, clientY: number): { pos: number; node: any } | null => {
+    let view;
+    try {
+        view = props.editor.view;
+    } catch {
+        return null;
+    }
+    if (!view) return null;
+
+    // Walk up from the element under the cursor to find a ProseMirror top-level block
+    let el = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    if (!el) return null;
+
+    const proseMirrorDom = view.dom;
+    
+    // Walk up until we find a direct child of the ProseMirror container
+    while (el && el !== proseMirrorDom && el.parentElement !== proseMirrorDom) {
+        el = el.parentElement;
+    }
+
+    // el should now be a direct child of proseMirrorDom (a top-level block)
+    if (!el || el === proseMirrorDom || el.parentElement !== proseMirrorDom) return null;
+
+    // Get the ProseMirror position for this DOM node
+    const pos = view.posAtDOM(el, 0);
+    if (pos < 0) return null;
+
+    try {
+        const $pos = view.state.doc.resolve(pos);
+        if ($pos.depth === 0) return null;
+        const blockPos = $pos.before(1);
+        const blockNode = $pos.node(1);
+        if (!blockNode) return null;
+        return { pos: blockPos, node: blockNode };
+    } catch {
+        return null;
+    }
+};
+
+const resolveBlockAtCoords = (clientX: number, clientY: number): { pos: number; node: any } | null => {
+    let view;
+    try {
+        view = props.editor.view;
+    } catch {
+        return null;
+    }
+    if (!view) return null;
+
+    // Try ProseMirror's coordinate resolution first
+    const posInfo = view.posAtCoords({ left: clientX, top: clientY });
+    if (posInfo) {
+        try {
+            const $pos = view.state.doc.resolve(posInfo.pos);
+            if ($pos.depth > 0) {
+                const blockPos = $pos.before(1);
+                const blockNode = $pos.node(1);
+                if (blockNode) {
+                    // CRITICAL: Verify the mouse is actually over this block's DOM rect.
+                    // ProseMirror resolves empty space below content to the last block,
+                    // which causes the handle to "lock" to the bottom block.
+                    const blockDom = view.nodeDOM(blockPos) as HTMLElement;
+                    if (blockDom && blockDom.getBoundingClientRect) {
+                        const rect = blockDom.getBoundingClientRect();
+                        if (clientY > rect.bottom + 2 || clientY < rect.top - 2) {
+                            // Mouse is outside this block's vertical bounds — ignore
+                            return null;
+                        }
+                    }
+                    return { pos: blockPos, node: blockNode };
+                }
+            }
+        } catch {
+            // Fall through to DOM fallback
+        }
+    }
+
+    // Fallback: use DOM traversal
+    return resolveBlockFromDOM(clientX, clientY);
+};
+
+
+// --- Custom Drag Ghost ---
+const createDragGhost = (sourceDom: HTMLElement): HTMLElement => {
+    const ghost = sourceDom.cloneNode(true) as HTMLElement;
+    const rect = sourceDom.getBoundingClientRect();
+    
+    ghost.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: ${rect.width}px;
+        pointer-events: none;
+        z-index: 10000;
+        opacity: 0.85;
+        background: white;
+        border-radius: 8px;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.12), 0 2px 8px rgba(0,0,0,0.08);
+        padding: 4px 8px;
+        transform: translate3d(${rect.left}px, ${rect.top}px, 0) rotate(1.5deg) scale(1.02);
+        transition: opacity 0.15s ease, transform 0.1s linear;
+        overflow: hidden;
+        will-change: transform;
+    `;
+    
+    document.body.appendChild(ghost);
+    return ghost;
+};
+
+const updateDragGhostPosition = (ghost: HTMLElement, clientX: number, clientY: number) => {
+    // Use translate3d for GPU acceleration - significantly reduces lag on high-refresh displays
+    ghost.style.transform = `translate3d(${clientX + 12}px, ${clientY - 10}px, 0) rotate(1.5deg) scale(1.02)`;
+};
+
+const removeDragGhost = () => {
+    if (dragGhost.value) {
+        dragGhost.value.style.opacity = '0';
+        dragGhost.value.style.transform = 'rotate(0deg) scale(0.98)';
+        const ghost = dragGhost.value;
+        setTimeout(() => {
+            ghost.remove();
+        }, 150);
+        dragGhost.value = null;
+    }
+};
+
+
+// --- Drag & Drop Logic ---
 const handleDragStart = (event: DragEvent) => {
-    if (!props.editor || !activePos.value) return;
+    if (!props.editor || activePos.value === null) return;
     
     let view;
     try {
@@ -127,36 +316,164 @@ const handleDragStart = (event: DragEvent) => {
 
     view.focus();
     
-    // Select the node
-    const tr = view.state.tr.setSelection(NodeSelection.create(view.state.doc, activePos.value));
+    const pos = activePos.value;
+    const node = view.state.doc.nodeAt(pos);
+    if (!node) return;
+
+    isDragging.value = true;
+
+    // Mark the source block as "being dragged"
+    const domNode = view.nodeDOM(pos) as HTMLElement;
+    if (domNode) {
+        domNode.classList.add('is-block-dragging');
+        draggedBlockHeight.value = domNode.offsetHeight;
+        draggedBlockHtml.value = domNode.outerHTML; // Use outerHTML to capture tags like <h1>, <pre>, etc.
+    }
+
+    // Select the node so ProseMirror knows what is being dragged
+    const selection = NodeSelection.create(view.state.doc, pos);
+    const tr = view.state.tr.setSelection(selection);
     view.dispatch(tr);
     
-    // Let Tiptap/ProseMirror handle the actual drag of the selection
-    // We just need to ensure the element being dragged is considered a valid drag handle.
-    // By default, dragging an element requires valid dragstart. 
-    // ProseMirror handles dragging selections.
+    // Serialize content for Drag and Drop
+    const slice = selection.content();
+    const serializer = DOMSerializer.fromSchema(view.state.schema);
+    const fragment = serializer.serializeFragment(slice.content);
     
-    // Hack: We rely on the fact that we just selected the node. 
-    // The user is technically dragging the "handle", not the text.
-    // To make this work like Notion, we often need a custom DragHandle extension in PM.
-    // BUT, a simple way is: Set selection, then let user drag? 
-    // Actually, dragging the handle *shim* is tricky.
-    
-    // Alternative: Use the handle to open a menu, and use a separate "Drag Mode" or rely on a specialized library.
-    // For MVP: Let's make it a Menu Trigger first (Notion +/:: icon).
-    // Dragging is complex to implement from scratch in one go.
-    // Let's just implement "Click to Select" and "Menu".
-    
+    const tempDiv = document.createElement('div');
+    tempDiv.appendChild(fragment);
+    const html = tempDiv.innerHTML;
+    const text = tempDiv.textContent || '';
+
     if (event.dataTransfer) {
-        event.dataTransfer.setData('text/plain', 'Block Drag');
+        event.dataTransfer.effectAllowed = 'move'; 
+        event.dataTransfer.setData('application/x-aether-block-pos', pos.toString());
+        event.dataTransfer.setData('application/x-aether-block-size', node.nodeSize.toString());
+        event.dataTransfer.setData('application/x-aether-block-json', JSON.stringify(node.toJSON()));
+        event.dataTransfer.setData('text/html', html);
+        event.dataTransfer.setData('text/plain', text);
+        
+        // Use a tiny 1x1 transparent image to hide the native drag image
+        const emptyImg = new Image();
+        emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        event.dataTransfer.setDragImage(emptyImg, 0, 0);
     }
-    // We can simulate drag by implementing the drag slice logic manually, but that's heavy.
+
+    // Create our custom drag ghost
+    if (domNode) {
+        dragGhost.value = createDragGhost(domNode);
+    }
+};
+
+const handleDragOver = (e: DragEvent) => {
+    if (!isDragging.value) return;
+    e.preventDefault();
+    if (e.dataTransfer) {
+        e.dataTransfer.dropEffect = 'move';
+    }
+
+    // Store latest coordinates for rAF
+    latestDragX = e.clientX;
+    latestDragY = e.clientY;
+
+    // Use rAF to throttle BOTH ghost updates and indicator calculations
+    if (dragOverRAF !== null) return;
+    
+    dragOverRAF = requestAnimationFrame(() => {
+        dragOverRAF = null;
+        
+        // 1. Efficiently update ghost position (GPU transform) - Keep this at 60fps
+        if (dragGhost.value) {
+            updateDragGhostPosition(dragGhost.value, latestDragX, latestDragY);
+        }
+
+        // 2. Throttle drop target resolution (expensive DOM lookups) to ~30fps
+        const now = Date.now();
+        if (now - lastResolveTime < 32) return; // ~30fps cap for indicator updates
+        lastResolveTime = now;
+
+        const target = resolveDropTarget(latestDragX, latestDragY);
+        
+        let emitData;
+        if (!target) {
+            emitData = { visible: false, top: 0, left: 0, width: 0 };
+        } else {
+            let view;
+            try {
+                view = props.editor.view;
+            } catch {
+                return;
+            }
+            
+            if (!view) return;
+            const editorRect = view.dom.getBoundingClientRect();
+            emitData = {
+                visible: true,
+                top: target.rect.y - editorRect.top,
+                left: target.rect.x - editorRect.left,
+                width: target.rect.width,
+                pos: target.pos,
+                height: draggedBlockHeight.value,
+                html: draggedBlockHtml.value,
+            };
+        }
+
+        // 3. Deduplicate events to prevent Vue re-renders
+        const emitString = JSON.stringify(emitData);
+        if (lastEmitted !== emitString) {
+            emit('drop-indicator', emitData);
+            lastEmitted = emitString;
+        }
+    });
+};
+
+const handleDragLeave = (e: DragEvent) => {
+    let view;
+    try {
+        view = props.editor.view;
+    } catch {
+        return;
+    }
+    if (!view) return;
+
+    const editorRect = view.dom.getBoundingClientRect();
+    const { clientX, clientY } = e;
+    
+    if (
+        clientX <= editorRect.left || clientX >= editorRect.right ||
+        clientY <= editorRect.top || clientY >= editorRect.bottom
+    ) {
+        emit('drop-indicator', { visible: false, top: 0, left: 0, width: 0 });
+    }
+};
+
+const handleDragEnd = (event: DragEvent) => {
+    isDragging.value = false;
+    blockHighlight.value = null;
+    
+    // Remove custom ghost
+    removeDragGhost();
+    
+    // Cancel any pending rAF
+    if (dragOverRAF !== null) {
+        cancelAnimationFrame(dragOverRAF);
+        dragOverRAF = null;
+    }
+    
+    // Cleanup drag opacity class
+    const dragging = document.querySelector('.is-block-dragging');
+    if (dragging) dragging.classList.remove('is-block-dragging');
+
+    // Hide drop indicator
+    // Hide drop indicator
+    if (lastEmitted !== null) { // Only emit if currently visible
+        emit('drop-indicator', { visible: false, top: 0, left: 0, width: 0 });
+        lastEmitted = null;
+    }
 };
 
 // --- Actions ---
 const handleClick = () => {
-   // Open Block Menu (Delete, Turn Into, etc.)
-   // For now, just select the block clearly.
    if (activePos.value !== null && props.editor && !props.editor.isDestroyed) {
        try {
            const view = props.editor.view;
@@ -171,37 +488,55 @@ const handleClick = () => {
 
 const handleMouseMove = (e: MouseEvent) => {
     if (!props.editor || props.editor.isDestroyed) return;
+    if (isDragging.value) return;
 
-    let view;
-    try {
-        view = props.editor.view;
-    } catch (e) {
+    // Filter out pseudo-moves (e.g. triggering from layout shifts without actual mouse movement)
+    // We only want to enable hover mode if the user *intentionally* moves the mouse.
+    if (Math.abs(e.clientX - lastMouseX.value) < 2 && Math.abs(e.clientY - lastMouseY.value) < 2) {
+        return;
+    }
+    lastMouseX.value = e.clientX;
+    lastMouseY.value = e.clientY;
+
+    const block = resolveBlockAtCoords(e.clientX, e.clientY);
+    if (!block) {
+        // Mouse is in empty space — hide handle and highlight
+        if (isHoverActive.value) {
+            isHoverActive.value = false;
+            hoveredPos.value = null;
+            hoveredNode.value = null;
+            visible.value = false;
+            blockHighlight.value = null;
+        }
         return;
     }
 
-    if (!view) return;
+    // Activate hover state — this prevents selection watcher from overriding
+    isHoverActive.value = true;
+    hoveredPos.value = block.pos;
+    hoveredNode.value = block.node;
+    updateHandleForBlock(block.pos, block.node);
+};
 
-    // Find node at coordinates
-    const pos = view.posAtCoords({ left: e.clientX, top: e.clientY });
+const handleMouseLeave = (e: MouseEvent) => {
+    if (isDragging.value) return;
     
-    if (pos) {
-        // Resolve to block
-        // const $pos = view.state.doc.resolve(pos.pos);
-        // ... (Reusing logic would be good)
-        // For MVP, stick to "Selection Based" handle to ensure stability first.
-        // Hover based is jumpy without good debouncing.
-    }
-}
+    // When mouse leaves editor, deactivate hover and revert to selection-based positioning
+    isHoverActive.value = false;
+    hoveredPos.value = null;
+    hoveredNode.value = null;
+    updatePositionFromSelection();
+};
 
 onMounted(() => {
-    // Ideally we also listen to mouseover on the editor to move the handle to hovered blocks
-    // instead of just selected blocks.
-    // Implementation: Editor `onHover` extension or manual event listener.
     if (props.editor) {
         try {
            if (props.editor.view && props.editor.view.dom) {
                const dom = props.editor.view.dom;
                dom.addEventListener('mousemove', handleMouseMove);
+               dom.addEventListener('mouseleave', handleMouseLeave);
+               dom.addEventListener('dragover', handleDragOver);
+               dom.addEventListener('dragleave', handleDragLeave);
            }
         } catch (e) {
             // Ignore if view is not ready
@@ -215,26 +550,89 @@ onBeforeUnmount(() => {
             if (props.editor.view && props.editor.view.dom) {
                 const dom = props.editor.view.dom;
                 dom.removeEventListener('mousemove', handleMouseMove);
+                dom.removeEventListener('mouseleave', handleMouseLeave);
+                dom.removeEventListener('dragover', handleDragOver);
+                dom.removeEventListener('dragleave', handleDragLeave);
             }
         } catch (e) {
             // Ignore
         }
     }
+    
+    // Cleanup ghost if component unmounts mid-drag
+    removeDragGhost();
+    
+    if (dragOverRAF !== null) {
+        cancelAnimationFrame(dragOverRAF);
+        dragOverRAF = null;
+    }
 });
-
-// Re-using selection based for now.
 </script>
 
 <template>
+    <!-- Block Highlight Overlay -->
+    <div 
+        v-if="blockHighlight && !isDragging"
+        class="block-highlight"
+        :style="{
+            top: `${blockHighlight.top}px`,
+            left: `${blockHighlight.left}px`,
+            width: `${blockHighlight.width}px`,
+            height: `${blockHighlight.height}px`,
+        }"
+    />
+
+    <!-- Drag Handle Button -->
     <div 
         v-if="visible"
         ref="menuRef"
-        class="absolute z-50 flex items-center justify-center w-6 h-6 cursor-grab text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded transition-colors"
+        class="drag-handle"
+        :class="{ 'is-dragging': isDragging }"
         :style="{ top: `${top}px`, left: `${left}px` }"
         draggable="true"
         @dragstart="handleDragStart"
+        @dragend="handleDragEnd"
         @click="handleClick"
     >
         <Icon name="drag-move" size="16px" />
     </div>
 </template>
+
+<style scoped>
+.block-highlight {
+    position: absolute;
+    z-index: 1;
+    pointer-events: none;
+    border-radius: 4px;
+    background: linear-gradient(90deg, rgba(59, 130, 246, 0.08), rgba(59, 130, 246, 0.02));
+    transition: top 0.12s cubic-bezier(0.2, 0, 0, 1), height 0.1s ease, opacity 0.15s ease;
+}
+
+.drag-handle {
+    position: absolute;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    cursor: grab;
+    color: #9ca3af;
+    border-radius: 4px;
+    transition: color 0.15s ease, background-color 0.15s ease, opacity 0.2s ease, transform 0.15s ease, top 0.12s cubic-bezier(0.2, 0, 0, 1);
+    opacity: 0.4;
+}
+
+.drag-handle:hover {
+    color: #4b5563;
+    background-color: #f3f4f6;
+    opacity: 1;
+    transform: scale(1.1);
+}
+
+.drag-handle:active,
+.drag-handle.is-dragging {
+    cursor: grabbing;
+    opacity: 0.7;
+}
+</style>
