@@ -44,8 +44,11 @@ async fn main() {
     // 6. Router & Server
     let app = router::build_router(state);
     
-    let addr = "0.0.0.0:3000";
-    let listener = TcpListener::bind(addr).await.expect("Failed to bind port 3000");
+    // Configurable Port for Tauri/Desktop
+    let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
+    let addr = format!("0.0.0.0:{}", port);
+    
+    let listener = TcpListener::bind(&addr).await.expect(&format!("Failed to bind port {}", port));
     tracing::info!("Aether Core online at {} (Refactored)", addr);
     axum::serve(listener, app).await.unwrap();
 }

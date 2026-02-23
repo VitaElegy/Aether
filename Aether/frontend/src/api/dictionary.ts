@@ -18,7 +18,7 @@ export interface DictionaryEntry {
 
 export const dictionaryApi = {
     lookup: async (word: string, signal?: AbortSignal) => {
-        const res = await axios.get<DictionaryEntry>('/api/dictionary/lookup', { params: { word }, signal });
+        const res = await axios.get<DictionaryEntry[]>('/api/dictionary/lookup', { params: { word }, signal });
         return res.data;
     },
     fuzzy: async (word: string, signal?: AbortSignal) => {

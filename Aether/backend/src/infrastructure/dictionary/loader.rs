@@ -181,22 +181,18 @@ impl DictionaryLoader {
         }
     }
 
-    pub fn lookup(&self, word: &str) -> Option<Vec<String>> {
+    pub fn lookup(&self, word: &str) -> Vec<(String, String)> {
         let mut results = Vec::new();
         
         for dict_mutex in self.dicts.iter() {
              if let Ok(mut dict) = dict_mutex.lock() {
                  if let Some(def) = dict.get(word) {
-                     results.push(def);
+                     results.push((dict.name.clone(), def));
                  }
              }
         }
         
-        if results.is_empty() {
-             None
-        } else {
-             Some(results)
-        }
+        results
     }
 
     pub async fn fuzzy_search(&self, word: &str) -> Vec<String> {
