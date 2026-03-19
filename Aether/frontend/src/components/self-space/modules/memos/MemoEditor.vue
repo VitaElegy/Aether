@@ -69,12 +69,14 @@
                     class="w-full bg-transparent border-none p-0 text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-300 dark:placeholder:text-zinc-700 focus:ring-0 mb-4 font-sans"
                 />
 
-                <!-- Body Textarea -->
-                <textarea 
-                    v-model="localData.content"
-                    placeholder="Write your thoughts..." 
-                    class="w-full min-h-[300px] bg-transparent border-none p-0 resize-none text-lg leading-relaxed text-zinc-700 dark:text-zinc-300 placeholder:text-zinc-300 dark:placeholder:text-zinc-700 focus:ring-0 font-serif"
-                ></textarea>
+                <!-- Body Editor Adapter -->
+                <div class="w-full min-h-[300px] text-lg leading-relaxed text-zinc-700 dark:text-zinc-300 font-serif">
+                    <MarkdownEditorAdapter 
+                        v-model="localData.content"
+                        placeholder="Write your thoughts..." 
+                        class="min-h-[300px]"
+                    />
+                </div>
             </div>
 
             <!-- Tags Section -->
@@ -197,6 +199,7 @@ import { ref, computed, watch } from 'vue';
 import { useMemosStore, type Memo } from '@/stores/memos';
 import { format } from 'date-fns';
 import { getTagColor } from '@/utils/colors';
+import MarkdownEditorAdapter from '@/components/editor/adapters/MarkdownEditorAdapter.vue';
 
 const store = useMemosStore();
 // ... (rest of imports)

@@ -41,13 +41,14 @@
                 />
 
                 <!-- Main Content -->
-                <textarea 
-                    ref="contentArea"
-                    v-model="localData.content"
-                    placeholder="What's on your mind?" 
-                    class="w-full min-h-[200px] max-h-[40vh] bg-transparent border-none p-0 resize-none text-base leading-relaxed text-text-secondary placeholder:text-text-quaternary focus:ring-0 font-serif custom-scrollbar"
-                    autofocus
-                ></textarea>
+                <div class="w-full min-h-[200px] max-h-[40vh] text-base leading-relaxed text-text-secondary font-serif custom-scrollbar overflow-y-auto">
+                    <MarkdownEditorAdapter 
+                        v-model="localData.content"
+                        placeholder="What's on your mind?" 
+                        class="min-h-[200px]"
+                        :autofocus="true"
+                    />
+                </div>
 
                 <!-- Tags & Quick Actions -->
                 <div class="mt-4 flex flex-wrap gap-2">
@@ -110,6 +111,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import type { Memo } from '@/stores/memos';
+import MarkdownEditorAdapter from '@/components/editor/adapters/MarkdownEditorAdapter.vue';
 
 const props = defineProps<{
   modelValue: boolean; // v-model for visibility

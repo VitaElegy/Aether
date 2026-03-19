@@ -20,9 +20,11 @@
     </div>
 
     <!-- Body: Content Preview -->
-    <div class="px-5 pb-4 text-[15px] leading-relaxed text-text-secondary/90 font-medium relative z-10">
-      <div class="line-clamp-6 whitespace-pre-wrap decoration-clone font-sans">
-         {{ previewContent }}
+    <div class="px-5 pb-4 text-[15px] leading-relaxed text-text-secondary/90 font-medium relative z-10 w-full overflow-hidden">
+      <!-- Fixed max-height to ensure line-clamp equivalent visually -> fade out at bottom -->
+      <div class="max-h-[140px] overflow-hidden relative">
+          <MarkdownRenderer :content="memo.content || '*Empty Note*'" class="memo-preview-markdown" />
+          <div class="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-white to-transparent dark:from-zinc-900 pointer-events-none"></div>
       </div>
     </div>
 
@@ -83,6 +85,7 @@ import { computed } from 'vue';
 import type { Memo } from '@/stores/memos';
 import { formatDistanceToNow } from 'date-fns';
 import { getTagColor } from '@/utils/colors';
+import MarkdownRenderer from '@/components/renderers/MarkdownRenderer.vue';
 
 const props = defineProps<{
   memo: Memo;
@@ -124,5 +127,29 @@ function formatDate(date: string) {
   -webkit-line-clamp: 6;
   -webkit-box-orient: vertical;
   overflow: hidden;
+}
+
+/* Adjust Prose for Mini Card Format */
+:deep(.memo-preview-markdown.prose) {
+   font-size: 0.9rem !important;
+   line-height: 1.5 !important;
+}
+:deep(.memo-preview-markdown.prose p) {
+   margin-top: 0 !important;
+   margin-bottom: 0.5em !important;
+}
+:deep(.memo-preview-markdown.prose h1),
+:deep(.memo-preview-markdown.prose h2),
+:deep(.memo-preview-markdown.prose h3) {
+   font-size: 1.1rem !important;
+   margin-top: 0 !important;
+   margin-bottom: 0.5em !important;
+   font-weight: bold;
+}
+:deep(.memo-preview-markdown.prose ul),
+:deep(.memo-preview-markdown.prose ol) {
+   margin-top: 0 !important;
+   margin-bottom: 0.5em !important;
+   padding-left: 1.25em !important;
 }
 </style>

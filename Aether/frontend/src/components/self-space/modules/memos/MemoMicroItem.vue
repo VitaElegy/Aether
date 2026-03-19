@@ -18,7 +18,7 @@
         
         <div class="flex-1 min-w-0 flex items-center gap-2">
             <span class="font-medium text-text-primary truncate transition-colors group-hover:text-primary">
-                {{ memo.title || memo.content }}
+                {{ memo.title || strippedContent }}
             </span>
             
             <!-- Tags (optional) -->
@@ -54,5 +54,15 @@ const statusColor = computed(() => {
         case 'Doing': return 'bg-blue-500 border-blue-500 ring-2 ring-blue-500/20';
         default: return '';
     }
+});
+
+// Strip raw markdown syntax for a clean single-line preview
+const strippedContent = computed(() => {
+    if (!props.memo.content) return 'Empty Note';
+    return props.memo.content
+        .replace(/[#*>`_~]/g, '') // Basic markdown characters
+        .replace(/\[([^\]]+)\]\([^\)]+\)/g, '$1') // Links (keep text)
+        .replace(/\n/g, ' ') // Flatten newlines
+        .trim();
 });
 </script>
