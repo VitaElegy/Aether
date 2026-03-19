@@ -83,12 +83,30 @@ export interface Paper {
     metadata?: PaperMetadata;
 }
 
+export interface FetchProgress {
+    active: boolean;
+    current: number;
+    total: number;
+    currentFeedName: string;
+    results: { success: number; errors: number; newItems: number };
+}
+
 export const usePrkbStore = defineStore('prkb', () => {
     const feeds = ref<Feed[]>([]);
     const inbox = ref<InboxItem[]>([]);
     const library = ref<Paper[]>([]);
-    const loading = ref(false); // Restored missing state
+    const loading = ref(false);
     const loadingFeeds = ref(new Set<string>());
+    const selectedFeeds = ref(new Set<string>()); // Track selected feeds
+
+    // UI Progress State
+    const fetchProgress = ref<FetchProgress>({
+        active: false,
+        current: 0,
+        total: 0,
+        currentFeedName: '',
+        results: { success: 0, errors: 0, newItems: 0 }
+    });
 
     const inboxTotalCount = ref(0);
     const publications = ref<string[]>([]); // Facets
@@ -101,6 +119,24 @@ export const usePrkbStore = defineStore('prkb', () => {
             feeds.value = res.data;
         } catch (e) {
             console.error(e);
+        }
+    };
+
+    const toggleFeedSelection = (feedId: string) => {
+        if (selectedFeeds.value.has(feedId)) {
+            selectedFeeds.value.delete(feedId);
+        } else {
+            selectedFeeds.value.add(feedId);
+        }
+    };
+
+    const selectAllFeeds = (forceValue?: boolean) => {
+        if (forceValue === true || (forceValue === undefined && selectedFeeds.value.size < feeds.value.length)) {
+            // Select all
+            feeds.value.forEach(f => selectedFeeds.value.add(f.id));
+        } else {
+            // Deselect all
+            selectedFeeds.value.clear();
         }
     };
 
@@ -121,10 +157,6 @@ export const usePrkbStore = defineStore('prkb', () => {
             console.error(e);
         }
     };
-
-    // ... (createFeed, deleteFeed unchanged)
-
-    // Inbox ...
 
     const createFeed = async (name: string, url: string, type: string) => {
         try {
@@ -154,10 +186,9 @@ export const usePrkbStore = defineStore('prkb', () => {
                 params.publication = publication;
             }
             const res = await axios.get('/api/prkb/inbox', { params });
-            // Handle both old array format (fallback) and new object format
             if (Array.isArray(res.data)) {
                 inbox.value = res.data;
-                inboxTotalCount.value = res.data.length; // Approximate fallback
+                inboxTotalCount.value = res.data.length;
             } else {
                 inbox.value = res.data.items;
                 inboxTotalCount.value = res.data.total;
@@ -168,53 +199,93 @@ export const usePrkbStore = defineStore('prkb', () => {
     };
 
     const refreshFeeds = async (feedId?: string) => {
+        if (loading.value || fetchProgress.value.active) return;
+
         loading.value = true;
 
+        // Define target feeds
+        let targetFeeds: Feed[] = [];
         if (feedId) {
-            loadingFeeds.value.add(feedId);
+            targetFeeds = feeds.value.filter(f => f.id === feedId);
+        } else if (selectedFeeds.value.size > 0) {
+            targetFeeds = feeds.value.filter(f => selectedFeeds.value.has(f.id));
         } else {
-            // If fetching all, technically all could be marked, but global loading is enough for main button
-            // If we want sidebar to spin for all, we could map IDs. 
-            // For simplicity, let's rely on global 'loading' for the main button,
-            // and 'loadingFeeds' for specific manual triggers.
-            // OR: we can mark all as loading if we list them.
-            feeds.value.forEach(f => loadingFeeds.value.add(f.id));
+            targetFeeds = [...feeds.value];
         }
 
-        try {
-            const res = await axios.post('/api/prkb/fetch', { feed_id: feedId || null });
-            const stats = res.data;
-
-            // Build detailed message
-            if (stats.details && stats.details.length > 0) {
-                const detailsStr = stats.details
-                    .filter((d: any) => d.count > 0 || d.status !== 'ok')
-                    .map((d: any) => {
-                        if (d.status !== 'ok') return `${d.feed_name}: Error`;
-                        return `${d.feed_name}: +${d.count}`;
-                    })
-                    .join(', ');
-
-                if (detailsStr) {
-                    MessagePlugin.success(`Fetched ${stats.total_count} items. (${detailsStr})`);
-                } else {
-                    MessagePlugin.info(`Check completed. No new items.`);
-                }
-            } else {
-                MessagePlugin.success(`Fetched ${stats.total_count} items`);
-            }
-            fetchInbox();
-            fetchFeeds(); // Update last fetched time
-        } catch (e) {
-            MessagePlugin.error('Failed to refresh feeds');
-        } finally {
+        if (targetFeeds.length === 0) {
             loading.value = false;
-            if (feedId) {
-                loadingFeeds.value.delete(feedId);
-            } else {
-                loadingFeeds.value.clear();
+            MessagePlugin.info('No feeds to refresh.');
+            return;
+        }
+
+        // Initialize progress
+        fetchProgress.value = {
+            active: true,
+            current: 0,
+            total: targetFeeds.length,
+            currentFeedName: '',
+            results: { success: 0, errors: 0, newItems: 0 }
+        };
+
+        // Fetch sequentially
+        for (const feed of targetFeeds) {
+            fetchProgress.value.current++;
+            fetchProgress.value.currentFeedName = feed.name;
+            loadingFeeds.value.add(feed.id);
+
+            try {
+                const res = await axios.post('/api/prkb/fetch', { feed_id: feed.id });
+                const stats = res.data;
+
+                // Detailed parsing of the new backend stats format
+                if (stats.details && stats.details.length > 0) {
+                    const detail = stats.details[0];
+                    if (detail.status === 'ok') {
+                        fetchProgress.value.results.success++;
+                        fetchProgress.value.results.newItems += detail.count;
+                    } else {
+                        fetchProgress.value.results.errors++;
+                    }
+                } else if (stats.total_count >= 0) {
+                    fetchProgress.value.results.success++;
+                    fetchProgress.value.results.newItems += stats.total_count;
+                }
+            } catch (e) {
+                console.error(`Failed to fetch feed: ${feed.name}`, e);
+                fetchProgress.value.results.errors++;
+            } finally {
+                loadingFeeds.value.delete(feed.id);
             }
         }
+
+        // Finalize
+        loading.value = false;
+        fetchProgress.value.active = false;
+        fetchProgress.value.currentFeedName = '';
+
+        // Display summary notification
+        if (feedId) {
+            const successCount = fetchProgress.value.results.success;
+            const items = fetchProgress.value.results.newItems;
+            if (successCount > 0) {
+                MessagePlugin.success(`Fetched ${items} new items from ${targetFeeds[0].name}.`);
+            } else {
+                MessagePlugin.error(`Failed to connect to ${targetFeeds[0].name}. The server may be blocking requests.`);
+            }
+        } else {
+            const { success, errors, newItems } = fetchProgress.value.results;
+            if (errors > 0 && success === 0) {
+                MessagePlugin.error(`Failed to refresh target feeds. All ${errors} sources errored.`);
+            } else if (errors > 0) {
+                MessagePlugin.warning(`Refresh complete. ${newItems} new items. (${success} succeeded, ${errors} failed)`);
+            } else {
+                MessagePlugin.success(`Refresh complete. ${newItems} new items across ${success} feeds.`);
+            }
+        }
+
+        fetchInbox();
+        fetchFeeds();
     };
 
     const savePaper = async (item: InboxItem) => {
@@ -300,6 +371,10 @@ export const usePrkbStore = defineStore('prkb', () => {
         library,
         loading,
         loadingFeeds,
+        fetchProgress,
+        selectedFeeds,
+        toggleFeedSelection,
+        selectAllFeeds,
         fetchFeeds,
         fetchPublications,
         fetchVenues,

@@ -1,54 +1,19 @@
-use quick_xml::de::from_str;
-use serde::Deserialize;
 use reqwest::Client;
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use crate::domain::prkb::models::InboxItem;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ArxivService {
     client: Client,
 }
 
-#[derive(Debug, Deserialize)]
-struct AtomFeed {
-    entry: Option<Vec<AtomEntry>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AtomEntry {
-    id: String,
-    title: String,
-    summary: String,
-    published: String,
-    author: Vec<AtomAuthor>,
-    link: Vec<AtomLink>,
-    #[serde(rename = "journal_ref", default)]
-    journal_ref: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-struct AtomAuthor {
-    name: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct AtomLink {
-    #[serde(rename = "@href")]
-    href: String,
-    #[allow(dead_code)]
-    #[serde(rename = "@rel", default)]
-    rel: Option<String>,
-    #[serde(rename = "@type", default)]
-    link_type: Option<String>,
-    #[serde(rename = "@title", default)]
-    title: Option<String>,
-}
-
 impl ArxivService {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        let client = Client::builder()
+            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Aether/1.0")
+            .build()
+            .unwrap_or_else(|_| Client::new());
+        Self { client }
     }
 
     pub async fn fetch_recent_by_category(&self, category: &str, limit: usize) -> Result<Vec<InboxItem>, anyhow::Error> {
@@ -57,62 +22,59 @@ impl ArxivService {
             category, limit
         );
 
-        let resp = self.client.get(&url).send().await?.text().await?;
-        
-        // Parse XML
-        let feed: AtomFeed = from_str(&resp)?;
+        let content = self.client.get(&url).send().await?.bytes().await?;
+        let feed = feed_rs::parser::parse(&content[..])?;
 
         let mut items = Vec::new();
-        if let Some(entries) = feed.entry {
-            for entry in entries {
-                let authors: Vec<String> = entry.author.iter().map(|a| a.name.clone()).collect();
-                
-                let pdf_url = entry.link.iter()
-                    .find(|l| l.link_type.as_deref() == Some("application/pdf") || l.title.as_deref() == Some("pdf")) // Arxiv uses title="pdf" sometimes or type
-                    .map(|l| l.href.clone())
-                    .or_else(|| {
-                         // Fallback logic for Arxiv PDF links if type is missing? 
-                         // Usually links are: 
-                         // <link href="http://arxiv.org/abs/2101.00001" rel="alternate" type="text/html"/>
-                         // <link title="pdf" href="http://arxiv.org/pdf/2101.00001" rel="related" type="application/pdf"/>
-                         entry.link.iter().find(|l| l.href.contains("/pdf/")).map(|l| l.href.clone())
-                    });
 
-                // Clean abstract (Arxiv often has newlines)
-                let abstract_text = entry.summary.replace("\n", " ").trim().to_string();
+        for entry in feed.entries {
+            let authors: Vec<String> = entry.authors.into_iter().map(|a| a.name).collect();
 
-                // Parse Date
-                let publish_date = DateTime::parse_from_rfc3339(&entry.published)
-                    .map(|dt| dt.with_timezone(&Utc))
-                    .unwrap_or(Utc::now());
+            let pdf_url = entry.links.iter()
+                .find(|l| {
+                    let mt = l.media_type.as_deref().unwrap_or("");
+                    let title = l.title.as_deref().unwrap_or("").to_lowercase();
+                    mt == "application/pdf" || title == "pdf" || l.href.contains("/pdf/")
+                })
+                .map(|l| l.href.clone());
 
-                items.push(InboxItem {
-                    id: uuid::Uuid::new_v4(), // Transient ID
-                    feed_id: uuid::Uuid::nil(), // Caller sets this
-                    external_id: entry.id.clone(), // Arxiv URL/ID
-                    title: entry.title.replace("\n", " ").trim().to_string(),
-                    authors,
-                    abstract_text,
-                    url: entry.id, // ID is often the ABS URL, move is fine here if it's last usage or clone
+            let abstract_text = entry.summary.map(|s| s.content)
+                .or_else(|| entry.content.map(|c| c.body.unwrap_or_default()))
+                .unwrap_or_default()
+                .replace("\n", " ").trim().to_string();
 
-                    pdf_url,
-                    publish_date,
-                    is_read: false,
-                    is_saved: false,
-                    fetched_at: Utc::now(),
-                    publication: entry.journal_ref,
-                });
-            }
+            let publish_date = entry.published
+                .or(entry.updated)
+                .unwrap_or_else(|| Utc::now());
+
+            let title = entry.title.map(|t| t.content).unwrap_or_else(|| "Untitled".to_string())
+                .replace("\n", " ").trim().to_string();
+
+            let external_id = entry.id.clone();
+            
+            let item_url = if external_id.starts_with("http") {
+                external_id.clone()
+            } else {
+                entry.links.first().map(|l| l.href.clone()).unwrap_or_else(|| external_id.clone())
+            };
+
+            items.push(InboxItem {
+                id: uuid::Uuid::new_v4(), // Transient ID
+                feed_id: uuid::Uuid::nil(), // Caller sets this
+                external_id,
+                title,
+                authors,
+                abstract_text,
+                url: item_url,
+                pdf_url,
+                publish_date,
+                is_read: false,
+                is_saved: false,
+                fetched_at: Utc::now(),
+                publication: None, // Assuming journal_ref is dropped in feed_rs Atom parse
+            });
         }
         
         Ok(items)
     }
 }
-
-// Helper to fix the quick-xml parsing issue with single vs multiple entries if needed.
-// However, quick-xml with serde `Vec` usually handles single item as 1-element vec if configured?
-// Defaults might be tricky. If `entry` is missing, it's None. If 1, it might fail to map to Vec without `serde_as`.
-// For simplicity, let's assume `Vec<AtomEntry>` works or we catch the error.
-// Ideally usage of `#[serde(default)]` helps. 
-// A robust way uses a custom deserializer or a wrapper enum.
-// Let's hope quick-xml handles `entry` appearing multiple times into a Vec.

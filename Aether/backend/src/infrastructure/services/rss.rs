@@ -10,14 +10,26 @@ pub struct RssService {
 
 impl RssService {
     pub fn new() -> Self {
-        Self {
-            client: Client::new(),
-        }
+        let client = Client::builder()
+            .user_agent("Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 Aether/1.0")
+            .build()
+            .unwrap_or_else(|_| Client::new());
+        Self { client }
     }
 
     pub async fn fetch_feed(&self, url: &str) -> Result<Vec<InboxItem>, anyhow::Error> {
-        let content = self.client.get(url).send().await?.bytes().await?;
-        let feed = feed_rs::parser::parse(&content[..])?;
+        let content = match self.client.get(url).send().await {
+            Ok(r) => r.bytes().await?,
+            Err(e) => return Err(anyhow::anyhow!("Request failed: {}", e)),
+        };
+
+        let feed = match feed_rs::parser::parse(&content[..]) {
+            Ok(f) => f,
+            Err(e) => {
+                let text = String::from_utf8_lossy(&content[..std::cmp::min(100, content.len())]);
+                return Err(anyhow::anyhow!("Parsing failed: {}. Body snippet: {:?}", e, text));
+            }
+        };
 
         let mut items = Vec::new();
 
@@ -26,10 +38,10 @@ impl RssService {
             let title = entry.title.map(|t| t.content).unwrap_or_else(|| "Untitled".to_string());
 
             // Extract URL
-            let url = entry.links.first().map(|l| l.href.clone()).unwrap_or_default();
+            let entry_url = entry.links.first().map(|l| l.href.clone()).unwrap_or_default();
 
             // Extract Authors
-            let authors: Vec<String> = entry.authors.iter().map(|p| p.name.clone()).collect();
+            let authors: Vec<String> = entry.authors.into_iter().map(|p| p.name).collect();
 
             // Extract Content/Summary
             let abstract_text = entry.summary.map(|s| s.content)
@@ -49,7 +61,7 @@ impl RssService {
                 title,
                 authors,
                 abstract_text, // Usually HTML in RSS, might need stripping
-                url,
+                url: entry_url,
                 pdf_url: None, // RSS rarely links PDFs directly, mostly HTML
                 publish_date,
                 is_read: false,

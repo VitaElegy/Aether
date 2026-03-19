@@ -159,8 +159,8 @@ async fn seed_prkb_feeds(db: &DatabaseConnection) {
     let feeds = vec![
         ("ArXiv Cryptography", "cs.CR", "arxiv"),
         ("Google Project Zero", "https://googleprojectzero.blogspot.com/feeds/posts/default", "rss"),
-        ("Sec-Circus", "https://sec-circus.com/feed", "rss"),
-        ("USENIX Security", "https://www.usenix.org/rss/conference/usenixsecurity24/rss.xml", "rss"),
+        ("The Hacker News", "https://thehackernews.com/feeds/posts/default", "rss"),
+        ("USENIX Security", "https://dblp.org/feed/streams/conf/uss.rss", "rss"),
         ("Full Disclosure", "https://seclists.org/rss/fulldisclosure.rss", "rss"),
     ];
 

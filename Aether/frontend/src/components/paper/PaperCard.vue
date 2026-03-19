@@ -7,7 +7,11 @@
         <h3 class="text-base font-bold text-gray-900 leading-snug font-serif group-hover:text-blue-700 mb-1">
           {{ paper.title }}
         </h3>
-        <div class="flex items-center gap-2 text-xs text-gray-500 font-mono">
+        <div class="flex items-center flex-wrap gap-2 text-xs text-gray-500 font-mono">
+           <!-- Card Type Badge -->
+           <span :class="itemTypeClasses" class="px-1.5 py-0.5 rounded-sm uppercase tracking-wide text-[10px] font-bold">
+              {{ itemType }}
+           </span>
            <span v-if="displayVenue" class="px-1.5 py-0.5 bg-gray-100 text-gray-700 rounded-sm uppercase tracking-wide text-[10px] font-bold">
              {{ displayVenue }}
            </span>
@@ -154,6 +158,38 @@ const props = defineProps({
 defineEmits(['save', 'update', 'trash']);
 
 // ... computeds ...
+
+// Card Type Inference
+const itemType = computed(() => {
+    const pub = (props.paper.publication || '').toLowerCase();
+    const url = (props.paper.url || '').toLowerCase();
+    
+    // ArXiv CS preprints
+    if (pub.startsWith('cs.') || url.includes('arxiv.org')) {
+        return 'Preprint';
+    }
+    
+    // DBLP Conferences (USENIX, CCS, NDSS, Oakland, etc)
+    if (url.includes('dblp.org') || pub.includes('usenix') || pub.includes('ccs') || pub.includes('ndss')) {
+        return 'Conference';
+    }
+    
+    // Everything else (Google Project Zero, Sec-Circus, Hacker News, Full Disclosure)
+    return 'News / Blog';
+});
+
+const itemTypeClasses = computed(() => {
+    switch (itemType.value) {
+        case 'Preprint':
+            return 'bg-purple-100 text-purple-700 border border-purple-200';
+        case 'Conference':
+            return 'bg-blue-100 text-blue-700 border border-blue-200';
+        case 'News / Blog':
+            return 'bg-orange-100 text-orange-700 border border-orange-200';
+        default:
+            return 'bg-gray-100 text-gray-700';
+    }
+});
 
 const displayTrack = computed(() => props.paper.metadata?.track);
 const displaySeries = computed(() => props.paper.metadata?.series);

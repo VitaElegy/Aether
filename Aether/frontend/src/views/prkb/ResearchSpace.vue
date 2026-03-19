@@ -2,7 +2,20 @@
   <div class="h-full">
     <Paper_v1Layout v-model:activeTab="activeTab" @add-feed="showAddFeed = true">
       <template #tools>
+         <div v-if="store.fetchProgress.active" class="flex items-center space-x-3 bg-white px-4 py-2 rounded-md shadow-sm border border-blue-200 min-w-[300px]">
+             <i class="ri-loader-4-line animate-spin text-blue-500"></i>
+             <div class="flex-1">
+                 <div class="flex justify-between text-xs text-gray-500 mb-1">
+                     <span class="truncate max-w-[180px]">Fetching {{ store.fetchProgress.current }}/{{ store.fetchProgress.total }}: {{ store.fetchProgress.currentFeedName }}</span>
+                     <span>{{ Math.round((store.fetchProgress.current / store.fetchProgress.total) * 100) }}%</span>
+                 </div>
+                 <div class="w-full bg-gray-200 rounded-full h-1.5">
+                     <div class="bg-blue-500 h-1.5 rounded-full transition-all duration-300" :style="{ width: `${(store.fetchProgress.current / store.fetchProgress.total) * 100}%` }"></div>
+                 </div>
+             </div>
+         </div>
          <button 
+            v-else
             @click="store.refreshFeeds()"
             :disabled="store.loading"
             class="flex items-center px-4 py-2 text-sm font-bold text-white bg-gray-900 border border-transparent rounded-md hover:bg-gray-800 disabled:opacity-50 transition-all shadow-sm"
@@ -65,14 +78,14 @@
             <t-form-item label="Quick Add from Popular Sources">
                 <t-select placeholder="Select a preset..." @change="onPresetSelect">
                     <t-option-group label="Conferences (DBLP RSS)">
-                        <t-option value="CCS|https://dblp.org/db/conf/ccs/index.rss|rss" label="ACM CCS" />
-                        <t-option value="S&P|https://dblp.org/db/conf/sp/index.rss|rss" label="IEEE S&P (Oakland)" />
-                        <t-option value="NDSS|https://dblp.org/db/conf/ndss/index.rss|rss" label="NDSS Symposium" />
-                        <t-option value="USENIX|https://dblp.org/db/conf/uss/index.rss|rss" label="USENIX Security" />
+                        <t-option value="CCS|https://dblp.org/feed/streams/conf/ccs.rss|rss" label="ACM CCS" />
+                        <t-option value="S&P|https://dblp.org/feed/streams/conf/sp.rss|rss" label="IEEE S&P (Oakland)" />
+                        <t-option value="NDSS|https://dblp.org/feed/streams/conf/ndss.rss|rss" label="NDSS Symposium" />
+                        <t-option value="USENIX|https://dblp.org/feed/streams/conf/uss.rss|rss" label="USENIX Security" />
                     </t-option-group>
                     <t-option-group label="Blogs & News">
                          <t-option value="Google Project Zero|https://googleprojectzero.blogspot.com/feeds/posts/default|rss" label="Google Project Zero" />
-                         <t-option value="Sec-Circus|https://sec-circus.com/feed|rss" label="Sec-Circus" />
+                         <t-option value="The Hacker News|https://thehackernews.com/feeds/posts/default|rss" label="The Hacker News" />
                          <t-option value="Full Disclosure|https://seclists.org/rss/fulldisclosure.rss|rss" label="Full Disclosure" />
                     </t-option-group>
                     <t-option-group label="ArXiv Categories">

@@ -35,18 +35,28 @@
 
         <div class="mt-8 px-3 mb-2 flex items-center justify-between text-xs font-semibold text-gray-400 uppercase tracking-wider">
             <span>Feeds</span>
-            <span class="text-[10px] cursor-pointer hover:text-gray-600" @click="store.fetchFeeds()">REFRESH LIST</span>
+            <div class="flex space-x-2">
+                <span class="text-[10px] cursor-pointer hover:text-gray-600" @click="store.selectAllFeeds()">TOGGLE ALL</span>
+                <span class="text-[10px] cursor-pointer hover:text-gray-600" @click="store.fetchFeeds()">REFRESH</span>
+            </div>
         </div>
         
         <div v-if="store.feeds.length === 0" class="px-3 py-2 text-sm text-gray-500 italic">
             No feeds added.
         </div>
 
-        <div v-for="feed in store.feeds" :key="feed.id" class="group flex items-center justify-between px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-gray-50 transition-colors">
-            <span class="truncate max-w-[120px] flex items-center" :title="feed.name">
+        <div v-for="feed in store.feeds" :key="feed.id" class="group flex items-center justify-between px-3 py-2 text-sm text-gray-600 rounded-md hover:bg-gray-50 transition-colors cursor-pointer" @click="store.toggleFeedSelection(feed.id)">
+            <span class="truncate max-w-[150px] flex items-center" :title="feed.name">
+                 <input 
+                    type="checkbox" 
+                    :checked="store.selectedFeeds.has(feed.id)"
+                    @click.stop
+                    @change="store.toggleFeedSelection(feed.id)"
+                    class="mr-2 cursor-pointer w-3.5 h-3.5 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                 />
                  <!-- Status Dot / Spinner -->
-                 <span v-if="store.loadingFeeds.has(feed.id)" class="w-2 h-2 mr-2 inline-block rounded-full border-2 border-blue-400 border-t-transparent animate-spin"></span>
-                 <span v-else class="w-2 h-2 mr-2 inline-block rounded-full" 
+                 <span v-if="store.loadingFeeds.has(feed.id)" class="w-1.5 h-1.5 mr-1.5 inline-block rounded-full border-2 border-blue-400 border-t-transparent animate-spin"></span>
+                 <span v-else class="w-1.5 h-1.5 mr-1.5 inline-block rounded-full" 
                        :class="feed.last_fetched_at ? 'bg-green-500' : 'bg-gray-300'"
                        :title="feed.last_fetched_at ? 'Last fetched: ' + new Date(feed.last_fetched_at).toLocaleString() : 'Never fetched'"
                  ></span>
