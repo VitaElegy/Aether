@@ -102,6 +102,13 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
         backup_service.clone()
     ).with_id("assets_v1".to_string())));
 
+    // Blanket Default Provider Aliases for all other supported layout templates
+    for alias in ["memo", "vrkb", "prkb", "math_v3"] {
+        portability_service.register_provider(Arc::new(DefaultPortabilityProvider::new(
+            backup_service.clone()
+        ).with_id(alias.to_string())));
+    }
+
     let portability_service = Arc::new(portability_service);
 
     let arxiv_service = Arc::new(ArxivService::new());

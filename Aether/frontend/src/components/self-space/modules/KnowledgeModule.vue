@@ -59,6 +59,12 @@ watch(selectedTemplateId, (newVal) => {
 });
 const showCreateLayoutModal = ref(false);
 
+// -- Import Backup State --
+const kbFormTab = ref<'blank' | 'import'>('blank');
+const importFile = ref<File | null>(null);
+const importSummary = ref<any | null>(null);
+const importing = ref(false);
+
 const kbFormLayoutMeta = computed(() => {
     if (!LAYOUTS.value || LAYOUTS.value.length === 0) {
         return {
@@ -395,6 +401,54 @@ const createKb = async () => {
         } else {
             alert(`Creation Failed: ${e.message}`);
         }
+    }
+};
+
+// -- Import --
+const handleImportFileChange = async (event: Event) => {
+    const target = event.target as HTMLInputElement;
+    if (!target.files?.length) return;
+    
+    importFile.value = target.files[0];
+    importSummary.value = null; // reset
+    console.log('[KnowledgeModule] File selected for import:', importFile.value.name, importFile.value.size, importFile.value.type);
+    
+    try {
+        console.log('[KnowledgeModule] Requesting preview...');
+        importSummary.value = await backupApi.preview(importFile.value);
+        console.log('[KnowledgeModule] Preview success:', importSummary.value);
+    } catch (e: any) {
+        console.error('[KnowledgeModule] Preview failed', e);
+        if (e.response && e.response.status === 401) {
+             alert('Authentication failed: You are not authorized to preview this backup. Please login again.');
+        } else if (e.response && e.response.data && e.response.data.error) {
+             alert(`Preview Error: ${e.response.data.error}`);
+        } else {
+             alert('Failed to preview backup file. It might be corrupted or invalid.');
+        }
+        importFile.value = null;
+    }
+};
+
+const confirmImport = async () => {
+    if (!importFile.value) return;
+    importing.value = true;
+    try {
+        await backupApi.restore(importFile.value);
+        MessagePlugin.success('Knowledge Base imported successfully.');
+        kbFormVisible.value = false;
+        
+        // Reset state
+        importFile.value = null;
+        importSummary.value = null;
+        kbFormTab.value = 'blank';
+        
+        fetchKBs();
+    } catch (e: any) {
+        console.error('Import failed', e);
+        alert('Failed to import Knowledge Base.');
+    } finally {
+        importing.value = false;
     }
 };
 
@@ -901,7 +955,27 @@ onUnmounted(() => {
             class="fixed inset-0 z-50 flex items-center justify-center bg-black/20 backdrop-blur-sm"
             @click.self="kbFormVisible = false">
             <div class="bg-paper p-6 rounded-lg border border-ink/10 shadow-xl w-96 max-w-full">
-                <h3 class="text-lg font-bold mb-4">New Knowledge Base</h3>
+                
+                <!-- Header & Tabs -->
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-bold">New Knowledge Base</h3>
+                    <div class="flex bg-surface rounded p-1 text-xs">
+                        <button 
+                            @click="kbFormTab = 'blank'"
+                            class="px-3 py-1 rounded transition-colors"
+                            :class="kbFormTab === 'blank' ? 'bg-paper shadow-sm font-medium' : 'text-ink/60 hover:text-ink'">
+                            Blank
+                        </button>
+                        <button 
+                            @click="kbFormTab = 'import'"
+                            class="px-3 py-1 rounded transition-colors"
+                            :class="kbFormTab === 'import' ? 'bg-paper shadow-sm font-medium' : 'text-ink/60 hover:text-ink'">
+                            Import
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="kbFormTab === 'blank'">
                 <input v-model="kbForm.title" placeholder="Title"
                     class="w-full bg-surface border border-ink/10 rounded px-3 py-2 mb-3 text-sm focus:outline-none focus:border-accent"
                     autoFocus />
@@ -965,11 +1039,53 @@ onUnmounted(() => {
                     <input v-model="kbForm.cover_image" placeholder="Or enter image URL..."
                         class="mt-2 w-full bg-transparent border-b border-ink/10 py-1 text-xs text-ink/60 focus:outline-none focus:border-accent" />
                 </div>
-                <div class="flex justify-end gap-2 text-xs font-medium">
+                <div class="flex justify-end gap-2 text-xs font-medium mt-4">
                     <button @click="kbFormVisible = false" class="px-3 py-1.5 hover:bg-surface rounded">Cancel</button>
                     <button @click="createKb"
                         class="bg-ink text-paper px-3 py-1.5 rounded hover:bg-accent transition-colors">Create</button>
                 </div>
+                </div> <!-- End Blank Tab -->
+
+                <div v-else-if="kbFormTab === 'import'" class="space-y-4">
+                    <div class="border-2 border-dashed border-ink/10 rounded-lg p-6 text-center hover:border-accent/50 transition-colors bg-surface">
+                        <input type="file" id="import-akb" accept=".akb,.zip" class="hidden" 
+                            @click="($event.target as HTMLInputElement).value = ''"
+                            @change="handleImportFileChange" />
+                        <label for="import-akb" class="cursor-pointer flex flex-col items-center gap-2">
+                            <i class="ri-upload-cloud-2-line text-3xl text-ink/40"></i>
+                            <span class="text-sm font-medium text-ink/80">{{ importFile ? importFile.name : 'Select .akb or .zip file' }}</span>
+                            <span v-if="!importFile" class="text-xs text-ink/40">Click to browse your backups</span>
+                        </label>
+                    </div>
+
+                    <!-- Preview Summary -->
+                    <div v-if="importSummary" class="bg-surface rounded border border-ink/10 p-3 text-sm">
+                        <div class="flex justify-between items-center mb-2 pb-2 border-b border-ink/5">
+                            <span class="font-medium">Preview Summary</span>
+                            <span class="bg-blue-100 text-blue-800 text-[10px] uppercase font-bold px-2 py-0.5 rounded">Ready</span>
+                        </div>
+                        <ul class="space-y-1.5 text-xs">
+                            <li class="flex justify-between items-center">
+                                <span class="text-ink/60">Total Items:</span>
+                                <span class="font-bold">{{ importSummary.total_items }}</span>
+                            </li>
+                            <li v-for="section in importSummary.sections" :key="section.name" class="flex justify-between items-center bg-paper px-2 py-1 rounded">
+                                <span class="text-ink/80">{{ section.name }}</span>
+                                <span class="text-ink/60 font-mono">{{ section.count }}</span>
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="flex justify-end gap-2 text-xs font-medium pt-2">
+                        <button @click="kbFormVisible = false" class="px-3 py-1.5 hover:bg-surface rounded">Cancel</button>
+                        <button @click="confirmImport"
+                            :disabled="!importFile || importing"
+                            class="bg-ink text-paper px-3 py-1.5 rounded hover:bg-accent transition-colors disabled:opacity-50 flex items-center gap-2">
+                            <i v-if="importing" class="ri-loader-4-line animate-spin"></i>
+                            {{ importing ? 'Importing...' : 'Confirm Import' }}
+                        </button>
+                    </div>
+                </div> <!-- End Import Tab -->
             </div>
         </div>
 

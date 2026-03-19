@@ -67,9 +67,9 @@ impl PortabilityProvider for DefaultPortabilityProvider {
 
         let _ = progress.send(ProgressEvent {
             task_id,
-            stage: "Completed".to_string(),
-            percent: 100,
-            message: "Backup ready.".to_string(),
+            stage: "Finalizing".to_string(),
+            percent: 99,
+            message: "Backup ready. Saving to disk...".to_string(),
             error: None,
         }).await;
 

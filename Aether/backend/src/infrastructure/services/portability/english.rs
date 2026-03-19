@@ -245,9 +245,9 @@ impl PortabilityProvider for EnglishPortabilityProvider {
 
         let _ = progress.send(ProgressEvent {
             task_id,
-            stage: "Completed".to_string(),
-            percent: 100,
-            message: "Export ready for download.".to_string(),
+            stage: "Finalizing".to_string(),
+            percent: 99,
+            message: "Export ready. Saving to disk...".to_string(),
             error: None,
         }).await;
 

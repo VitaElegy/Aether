@@ -44,3 +44,11 @@ This file serves as the long-term memory for the AI Agent. Read this upon initia
 - **Methodology**: **Code-First with `utoipa`**. Do not manually edit YAML/JSON specs. Annotate Rust controllers with macros.
 - **Error Handling**: Define **Detailed Business Errors** in the spec (e.g., `TitleExists`), not just generic HTTP codes.
 - **Frontend**: Generate **TypeScript Types (`.d.ts`)** only. Do not generate full API clients; keep manual control over `axios` calls for flexibility.
+
+### 8. Frontend API Client Authentication
+- **Symptom**: `401 Unauthorized` or parsing/data-not-found errors in newly created frontend modules or when integrating new backend endpoints.
+- **Cause**: The frontend uses manual `axios` API client files (e.g., `api/knowledge.ts`, `api/backup.ts`) instead of auto-generated clients. Developers/Agents frequently forget to attach the JWT token to new requests.
+- **Solution**: **ALWAYS** implement a helper function for headers (e.g., `getAuthHeaders()`) in your API client file and spread or pass it into the `axios` config argument. 
+- **Checklist for New Endpoints**:
+    - [ ] Did I pass `{ headers: { 'Authorization': \`Bearer ${localStorage.getItem('token')}\` } }` to `axios`?
+    - [ ] If using `FormData` (e.g., file uploads/imports), did I combine the `Content-Type: multipart/form-data` with the `Authorization` header?

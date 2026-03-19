@@ -22,6 +22,7 @@ pub fn router() -> Router<AppState> {
         .route("/", get(list_backups).post(create_backup))
         .route("/download/:filename", get(download_backup))
         .route("/restore", post(restore_backup))
+        .route("/preview", post(preview_backup))
 }
 
 async fn create_backup(
@@ -126,7 +127,7 @@ async fn restore_backup(
     let path = file_path.ok_or((StatusCode::BAD_REQUEST, "No file uploaded".to_string()))?;
 
     // 2. Trigger Restore
-    let new_kb_id = state.backup_service.restore_backup(path.clone(), user.id).await
+    let new_kb_id = state.backup_service.restore_backup(path.clone(), user.id, None, None).await
         .map_err(|e| {
             // Try to cleanup
             let _ = std::fs::remove_file(&path);
@@ -140,4 +141,48 @@ async fn restore_backup(
         "status": "success",
         "new_kb_id": new_kb_id
     })))
+}
+
+async fn preview_backup(
+    State(state): State<AppState>,
+    _user: AuthenticatedUser,
+    mut multipart: Multipart,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    // 1. Receive File
+    let mut file_path = None;
+    
+    while let Some(field) = multipart.next_field().await.map_err(|e| (StatusCode::BAD_REQUEST, e.to_string()))? {
+        if field.name() == Some("file") {
+            let filename = field.file_name().unwrap_or("backup.akb").to_string();
+            // Validate extension
+            if !filename.ends_with(".akb") && !filename.ends_with(".zip") {
+                return Err((StatusCode::BAD_REQUEST, "Invalid file type. Must be .akb or .zip".to_string()));
+            }
+
+            // Save to temp
+            let temp_dir = std::env::temp_dir();
+            let target_path = temp_dir.join(format!("preview_{}_{}", Uuid::new_v4(), filename));
+            
+            let data = field.bytes().await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            tokio::fs::write(&target_path, data).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            
+            file_path = Some(target_path);
+            break; // One file only
+        }
+    }
+
+    let path = file_path.ok_or((StatusCode::BAD_REQUEST, "No file uploaded".to_string()))?;
+
+    // 2. Trigger Preview
+    let summary = state.backup_service.preview_backup(&path)
+        .map_err(|e| {
+            // Try to cleanup
+            let _ = std::fs::remove_file(&path);
+            (StatusCode::BAD_REQUEST, e)
+        })?;
+
+    // Cleanup
+    let _ = std::fs::remove_file(path);
+
+    Ok(Json(summary))
 }

@@ -74,7 +74,6 @@ async fn start_export(
 
 async fn task_progress(
     State(state): State<AppState>,
-    _user: AuthenticatedUser,
     Path(task_id): Path<Uuid>,
 ) -> impl IntoResponse {
     // Retrieve receiver
@@ -82,7 +81,7 @@ async fn task_progress(
     
     let stream: Pin<Box<dyn Stream<Item = Result<Event, axum::Error>> + Send>> = if let Some(rx) = rx_opt {
         let s = ReceiverStream::new(rx)
-            .map(|event| Event::default().json_data(event).map_err(axum::Error::new));
+            .map(|event| Event::default().event("message").json_data(event).map_err(axum::Error::new));
         Box::pin(s)
     } else {
         let s = tokio_stream::once(Ok(Event::default().event("error").data("Task not found or already consumed")));
@@ -92,24 +91,36 @@ async fn task_progress(
     Sse::new(stream).keep_alive(axum::response::sse::KeepAlive::new().interval(Duration::from_secs(1)))
 }
 
+use axum::body::Body;
+use axum::http::header;
+
 async fn download_export(
-    State(_state): State<AppState>,
-    _user: AuthenticatedUser,
-    Path(_task_id): Path<Uuid>,
+    State(state): State<AppState>,
+    Path(task_id): Path<Uuid>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    // TODO: Implement download logic.
-    // The export task should have saved the file path somewhere accessible by task_id.
-    // For MVP, the "Completed" event in SSE carries the download URL or path.
-    // Or we can store the result in PortabilityService.
     
-    // Since we didn't implement result storage in PortabilityService yet (just fire and forget),
-    // we can't easily serve it here without refactoring.
-    
-    // FIX: The SSE "Completed" message should contain a direct link to a static file handler 
-    // OR we need to store the result.
-    
-    // For now, let's assume the frontend uses the link provided in the SSE event.
-    // But wait, the SSE event just says "Export ready".
-    
-    Err::<axum::response::Response, (StatusCode, String)>((StatusCode::NOT_IMPLEMENTED, "Download via task ID not yet implemented. Use the link from progress event.".to_string()).into())
+    // 1. Fetch file path from completed tasks
+    let file_path = state.portability_service.get_task_result(task_id)
+        .ok_or_else(|| (StatusCode::NOT_FOUND, "Export archive not found or expired.".to_string()))?;
+
+    // 2. Open the file asynchronously
+    let file = tokio::fs::File::open(&file_path)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("Failed to open export file: {}", e)))?;
+
+    // 3. Create a stream from the file
+    let stream = tokio_util::io::ReaderStream::new(file);
+    let body = Body::from_stream(stream);
+
+    // 4. Build the final response with headers
+    let filename = file_path.file_name()
+        .and_then(|name| name.to_str())
+        .unwrap_or("export.zip");
+
+    let headers = [
+        (header::CONTENT_TYPE, "application/zip".to_string()),
+        (header::CONTENT_DISPOSITION, format!("attachment; filename=\"{}\"", filename)),
+    ];
+
+    Ok((headers, body))
 }

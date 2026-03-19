@@ -19,26 +19,26 @@ use crate::domain::models::{
 
 // --- Meta Schema ---
 
-#[derive(Serialize, Deserialize)]
-struct BackupMeta {
-    version: String,
-    exported_at: String,
-    knowledge_base: BackupKbMeta,
-    nodes: Vec<BackupNodeMeta>,
-    assets_map: HashMap<Uuid, String>, // Asset UUID -> Zip Path (assets/hash.png)
-}
-
-#[derive(Serialize, Deserialize)]
-struct BackupKbMeta {
-    id: Uuid,
-    title: String,
-    description: Option<String>,
-    renderer_id: Option<String>,
-    tags: Vec<String>,
+#[derive(Serialize, Deserialize, Clone)]
+pub struct BackupMeta {
+    pub version: String,
+    pub exported_at: String,
+    pub knowledge_base: BackupKbMeta,
+    pub nodes: Vec<BackupNodeMeta>,
+    pub assets_map: HashMap<Uuid, String>, // Asset UUID -> Zip Path (assets/hash.png)
 }
 
 #[derive(Serialize, Deserialize, Clone)]
-struct BackupNodeMeta {
+pub struct BackupKbMeta {
+    pub id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub renderer_id: Option<String>,
+    pub tags: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct BackupNodeMeta {
     id: Uuid,
     parent_id: Option<Uuid>,
     title: String,
@@ -272,7 +272,51 @@ impl BackupService {
         Ok(files)
     }
 
-    pub async fn restore_backup(&self, file_path: PathBuf, user_id: Uuid) -> Result<Uuid, String> {
+    pub fn preview_backup(&self, file_path: &PathBuf) -> Result<crate::domain::portability::models::ImportSummary, String> {
+        let file = std::fs::File::open(file_path).map_err(|e| e.to_string())?;
+        let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
+
+        let mut meta_file = archive.by_name("meta.json").map_err(|_| "Invalid backup: missing meta.json")?;
+        let mut meta_content = String::new();
+        meta_file.read_to_string(&mut meta_content).map_err(|e| e.to_string())?;
+        
+        let meta: BackupMeta = serde_json::from_str(&meta_content).map_err(|e| format!("Invalid meta.json: {}", e))?;
+        
+        let mut sections = vec![
+            crate::domain::portability::models::ImportSection {
+                name: "Knowledge Base Header".to_string(),
+                count: 1,
+                action: "Create".to_string(),
+            },
+            crate::domain::portability::models::ImportSection {
+                name: "Articles/Folders".to_string(),
+                count: meta.nodes.len(),
+                action: "Create".to_string(),
+            }
+        ];
+        
+        if !meta.assets_map.is_empty() {
+            sections.push(crate::domain::portability::models::ImportSection {
+                name: "Media Assets".to_string(),
+                count: meta.assets_map.len(),
+                action: "Create".to_string(),
+            });
+        }
+        
+        Ok(crate::domain::portability::models::ImportSummary {
+            total_items: meta.nodes.len() + meta.assets_map.len() + 1,
+            sections,
+            conflicts: vec![],
+        })
+    }
+
+    pub async fn restore_backup(
+        &self, 
+        file_path: PathBuf, 
+        user_id: Uuid, 
+        task_id: Option<Uuid>, 
+        progress: Option<tokio::sync::mpsc::Sender<crate::domain::portability::models::ProgressEvent>>
+    ) -> Result<Uuid, String> {
         // 1. Open Zip
         let file = std::fs::File::open(&file_path).map_err(|e| e.to_string())?;
         let mut archive = ZipArchive::new(file).map_err(|e| e.to_string())?;
@@ -284,6 +328,16 @@ impl BackupService {
         drop(meta_file); // Release borrow
 
         let meta: BackupMeta = serde_json::from_str(&meta_content).map_err(|e| format!("Invalid meta.json: {}", e))?;
+
+        if let (Some(tid), Some(tx)) = (task_id, &progress) {
+            let _ = tx.send(crate::domain::portability::models::ProgressEvent {
+                task_id: tid,
+                stage: "Restoring".to_string(),
+                percent: 10,
+                message: "Creating new Knowledge Base...".to_string(),
+                error: None,
+            }).await;
+        }
 
         // 3. Create NEW Knowledge Base
         let new_kb_id = Uuid::new_v4();
@@ -310,7 +364,18 @@ impl BackupService {
         let mut asset_id_map: HashMap<Uuid, Uuid> = HashMap::new();
 
         // 5. Restore Assets
-        for (old_asset_uuid, zip_path) in meta.assets_map {
+        let total_assets = meta.assets_map.len();
+        for (i, (old_asset_uuid, zip_path)) in meta.assets_map.into_iter().enumerate() {
+            if let (Some(tid), Some(tx)) = (task_id, &progress) {
+                let percent = 10 + ((i as f32 / total_assets as f32) * 30.0) as u8;
+                let _ = tx.send(crate::domain::portability::models::ProgressEvent {
+                    task_id: tid,
+                    stage: "Restoring Assets".to_string(),
+                    percent,
+                    message: format!("Importing media {}/{}", i + 1, total_assets),
+                    error: None,
+                }).await;
+            }
             // Extract file from zip to memory
             let mut asset_file = archive.by_name(&zip_path).map_err(|_| format!("Asset missing: {}", zip_path))?;
             let mut buffer = Vec::new();
@@ -351,7 +416,18 @@ impl BackupService {
 
         let asset_regex = Regex::new(r"\[\[asset:([0-9a-fA-F-]+)\]\]").unwrap();
 
-        for node_meta in sorted_nodes {
+        let total_nodes = sorted_nodes.len();
+        for (i, node_meta) in sorted_nodes.into_iter().enumerate() {
+            if let (Some(tid), Some(tx)) = (task_id, &progress) {
+                let percent = 40 + ((i as f32 / total_nodes as f32) * 55.0) as u8;
+                let _ = tx.send(crate::domain::portability::models::ProgressEvent {
+                    task_id: tid,
+                    stage: "Restoring Content".to_string(),
+                    percent,
+                    message: format!("Importing document {}/{}", i + 1, total_nodes),
+                    error: None,
+                }).await;
+            }
             let new_id = *node_id_map.get(&node_meta.id).unwrap();
             
             // Resolve Parent

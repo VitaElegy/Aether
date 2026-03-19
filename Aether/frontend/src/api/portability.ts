@@ -36,10 +36,12 @@ export const portabilityApi = {
   // Helper to connect to SSE
   connectProgress: (taskId: string, onEvent: (event: ProgressEvent) => void, onError: (err: any) => void) => {
     const eventSource = new EventSource(`${API_URL}/tasks/${taskId}/progress`);
-    
+
     eventSource.onmessage = (event) => {
       try {
+        console.log("Raw SSE Event:", event.data);
         const data = JSON.parse(event.data);
+        console.log("Parsed SSE Data:", data);
         onEvent(data);
         if (data.stage === 'Completed' || data.error) {
           eventSource.close();
@@ -56,7 +58,7 @@ export const portabilityApi = {
 
     return eventSource;
   },
-  
+
   // Helper for download URL
   getDownloadUrl: (taskId: string) => `${API_URL}/tasks/${taskId}/download`
 };
