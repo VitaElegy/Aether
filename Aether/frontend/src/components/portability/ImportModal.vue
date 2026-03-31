@@ -14,7 +14,9 @@
       <div class="p-6">
         <div class="text-center py-8 text-gray-500">
           <p>Import functionality coming soon.</p>
-          <p class="text-xs mt-2">Currently supports .zip / .akb restoration via Backup Manager.</p>
+          <p class="text-xs mt-2">
+            Backup Manager restores `.akb`, legacy snapshot `.zip`, and current Smart Portability ZIP packages with embedded snapshots.
+          </p>
         </div>
       </div>
       

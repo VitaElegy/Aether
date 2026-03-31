@@ -24,12 +24,20 @@ export interface ProgressEvent {
 
 export const portabilityApi = {
   analyzeExport: async (kbId: string): Promise<ExportSummary> => {
-    const response = await axios.get(`${API_URL}/${kbId}/export/preview`);
+    const response = await axios.get(`${API_URL}/${kbId}/export/preview`, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
     return response.data;
   },
 
   startExport: async (kbId: string): Promise<string> => {
-    const response = await axios.post(`${API_URL}/${kbId}/export/start`);
+    const response = await axios.post(`${API_URL}/${kbId}/export/start`, undefined, {
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+      },
+    });
     return response.data.task_id;
   },
 

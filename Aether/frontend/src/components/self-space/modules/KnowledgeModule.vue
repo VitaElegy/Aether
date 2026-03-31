@@ -10,7 +10,13 @@ import { useRouter } from 'vue-router';
 import { knowledgeApi, type KnowledgeBase } from '../../../api/knowledge';
 import { contentApi, type Content } from '../../../api/content';
 import { uploadApi } from '../../../api/upload';
-import { backupApi } from '../../../api/backup';
+import {
+    backupApi,
+    extractBackupApiError,
+    formatBackupApiError,
+    type BackupApiErrorDetails,
+    type ImportSummary,
+} from '../../../api/backup';
 import TagInput from '../../common/TagInput.vue';
 import UserSelect from '../../common/UserSelect.vue';
 import BlockRenderer from '../renderer/BlockRenderer.vue';
@@ -23,6 +29,7 @@ import { inject } from 'vue';
 const os = inject<{ launchApp: (id: string) => void }>('os');
 
 import ExportModal from '@/components/portability/ExportModal.vue';
+import { resolveSpecialKbRenderer } from '@/registries/special_kb_registry';
 
 // -- State --
 const router = useRouter();
@@ -62,7 +69,8 @@ const showCreateLayoutModal = ref(false);
 // -- Import Backup State --
 const kbFormTab = ref<'blank' | 'import'>('blank');
 const importFile = ref<File | null>(null);
-const importSummary = ref<any | null>(null);
+const importSummary = ref<ImportSummary | null>(null);
+const importError = ref<BackupApiErrorDetails | null>(null);
 const importing = ref(false);
 
 const kbFormLayoutMeta = computed(() => {
@@ -79,6 +87,10 @@ const kbFormLayoutMeta = computed(() => {
     // Loop up by selectedTemplateId (UI State)
     return LAYOUTS.value.find(l => l.id === selectedTemplateId.value) || LAYOUTS.value[0];
 });
+
+const isAssetsRenderer = (rendererId?: string) => {
+    return resolveSpecialKbRenderer(rendererId)?.canonicalRendererId === 'assets_v1';
+};
 
 // Settings Form
 const settingsForm = ref({
@@ -410,29 +422,26 @@ const handleImportFileChange = async (event: Event) => {
     if (!target.files?.length) return;
     
     importFile.value = target.files[0];
-    importSummary.value = null; // reset
+    importSummary.value = null;
+    importError.value = null;
     console.log('[KnowledgeModule] File selected for import:', importFile.value.name, importFile.value.size, importFile.value.type);
     
     try {
         console.log('[KnowledgeModule] Requesting preview...');
         importSummary.value = await backupApi.preview(importFile.value);
+        importError.value = null;
         console.log('[KnowledgeModule] Preview success:', importSummary.value);
     } catch (e: any) {
-        console.error('[KnowledgeModule] Preview failed', e);
-        if (e.response && e.response.status === 401) {
-             alert('Authentication failed: You are not authorized to preview this backup. Please login again.');
-        } else if (e.response && e.response.data && e.response.data.error) {
-             alert(`Preview Error: ${e.response.data.error}`);
-        } else {
-             alert('Failed to preview backup file. It might be corrupted or invalid.');
-        }
-        importFile.value = null;
+        importError.value = extractBackupApiError(e, 'Failed to preview backup file.');
+        console.error('[KnowledgeModule] Preview failed', importError.value, e);
+        alert(formatBackupApiError(importError.value));
     }
 };
 
 const confirmImport = async () => {
-    if (!importFile.value) return;
+    if (!importFile.value || !importSummary.value) return;
     importing.value = true;
+    importError.value = null;
     try {
         await backupApi.restore(importFile.value);
         MessagePlugin.success('Knowledge Base imported successfully.');
@@ -441,12 +450,14 @@ const confirmImport = async () => {
         // Reset state
         importFile.value = null;
         importSummary.value = null;
+        importError.value = null;
         kbFormTab.value = 'blank';
         
         fetchKBs();
     } catch (e: any) {
-        console.error('Import failed', e);
-        alert('Failed to import Knowledge Base.');
+        importError.value = extractBackupApiError(e, 'Failed to import Knowledge Base.');
+        console.error('[KnowledgeModule] Import failed', importError.value, e);
+        alert(formatBackupApiError(importError.value));
     } finally {
         importing.value = false;
     }
@@ -691,7 +702,7 @@ onUnmounted(() => {
                         <div v-else
                             class="w-full h-full flex items-center justify-center bg-gradient-to-br from-ash/20 to-ash/5 text-ink/10">
                             <!-- Special icon for Assets KB -->
-                            <i v-if="kb.renderer_id === 'assets_v1' || kb.renderer_id === 'assets'" 
+                            <i v-if="isAssetsRenderer(kb.renderer_id)" 
                                 class="ri-folder-3-line text-6xl"></i>
                             <i v-else class="ri-book-mark-fill text-6xl"></i>
                         </div>
@@ -1053,8 +1064,8 @@ onUnmounted(() => {
                             @change="handleImportFileChange" />
                         <label for="import-akb" class="cursor-pointer flex flex-col items-center gap-2">
                             <i class="ri-upload-cloud-2-line text-3xl text-ink/40"></i>
-                            <span class="text-sm font-medium text-ink/80">{{ importFile ? importFile.name : 'Select .akb or .zip file' }}</span>
-                            <span v-if="!importFile" class="text-xs text-ink/40">Click to browse your backups</span>
+                            <span class="text-sm font-medium text-ink/80">{{ importFile ? importFile.name : 'Select .akb, snapshot .zip, or Smart Export .zip' }}</span>
+                            <span v-if="!importFile" class="text-xs text-ink/40">Current Smart Export packages include an embedded snapshot and can be restored here.</span>
                         </label>
                     </div>
 
@@ -1076,10 +1087,29 @@ onUnmounted(() => {
                         </ul>
                     </div>
 
+                    <div v-if="importError" class="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-900">
+                        <div class="flex justify-between items-center mb-2 pb-2 border-b border-red-200">
+                            <span class="font-medium">Import Diagnostics</span>
+                            <span class="bg-red-100 text-red-700 text-[10px] uppercase font-bold px-2 py-0.5 rounded">
+                                {{ importError.code || 'preview_failed' }}
+                            </span>
+                        </div>
+                        <p class="font-medium">{{ importError.error }}</p>
+                        <p v-if="importError.details" class="mt-2 text-xs font-mono bg-white/70 rounded px-2 py-1 break-all">
+                            {{ importError.details }}
+                        </p>
+                        <p v-if="importError.hint" class="mt-2 text-xs text-red-700">
+                            {{ importError.hint }}
+                        </p>
+                        <p v-if="importError.status" class="mt-2 text-[10px] uppercase tracking-wide text-red-500">
+                            HTTP {{ importError.status }}{{ importError.stage ? ` • ${importError.stage}` : '' }}
+                        </p>
+                    </div>
+
                     <div class="flex justify-end gap-2 text-xs font-medium pt-2">
                         <button @click="kbFormVisible = false" class="px-3 py-1.5 hover:bg-surface rounded">Cancel</button>
                         <button @click="confirmImport"
-                            :disabled="!importFile || importing"
+                            :disabled="!importFile || !importSummary || importing"
                             class="bg-ink text-paper px-3 py-1.5 rounded hover:bg-accent transition-colors disabled:opacity-50 flex items-center gap-2">
                             <i v-if="importing" class="ri-loader-4-line animate-spin"></i>
                             {{ importing ? 'Importing...' : 'Confirm Import' }}

@@ -1,4 +1,8 @@
 import { type Component, defineAsyncComponent } from 'vue';
+import {
+    resolveDashboardIdForRenderer,
+    resolveLayoutIdForRenderer,
+} from './special_kb_registry';
 
 // Default Layout
 const StandardReadLayout = defineAsyncComponent(() => import('@/components/layouts/StandardReadLayout.vue'));
@@ -23,13 +27,14 @@ export const registerLayout = (id: string, component: Component) => {
 };
 
 export const getLayout = (id: string | null | undefined): Component => {
-    if (!id || id === 'default') {
+    const layoutId = resolveLayoutIdForRenderer(id);
+    if (!layoutId || layoutId === 'default') {
         return StandardReadLayout;
     }
 
-    const layout = registry.get(id);
+    const layout = registry.get(layoutId);
     if (!layout) {
-        console.warn(`[ReadLayoutRegistry] Layout '${id}' not found.`);
+        console.warn(`[ReadLayoutRegistry] Layout '${layoutId}' not found.`);
         return RendererErrorLayout;
     }
     return layout;
@@ -48,24 +53,14 @@ export const registerDashboard = (id: string, component: Component) => {
 };
 
 export const getDashboard = (id: string | null | undefined): Component | null => {
-    if (!id) return null; // Default handling provided by view
-    return dashboardRegistry.get(id) || null;
+    const dashboardId = resolveDashboardIdForRenderer(id);
+    if (!dashboardId) return null;
+    return dashboardRegistry.get(dashboardId) || null;
 };
 
 // -- Metadata Registry --
 import { ref } from 'vue';
 import { templateApi, type LayoutTemplate } from '@/api/template';
-
-// We map 'renderer_id' (from DB/Template) -> Component (Code)
-// This remains static/hardcoded because components must exist in the bundle.
-const RENDERER_MAP: Record<string, string> = {
-    'default': 'default',
-    'math_v1': 'math_v1',
-    'math_v3': 'math_v3',
-    'english_v1': 'english_v1',
-    'vrkb': 'vulnerability_research',
-    'admin_system': 'admin_system',
-};
 
 export const LAYOUTS = ref<LayoutTemplate[]>([]);
 
@@ -132,15 +127,6 @@ const DEFAULTS: LayoutTemplate[] = [
         description: 'Kanban-style project management board.',
         thumbnail: 'bg-slate-800 text-green-500',
         tags: ['Security'],
-        created_at: new Date().toISOString()
-    },
-    {
-        id: 'english_std',
-        renderer_id: 'english',
-        title: 'English Learning',
-        description: 'Vocabulary, dictionary, and flashcard workspace.',
-        thumbnail: 'bg-gradient-to-br from-green-400 to-teal-500',
-        tags: ['Language', 'Study'],
         created_at: new Date().toISOString()
     },
     {

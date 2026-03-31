@@ -16,6 +16,11 @@ import { usePluginStore } from '../stores/plugins';
 import { usePreferencesStore } from '../stores/preferences';
 import { knowledgeApi, type KnowledgeBase } from '../api/knowledge';
 import { eventBus } from '../utils/eventBus';
+import {
+    normalizeRendererId,
+    resolveSpecialKbRenderer,
+    SINGLETON_SPECIAL_KB_RENDERERS,
+} from '../registries/special_kb_registry';
 
 // Types
 export interface DockItem {
@@ -30,9 +35,6 @@ export interface DockItem {
     isRunning: boolean; // Is it currently open/backgrounded?
     children?: DockItem[];
 }
-
-// Special Renderers that should only appear ONCE in the dock
-const SINGLETON_RENDERERS = new Set(['math', 'system', 'admin_system', 'admin', 'vocabulary', 'memo', 'vrkb', 'assets_v1', 'assets']);
 
 export function useSelfSpaceOrchestrator() {
     const appStore = useAppStateStore();
@@ -82,8 +84,23 @@ export function useSelfSpaceOrchestrator() {
         }
     }
 
+    function getCanonicalRendererId(rendererId: string | null | undefined): string {
+        const resolution = resolveSpecialKbRenderer(rendererId);
+        return resolution?.canonicalRendererId ?? normalizeRendererId(rendererId) ?? 'default';
+    }
+
+    function resolveKbReference(reference: string): KnowledgeBase | undefined {
+        const byId = allKbs.value.find((kb) => kb.id === reference);
+        if (byId) {
+            return byId;
+        }
+
+        const canonicalRendererId = getCanonicalRendererId(reference);
+        return allKbs.value.find((kb) => getCanonicalRendererId(kb.renderer_id) === canonicalRendererId);
+    }
+
     function createDockItem(kb: KnowledgeBase): DockItem {
-        const renderer = kb.renderer_id || 'default';
+        const renderer = getCanonicalRendererId(kb.renderer_id);
         const plugin = pluginStore.resolvePlugin(renderer);
 
         // PURE REGISTRY LOGIC: Ask the plugin for the icon.
@@ -120,7 +137,7 @@ export function useSelfSpaceOrchestrator() {
             if (nextQueue.has(item.id)) return; // Already by ID
 
             // Singleton Check
-            if (SINGLETON_RENDERERS.has(item._renderer_id)) {
+            if (SINGLETON_SPECIAL_KB_RENDERERS.has(item._renderer_id)) {
                 if (processedRenderers.has(item._renderer_id)) {
                     // Update existing if needed
                     for (const [key, existing] of nextQueue.entries()) {
@@ -153,24 +170,18 @@ export function useSelfSpaceOrchestrator() {
 
         // 2. Add Pinned Items (Order matters)
         for (const pid of prefStore.pinnedKbIds) {
-            const kb = allKbs.value.find(k => k.id === pid);
+            const kb = resolveKbReference(pid);
             if (kb) {
-                attemptAdd(createDockItem(kb));
-            } else {
-                // Legacy ID support
-                const altKb = allKbs.value.find(k => k.renderer_id === pid);
-                if (altKb) {
-                    const item = createDockItem(altKb);
-                    item.pinned = true;
-                    attemptAdd(item);
-                }
+                const item = createDockItem(kb);
+                item.pinned = true;
+                attemptAdd(item);
             }
         }
 
         // 3. System KB (Explicitly Pinned via Registry Match)
         // We scan for KBs that resolve to 'admin_system' which we know is the critical system app.
         // This is the only "hardcoded" assumption: that there is a 'admin_system' renderer that implies pinned status.
-        const systemKb = allKbs.value.find(k => k.renderer_id === 'admin_system');
+        const systemKb = allKbs.value.find((kb) => getCanonicalRendererId(kb.renderer_id) === 'admin_system');
         if (systemKb) {
             const item = createDockItem(systemKb);
             item.pinned = true;
@@ -215,24 +226,24 @@ export function useSelfSpaceOrchestrator() {
             // [Fix] Clear any previous error state so we can retry!
             errorState.value.delete(kbId);
 
-            let targetKb = allKbs.value.find(k => k.id === kbId);
+            let targetKb = resolveKbReference(kbId);
 
             if (!targetKb) {
                 await refreshKbList();
-                targetKb = allKbs.value.find(k => k.id === kbId);
-            }
-            if (!targetKb) {
-                targetKb = allKbs.value.find(k => k.renderer_id === kbId);
-                if (targetKb) {
-                    console.log(`[Orchestrator] Resolved legacy ID '${kbId}' to UUID '${targetKb.id}'`);
-                    kbId = targetKb.id;
-                }
+                targetKb = resolveKbReference(kbId);
             }
 
             if (!targetKb) throw new Error(`KB Not Found: ${kbId}`);
 
+            const requestedResolution = resolveSpecialKbRenderer(kbId);
+            if (requestedResolution?.migrated) {
+                console.log(
+                    `[Orchestrator] Resolved legacy renderer '${kbId}' -> '${requestedResolution.canonicalRendererId}' via KB '${targetKb.id}'`,
+                );
+            }
+
             // 3. Activate
-            const renderer = targetKb.renderer_id || 'knowledge';
+            const renderer = getCanonicalRendererId(targetKb.renderer_id);
             pluginStore.resolvePlugin(renderer);
             appStore.switchKB(targetKb.id);
 

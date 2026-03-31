@@ -6,7 +6,10 @@
         "playwright": "^1.58.2"
     },
     "scripts": {
-        "dev": "npm run dev --prefix Aether/frontend"
+        "dev": "npm run dev --prefix Aether/frontend",
+        "test:backend": "cargo test --manifest-path Aether/backend/Cargo.toml",
+        "test:frontend": "npm run test:unit --prefix Aether/frontend",
+        "test": "npm run test:backend && npm run test:frontend"
     },
     "devDependencies": {
         "autoprefixer": "^10.4.23",

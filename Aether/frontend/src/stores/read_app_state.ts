@@ -1,6 +1,10 @@
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
 import { useRouter } from 'vue-router';
+import {
+    normalizeRendererId,
+    resolveSpecialKbRenderer,
+} from '../registries/special_kb_registry';
 
 export const useAppStateStore = defineStore('app_state', () => {
     const router = useRouter();
@@ -84,10 +88,23 @@ export const useAppStateStore = defineStore('app_state', () => {
     function _resolveId(id: string): string {
         if (id === 'library') return 'library';
 
-        // Alias Normalization
-        if (id === 'system' || id === 'admin') {
-            const sys = kbRegistry.value.find(k => k.renderer_id === 'admin' || k.renderer_id === 'system' || k.renderer_id === 'admin_system');
-            if (sys) return sys.id;
+        const directMatch = kbRegistry.value.find(k => k.id === id);
+        if (directMatch) {
+            return directMatch.id;
+        }
+
+        const resolution = resolveSpecialKbRenderer(id);
+        const canonicalRendererId = resolution?.canonicalRendererId ?? normalizeRendererId(id);
+
+        if (canonicalRendererId) {
+            const matchedKb = kbRegistry.value.find((kb) => {
+                const kbRendererResolution = resolveSpecialKbRenderer(kb.renderer_id);
+                const kbRendererId = kbRendererResolution?.canonicalRendererId ?? normalizeRendererId(kb.renderer_id);
+                return kbRendererId === canonicalRendererId;
+            });
+            if (matchedKb) {
+                return matchedKb.id;
+            }
         }
 
         // Direct ID check

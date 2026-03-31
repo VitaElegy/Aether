@@ -4,8 +4,8 @@
     <div class="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-lg p-6 shadow-sm border border-blue-100 dark:border-blue-800">
       <h2 class="text-lg font-medium mb-2 text-blue-900 dark:text-blue-100">Smart Portability</h2>
       <p class="text-sm text-blue-700 dark:text-blue-300 mb-4">
-        Export your Knowledge Base with domain-specific formatting (e.g., CSV for Vocabulary, Markdown for Content). 
-        Includes preview and progress tracking.
+        Export your Knowledge Base with domain-specific files such as CSV and Markdown, and include an embedded restorable snapshot.
+        The generated ZIP can be restored later through Backup Manager.
       </p>
       
       <div class="flex gap-4 items-end">
@@ -34,7 +34,7 @@
     <div class="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border border-gray-200 dark:border-gray-700">
       <h2 class="text-lg font-medium mb-4">System Restore</h2>
       <p class="text-xs text-gray-500 mb-4">
-        Upload a .akb file to restore a Knowledge Base. This will create a NEW Knowledge Base copy and will not overwrite existing data.
+        Upload a restorable backup snapshot to create a NEW Knowledge Base copy. Supported files include `.akb`, legacy `.zip` snapshots with `meta.json`, and current Smart Portability ZIP packages with an embedded snapshot.
       </p>
       
       <div class="flex gap-4 items-center">
@@ -51,7 +51,7 @@
           class="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700 disabled:opacity-50 flex items-center gap-2"
         >
           <span v-if="restoring">Restoring...</span>
-          <span v-else>📤 Upload Backup File</span>
+          <span v-else>📤 Upload Restore Package</span>
         </button>
       </div>
     </div>
@@ -114,7 +114,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { backupApi } from '../../api/backup';
+import { backupApi, extractBackupApiError, formatBackupApiError } from '../../api/backup';
 import { knowledgeApi } from '../../api/knowledge';
 import ExportModal from '../portability/ExportModal.vue';
 
@@ -186,8 +186,9 @@ const handleRestoreUpload = async (event: Event) => {
     // Ideally redirect or reload KBs
     window.location.reload(); 
   } catch (e) {
-    console.error("Restore failed", e);
-    alert('Restore failed. Check console for details.');
+    const details = extractBackupApiError(e, 'Restore failed.');
+    console.error("Restore failed", details, e);
+    alert(formatBackupApiError(details));
   } finally {
     restoring.value = false;
     target.value = '';

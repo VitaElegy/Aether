@@ -1,6 +1,11 @@
 import { defineStore } from 'pinia';
 import { shallowRef } from 'vue';
 import type { SelfSpacePlugin } from '../core/plugin';
+import {
+    normalizeRendererId,
+    resolvePluginIdForRenderer,
+    resolveSpecialKbRenderer,
+} from '../registries/special_kb_registry';
 
 export const usePluginStore = defineStore('plugins', () => {
     // using shallowRef avoids deep reactivity overhead for components within the plugin objects
@@ -27,19 +32,27 @@ export const usePluginStore = defineStore('plugins', () => {
 
     // [NEW] Strict Resolution Logic
     const resolvePlugin = (rendererId: string | null | undefined): SelfSpacePlugin | undefined => {
-        if (!rendererId) return undefined;
+        const normalizedRendererId = normalizeRendererId(rendererId);
+        if (!normalizedRendererId) return undefined;
 
-        // 1. Strict Lookup
-        const id = rendererId.toLowerCase().trim();
-        const found = plugins.value.find(p => p.id === id);
+        const resolution = resolveSpecialKbRenderer(normalizedRendererId);
+        const pluginId = resolvePluginIdForRenderer(normalizedRendererId) ?? normalizedRendererId;
+        const found = plugins.value.find(p => p.id === pluginId);
 
         if (found) {
+            if (resolution?.migrated) {
+                console.info(
+                    `[PluginStore] Migrated legacy renderer '${normalizedRendererId}' -> '${resolution.canonicalRendererId}' using plugin '${pluginId}'.`,
+                );
+            }
             return found;
         }
 
         // 2. Strict Error (Loud Failure)
         if (!found) {
-            console.error(`[PluginStore] MISSING PLUGIN for renderer: '${id}'. Check registry.`);
+            console.error(
+                `[PluginStore] MISSING PLUGIN for renderer '${normalizedRendererId}' (resolved plugin '${pluginId}'). Check registry.`,
+            );
             console.warn('[PluginStore] Available Plugins:', plugins.value.map(p => p.id));
         }
         return undefined;
