@@ -13,7 +13,7 @@ pub struct Model {
     pub bio: Option<String>,
     pub avatar_url: Option<String>,
     pub password_hash: String,
-    pub permissions: i64, 
+    pub permissions: i64,
     pub created_at: DateTimeWithTimeZone,
     pub experience: Option<serde_json::Value>,
 }

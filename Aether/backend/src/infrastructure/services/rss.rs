@@ -27,7 +27,11 @@ impl RssService {
             Ok(f) => f,
             Err(e) => {
                 let text = String::from_utf8_lossy(&content[..std::cmp::min(100, content.len())]);
-                return Err(anyhow::anyhow!("Parsing failed: {}. Body snippet: {:?}", e, text));
+                return Err(anyhow::anyhow!(
+                    "Parsing failed: {}. Body snippet: {:?}",
+                    e,
+                    text
+                ));
             }
         };
 
@@ -35,28 +39,38 @@ impl RssService {
 
         for entry in feed.entries {
             // Extract Title
-            let title = entry.title.map(|t| t.content).unwrap_or_else(|| "Untitled".to_string());
+            let title = entry
+                .title
+                .map(|t| t.content)
+                .unwrap_or_else(|| "Untitled".to_string());
 
             // Extract URL
-            let entry_url = entry.links.first().map(|l| l.href.clone()).unwrap_or_default();
+            let entry_url = entry
+                .links
+                .first()
+                .map(|l| l.href.clone())
+                .unwrap_or_default();
 
             // Extract Authors
             let authors: Vec<String> = entry.authors.into_iter().map(|p| p.name).collect();
 
             // Extract Content/Summary
-            let abstract_text = entry.summary.map(|s| s.content)
+            let abstract_text = entry
+                .summary
+                .map(|s| s.content)
                 .or_else(|| entry.content.map(|c| c.body.unwrap_or_default()))
                 .unwrap_or_default();
 
             // Extract Date
-            let publish_date = entry.published
+            let publish_date = entry
+                .published
                 .or(entry.updated)
                 .unwrap_or_else(|| Utc::now());
 
             items.push(InboxItem {
                 publication: None,
                 id: Uuid::new_v4(),
-                feed_id: Uuid::nil(), // Caller sets this
+                feed_id: Uuid::nil(),  // Caller sets this
                 external_id: entry.id, // RSS GUID/ID
                 title,
                 authors,

@@ -1,15 +1,16 @@
 #[cfg(test)]
 mod tests {
-    use crate::infrastructure::persistence::postgres::PostgresRepository;
+    use crate::domain::models::{Node, NodeType, PermissionMode, Vocabulary, VocabularyExample};
     use crate::domain::ports::VocabularyRepository;
-    use crate::domain::models::{Vocabulary, Node, NodeType, PermissionMode, VocabularyExample};
-    use sea_orm::{Database, ConnectionTrait};
-    use uuid::Uuid;
+    use crate::infrastructure::persistence::postgres::PostgresRepository;
     use chrono::Utc;
+    use sea_orm::{ConnectionTrait, Database};
+    use uuid::Uuid;
 
     async fn setup_schema(db: &sea_orm::DatabaseConnection) {
         // SQLite schema for testing
-        db.execute_unprepared("
+        db.execute_unprepared(
+            "
             CREATE TABLE users (
                 id TEXT PRIMARY KEY,
                 username TEXT UNIQUE NOT NULL,
@@ -68,7 +69,10 @@ mod tests {
                 root TEXT NOT NULL,
                 meaning TEXT
             );
-        ").await.expect("Failed to create tables");
+        ",
+        )
+        .await
+        .expect("Failed to create tables");
     }
 
     #[tokio::test]
@@ -82,7 +86,7 @@ mod tests {
         // 1. Create Vocab A
         let vocab_a_id = Uuid::new_v4();
         let example_text = "This is a shared sentence.";
-        
+
         let vocab_a = Vocabulary {
             node: Node {
                 id: vocab_a_id,
@@ -104,18 +108,17 @@ mod tests {
             language: "en".to_string(),
             status: "New".to_string(),
             root: None,
-            examples: vec![
-                VocabularyExample {
-                    id: Uuid::new_v4(),
-                    sentence: example_text.to_string(),
-                    translation: Some("Trans".to_string()),
-                    note: None,
-                    image_url: None,
-                    article_id: None,
-                    sentence_uuid: None,
-                    created_at: Utc::now(),
-                }
-            ],
+            examples: vec![VocabularyExample {
+                id: Uuid::new_v4(),
+                sentence: example_text.to_string(),
+                translation: Some("Trans".to_string()),
+                note: None,
+                image_url: None,
+                article_id: None,
+                sentence_uuid: None,
+                created_at: Utc::now(),
+                global_sentence_id: None,
+            }],
             query_count: 0,
             is_important: false,
         };
@@ -123,7 +126,10 @@ mod tests {
         repo.save(vocab_a).await.expect("Failed to save Vocab A");
 
         // 2. Verify Global Sentence Created
-        let results = repo.search_global_sentences("shared").await.expect("Search failed");
+        let results = repo
+            .search_global_sentences("shared")
+            .await
+            .expect("Search failed");
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].1, example_text);
         let global_id = results[0].0;
@@ -151,18 +157,17 @@ mod tests {
             language: "en".to_string(),
             status: "New".to_string(),
             root: None,
-            examples: vec![
-                VocabularyExample {
-                    id: Uuid::new_v4(),
-                    sentence: example_text.to_string(), // Same text
-                    translation: Some("Trans".to_string()),
-                    note: None,
-                    image_url: None,
-                    article_id: None,
-                    sentence_uuid: None,
-                    created_at: Utc::now(),
-                }
-            ],
+            examples: vec![VocabularyExample {
+                id: Uuid::new_v4(),
+                sentence: example_text.to_string(), // Same text
+                translation: Some("Trans".to_string()),
+                note: None,
+                image_url: None,
+                article_id: None,
+                sentence_uuid: None,
+                created_at: Utc::now(),
+                global_sentence_id: None,
+            }],
             query_count: 0,
             is_important: false,
         };
@@ -170,27 +175,50 @@ mod tests {
         repo.save(vocab_b).await.expect("Failed to save Vocab B");
 
         // 4. Verify Global Sentence Count is still 1
-        let results_2 = repo.search_global_sentences("shared").await.expect("Search failed");
+        let results_2 = repo
+            .search_global_sentences("shared")
+            .await
+            .expect("Search failed");
         assert_eq!(results_2.len(), 1);
         assert_eq!(results_2[0].0, global_id); // Same ID
 
         // 5. Verify Retrieval
-        let fetched_b = repo.find_by_id(&vocab_b_id).await.expect("Find failed").unwrap();
+        let fetched_b = repo
+            .find_by_id(&vocab_b_id)
+            .await
+            .expect("Find failed")
+            .unwrap();
         assert_eq!(fetched_b.examples[0].sentence, example_text);
-        
+
         // 6. Test Global Update
         // Update Vocab A with modified text for the same example
-        let mut fetched_a = repo.find_by_id(&vocab_a_id).await.expect("Find failed").unwrap();
+        let mut fetched_a = repo
+            .find_by_id(&vocab_a_id)
+            .await
+            .expect("Find failed")
+            .unwrap();
         fetched_a.examples[0].sentence = "Updated shared sentence.".to_string();
-        repo.save(fetched_a).await.expect("Failed to update Vocab A");
+        repo.save(fetched_a)
+            .await
+            .expect("Failed to update Vocab A");
 
         // Verify Global Sentence Updated
-        let results_3 = repo.search_global_sentences("Updated").await.expect("Search updated failed");
+        let results_3 = repo
+            .search_global_sentences("Updated")
+            .await
+            .expect("Search updated failed");
         assert_eq!(results_3.len(), 1);
         assert_eq!(results_3[0].1, "Updated shared sentence.");
 
         // Verify Vocab B sees the update
-        let fetched_b_updated = repo.find_by_id(&vocab_b_id).await.expect("Find failed").unwrap();
-        assert_eq!(fetched_b_updated.examples[0].sentence, "Updated shared sentence.");
+        let fetched_b_updated = repo
+            .find_by_id(&vocab_b_id)
+            .await
+            .expect("Find failed")
+            .unwrap();
+        assert_eq!(
+            fetched_b_updated.examples[0].sentence,
+            "Updated shared sentence."
+        );
     }
 }

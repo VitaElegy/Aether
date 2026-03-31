@@ -1,21 +1,20 @@
-use axum::{
-    Router,
-    routing::{post, delete},
-    extract::{State, Query, Path},
-    Json,
-    response::IntoResponse,
-    http::StatusCode,
-};
-use serde::Deserialize;
-use utoipa::{ToSchema, IntoParams};
 use crate::{
     domain::{
-        models::{Vocabulary, Node, NodeType, PermissionMode, UserId},
+        models::{Node, NodeType, PermissionMode, UserId, Vocabulary},
         ports::VocabularyRepository,
     },
     interface::{api::auth::AuthenticatedUser, state::AppState},
 };
+use axum::{
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{delete, post},
+    Json, Router,
+};
 use chrono::Utc;
+use serde::Deserialize;
+use utoipa::{IntoParams, ToSchema};
 use uuid::Uuid;
 
 #[derive(Deserialize, ToSchema)]
@@ -40,14 +39,14 @@ pub struct CreateVocabularyRequest {
     pub translation: Option<String>,
     #[schema(example = "/ˈæp.əl/")]
     pub phonetic: Option<String>,
-    
+
     // Deprecated but kept optional
     pub context_sentence: Option<String>,
     pub image_url: Option<String>,
-    
+
     #[schema(example = "en")]
     pub language: Option<String>,
-    
+
     // New
     pub root: Option<String>,
     pub examples: Option<Vec<ExampleRequest>>,
@@ -60,7 +59,7 @@ pub struct ListVocabularyRequest {
     pub offset: Option<u64>,
     pub query: Option<String>,
     pub sort_by: Option<String>, // "query_count", "is_important", "created_at"
-    pub order: Option<String>, // "asc", "desc"
+    pub order: Option<String>,   // "asc", "desc"
     pub kb_id: Option<Uuid>,
 }
 
@@ -71,12 +70,24 @@ pub struct BatchDeleteRequest {
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/vocabulary", post(save_vocabulary).get(list_vocabulary))
-        .route("/api/vocabulary/batch-delete", post(batch_delete_vocabulary))
+        .route(
+            "/api/vocabulary",
+            post(save_vocabulary).get(list_vocabulary),
+        )
+        .route(
+            "/api/vocabulary/batch-delete",
+            post(batch_delete_vocabulary),
+        )
         .route("/api/vocabulary/:id", delete(delete_vocabulary))
         .route("/api/vocabulary/:id/examples", post(add_example))
-        .route("/api/vocabulary/:id/increment_query", post(increment_query_count))
-        .route("/api/vocabulary/:id/toggle_importance", post(toggle_importance))
+        .route(
+            "/api/vocabulary/:id/increment_query",
+            post(increment_query_count),
+        )
+        .route(
+            "/api/vocabulary/:id/toggle_importance",
+            post(toggle_importance),
+        )
         .route("/api/vocabulary/sentences/search", post(search_sentences))
 }
 
@@ -107,8 +118,12 @@ async fn search_sentences(
                 serde_json::json!({ "id": id, "text": text, "translation": translation })
             }).collect();
             (StatusCode::OK, Json(mapped)).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -128,29 +143,40 @@ async fn save_vocabulary(
     Json(payload): Json<CreateVocabularyRequest>,
 ) -> impl IntoResponse {
     let user_id = UserId(auth.id);
-    
+
     // Check for existing word to Determine Upsert vs Create
-    let (id, _is_update, existing_count, existing_importance) = if let Ok(Some(existing)) = state.repo.find_by_word(&user_id, &payload.word).await {
-         (existing.node.id, true, existing.query_count, existing.is_important)
-    } else {
-         (Uuid::new_v4(), false, 0, false)
-    };
-    
+    let (id, _is_update, existing_count, existing_importance) =
+        if let Ok(Some(existing)) = state.repo.find_by_word(&user_id, &payload.word).await {
+            (
+                existing.node.id,
+                true,
+                existing.query_count,
+                existing.is_important,
+            )
+        } else {
+            (Uuid::new_v4(), false, 0, false)
+        };
+
     // Map Examples
-    let examples = payload.examples.unwrap_or_default().into_iter().map(|e| {
-        use crate::domain::models::VocabularyExample;
-        VocabularyExample {
-            id: Uuid::new_v4(),
-            sentence: e.sentence,
-            translation: e.translation,
-            note: e.note,
-            image_url: e.image_url,
-            article_id: e.article_id,
-            sentence_uuid: e.sentence_uuid,
-            created_at: Utc::now(),
-            global_sentence_id: None,
-        }
-    }).collect();
+    let examples = payload
+        .examples
+        .unwrap_or_default()
+        .into_iter()
+        .map(|e| {
+            use crate::domain::models::VocabularyExample;
+            VocabularyExample {
+                id: Uuid::new_v4(),
+                sentence: e.sentence,
+                translation: e.translation,
+                note: e.note,
+                image_url: e.image_url,
+                article_id: e.article_id,
+                sentence_uuid: e.sentence_uuid,
+                created_at: Utc::now(),
+                global_sentence_id: None,
+            }
+        })
+        .collect();
 
     let vocab = Vocabulary {
         node: Node {
@@ -159,8 +185,8 @@ async fn save_vocabulary(
             author_id: user_id.0,
             knowledge_base_id: payload.kb_id,
             r#type: NodeType::Vocabulary,
-            title: payload.word.clone(), 
-            permission_mode: PermissionMode::Private, 
+            title: payload.word.clone(),
+            permission_mode: PermissionMode::Private,
             created_at: Utc::now(),
             updated_at: Utc::now(),
         },
@@ -174,13 +200,17 @@ async fn save_vocabulary(
         status: "New".to_string(),
         root: payload.root,
         examples,
-        query_count: existing_count, // Preserve or 0
+        query_count: existing_count,       // Preserve or 0
         is_important: existing_importance, // Preserve or false
     };
 
     match state.repo.save(vocab).await {
-            Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response(),
-            Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id }))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -204,9 +234,25 @@ async fn list_vocabulary(
     let limit = params.limit.unwrap_or(50);
     let offset = params.offset.unwrap_or(0);
 
-    match state.repo.list(&UserId(auth.id), limit, offset, params.query, params.sort_by, params.order, params.kb_id).await {
+    match state
+        .repo
+        .list(
+            &UserId(auth.id),
+            limit,
+            offset,
+            params.query,
+            params.sort_by,
+            params.order,
+            params.kb_id,
+        )
+        .await
+    {
         Ok(list) => (StatusCode::OK, Json(serde_json::to_value(list).unwrap())).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -228,8 +274,16 @@ async fn delete_vocabulary(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     match state.repo.delete(&id).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "deleted" }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "deleted" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -249,14 +303,22 @@ async fn batch_delete_vocabulary(
     Json(payload): Json<BatchDeleteRequest>,
 ) -> impl IntoResponse {
     match state.repo.delete_many(&payload.ids).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "batch_deleted", "count": payload.ids.len() }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "batch_deleted", "count": payload.ids.len() })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
 #[derive(Deserialize, ToSchema)]
 pub struct ImportancePayload {
-    pub is_important: bool
+    pub is_important: bool,
 }
 
 #[utoipa::path(
@@ -277,8 +339,16 @@ async fn increment_query_count(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     match state.repo.increment_query_count(&id).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "updated" }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "updated" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -302,8 +372,16 @@ async fn toggle_importance(
     Json(payload): Json<ImportancePayload>,
 ) -> impl IntoResponse {
     match state.repo.set_importance(&id, payload.is_important).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "status": "updated" }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "updated" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -329,17 +407,33 @@ async fn add_example(
     Json(payload): Json<ExampleRequest>,
 ) -> impl IntoResponse {
     let user_id = UserId(auth.id);
-    
+
     // 1. Fetch Existing
     let mut vocab = match state.repo.find_by_id(&id).await {
         Ok(Some(v)) => v,
-        Ok(None) => return (StatusCode::NOT_FOUND, Json(serde_json::json!({ "error": "Vocabulary not found" }))).into_response(),
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "Vocabulary not found" })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
     };
 
     // 2. Permission Check (Owner only)
     if vocab.node.author_id != user_id.0 {
-        return (StatusCode::FORBIDDEN, Json(serde_json::json!({ "error": "Access denied" }))).into_response();
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "Access denied" })),
+        )
+            .into_response();
     }
 
     // 3. Add Example
@@ -359,7 +453,15 @@ async fn add_example(
 
     // 4. Save
     match state.repo.save(vocab).await {
-        Ok(_) => (StatusCode::CREATED, Json(serde_json::json!({ "status": "example_added" }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+        Ok(_) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({ "status": "example_added" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }

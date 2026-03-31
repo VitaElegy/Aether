@@ -1,6 +1,6 @@
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use chrono::{DateTime, Utc};
 
 // --- core Node Domain ---
 
@@ -83,17 +83,17 @@ pub struct Vocabulary {
     pub definition: String,
     pub translation: Option<String>,
     pub phonetic: Option<String>,
-    // Removed old context_sentence/image_url in favor of examples list, 
+    // Removed old context_sentence/image_url in favor of examples list,
     // but keeping for backward compat if needed, or just deprecate.
-    // User wants "multiple examples". 
+    // User wants "multiple examples".
     // Let's deprecate single context_sentence/image_url or map the first example to them.
     // Ideally we return the full objects.
-    pub context_sentence: Option<String>, 
-    pub image_url: Option<String>, 
-    
+    pub context_sentence: Option<String>,
+    pub image_url: Option<String>,
+
     pub language: String,
     pub status: String,
-    
+
     // New Fields
     pub root: Option<String>, // The actual root string, e.g. "spec"
     pub examples: Vec<VocabularyExample>,
@@ -109,8 +109,8 @@ pub struct Memo {
     pub node: Node,
     pub content: String,
     pub priority: String, // P0, P1...
-    pub status: String, // Todo, Doing...
-    pub color: String, // Yellow, Red...
+    pub status: String,   // Todo, Doing...
+    pub color: String,    // Yellow, Red...
     pub is_pinned: bool,
     pub due_at: Option<DateTime<Utc>>,
     pub reminder_at: Option<DateTime<Utc>>,
@@ -138,7 +138,7 @@ pub struct ContentVersionSnapshot {
     pub created_at: DateTime<Utc>,
     pub reason: Option<String>,
     pub editor_id: Uuid,
-    pub body: Option<ContentBody>, 
+    pub body: Option<ContentBody>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -155,9 +155,9 @@ pub enum ContentBody {
 #[allow(dead_code)]
 pub mod permissions {
     pub const READ_PUBLIC: u64 = 1 << 0;
-    pub const COMMENT: u64     = 1 << 1;
+    pub const COMMENT: u64 = 1 << 1;
     pub const CREATE_NODE: u64 = 1 << 4; // Generic Create
-    pub const ADMIN: u64       = 1 << 63;
+    pub const ADMIN: u64 = 1 << 63;
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -219,7 +219,6 @@ pub struct Comment {
     pub replies: Vec<Comment>,
 }
 
-
 // --- Knowledge Base Domain ---
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
@@ -241,7 +240,7 @@ pub struct KnowledgeBase {
     pub tags: Vec<String>,
     pub cover_image: Option<String>,
     pub cover_offset_y: i32,
-    pub renderer_id: Option<String>, 
+    pub renderer_id: Option<String>,
     pub visibility: Visibility,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
@@ -326,7 +325,7 @@ pub struct VrkbMember {
     pub role: String,
     pub joined_at: DateTime<Utc>,
     // Optional Join for Listing
-    pub user: Option<User>, 
+    pub user: Option<User>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

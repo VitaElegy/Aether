@@ -6,13 +6,13 @@ pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub vocab_id: Uuid,
-    // Legacy/Cache field, now nullable. 
-    // In new logic, this might be empty if linked to global_sentence, 
+    // Legacy/Cache field, now nullable.
+    // In new logic, this might be empty if linked to global_sentence,
     // OR we keep it synced for easier querying without joins (denormalization).
     // User asked for "Shared" behavior. If we denormalize, we must update all copies.
     // Given the "Global Update" requirement, it is better to rely on JOINs or strictly keep them in sync.
     // For now, let's make it Option.
-    pub sentence: Option<String>, 
+    pub sentence: Option<String>,
     pub translation: Option<String>,
     pub note: Option<String>,
     pub image_url: Option<String>,

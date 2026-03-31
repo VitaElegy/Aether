@@ -1,22 +1,34 @@
+use crate::domain::models::VrkbDoc;
+use crate::domain::ports::VrkbRepository;
+use crate::interface::state::AppState;
+use axum::http::StatusCode;
 use axum::{
     extract::{Path, State},
     routing::get,
     Json, Router,
 };
-use uuid::Uuid;
-use crate::interface::state::AppState;
-use crate::domain::models::VrkbDoc;
-use crate::domain::ports::VrkbRepository;
-use axum::http::StatusCode;
 use chrono::Utc;
+use uuid::Uuid;
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/vrkb/projects/:id/docs", get(list_docs).post(create_doc))
+        .route(
+            "/api/vrkb/projects/:id/docs",
+            get(list_docs).post(create_doc),
+        )
         .route("/api/vrkb/projects/:id/trash", get(list_trash)) // New
-        .route("/api/vrkb/docs/:id", get(get_doc).put(update_doc).delete(delete_doc))
-        .route("/api/vrkb/docs/:id/restore", axum::routing::post(restore_doc)) // New
-        .route("/api/vrkb/docs/:id/permanent", axum::routing::delete(permanent_delete_doc)) // New
+        .route(
+            "/api/vrkb/docs/:id",
+            get(get_doc).put(update_doc).delete(delete_doc),
+        )
+        .route(
+            "/api/vrkb/docs/:id/restore",
+            axum::routing::post(restore_doc),
+        ) // New
+        .route(
+            "/api/vrkb/docs/:id/permanent",
+            axum::routing::delete(permanent_delete_doc),
+        ) // New
 }
 
 #[derive(serde::Deserialize)]
@@ -37,7 +49,11 @@ async fn list_docs(
     State(state): State<AppState>,
     Path(project_id): Path<Uuid>,
 ) -> Result<Json<Vec<VrkbDoc>>, (StatusCode, String)> {
-    let docs = state.repo.list_docs(&project_id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let docs = state
+        .repo
+        .list_docs(&project_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(docs))
 }
 
@@ -45,7 +61,11 @@ async fn list_trash(
     State(state): State<AppState>,
     Path(project_id): Path<Uuid>,
 ) -> Result<Json<Vec<VrkbDoc>>, (StatusCode, String)> {
-    let docs = state.repo.list_trash(&project_id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let docs = state
+        .repo
+        .list_trash(&project_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(docs))
 }
 
@@ -65,7 +85,11 @@ async fn create_doc(
         updated_at: Utc::now(),
         deleted_at: None,
     };
-    state.repo.create_doc(doc.clone()).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state
+        .repo
+        .create_doc(doc.clone())
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(doc))
 }
 
@@ -73,7 +97,11 @@ async fn get_doc(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<VrkbDoc>, (StatusCode, String)> {
-    let doc = state.repo.get_doc(&id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let doc = state
+        .repo
+        .get_doc(&id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     match doc {
         Some(d) => Ok(Json(d)),
         None => Err((StatusCode::NOT_FOUND, "Doc not found".to_string())),
@@ -85,15 +113,23 @@ async fn update_doc(
     Path(id): Path<Uuid>,
     Json(payload): Json<UpdateDocRequest>,
 ) -> Result<Json<VrkbDoc>, (StatusCode, String)> {
-    let existing = state.repo.get_doc(&id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let existing = state
+        .repo
+        .get_doc(&id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if let Some(mut doc) = existing {
         doc.title = payload.title;
         doc.content = payload.content;
         doc.parent_id = payload.parent_id;
         doc.updated_at = Utc::now();
-        
+
         // Clone doc because repo.update_doc consumes it
-        state.repo.update_doc(doc.clone()).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        state
+            .repo
+            .update_doc(doc.clone())
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         Ok(Json(doc))
     } else {
         Err((StatusCode::NOT_FOUND, "Doc not found".to_string()))
@@ -104,7 +140,11 @@ async fn delete_doc(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    state.repo.delete_doc(&id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state
+        .repo
+        .delete_doc(&id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::OK)
 }
 
@@ -112,7 +152,11 @@ async fn restore_doc(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    state.repo.restore_doc(&id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state
+        .repo
+        .restore_doc(&id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::OK)
 }
 
@@ -120,6 +164,10 @@ async fn permanent_delete_doc(
     State(state): State<AppState>,
     Path(id): Path<Uuid>,
 ) -> Result<StatusCode, (StatusCode, String)> {
-    state.repo.permanent_delete_doc(&id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    state
+        .repo
+        .permanent_delete_doc(&id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(StatusCode::OK)
 }

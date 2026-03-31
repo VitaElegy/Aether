@@ -6,7 +6,9 @@ pub struct MarkdownSchema;
 impl BlockSchema for MarkdownSchema {
     fn validate(&self, payload: &Value) -> Result<(), SchemaError> {
         if payload.get("content").and_then(|v| v.as_str()).is_none() {
-            return Err(SchemaError::ValidationFailed("Missing or invalid 'content' field in markdown block".into()));
+            return Err(SchemaError::ValidationFailed(
+                "Missing or invalid 'content' field in markdown block".into(),
+            ));
         }
         Ok(())
     }

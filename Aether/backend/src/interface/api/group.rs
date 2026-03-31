@@ -1,8 +1,11 @@
-use axum::{
-    Json, extract::{State, Path}, response::IntoResponse, http::StatusCode,
-};
-use crate::interface::state::AppState;
 use crate::interface::api::auth::AuthenticatedUser;
+use crate::interface::state::AppState;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    response::IntoResponse,
+    Json,
+};
 use serde::Deserialize;
 use uuid::Uuid;
 
@@ -16,9 +19,21 @@ pub async fn create_group_handler(
     auth_user: AuthenticatedUser,
     Json(payload): Json<CreateGroupRequest>,
 ) -> impl IntoResponse {
-    match state.permission_service.create_team(payload.name, auth_user.id).await {
-        Ok(id) => (StatusCode::CREATED, Json(serde_json::json!({ "id": id, "message": "Group created" }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    match state
+        .permission_service
+        .create_team(payload.name, auth_user.id)
+        .await
+    {
+        Ok(id) => (
+            StatusCode::CREATED,
+            Json(serde_json::json!({ "id": id, "message": "Group created" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -34,9 +49,21 @@ pub async fn add_member_handler(
     Json(payload): Json<AddMemberRequest>,
 ) -> impl IntoResponse {
     // TODO: Verify auth_user is owner of group_id using checks
-    match state.permission_service.add_team_member(group_id, payload.user_id).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "message": "Member added" }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    match state
+        .permission_service
+        .add_team_member(group_id, payload.user_id)
+        .await
+    {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "message": "Member added" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
@@ -46,16 +73,31 @@ pub async fn remove_member_handler(
     Path((group_id, user_id)): Path<(Uuid, Uuid)>,
 ) -> impl IntoResponse {
     // TODO: Check permissions
-    match state.permission_service.remove_team_member(group_id, user_id).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({ "message": "Member removed" }))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({ "error": e.to_string() }))).into_response(),
+    match state
+        .permission_service
+        .remove_team_member(group_id, user_id)
+        .await
+    {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "message": "Member removed" })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
     }
 }
 
 pub fn router() -> axum::Router<AppState> {
-    use axum::routing::{post, delete};
+    use axum::routing::{delete, post};
     axum::Router::new()
         .route("/api/groups", post(create_group_handler))
         .route("/api/groups/:id/members", post(add_member_handler))
-        .route("/api/groups/:id/members/:uid", delete(remove_member_handler))
+        .route(
+            "/api/groups/:id/members/:uid",
+            delete(remove_member_handler),
+        )
 }

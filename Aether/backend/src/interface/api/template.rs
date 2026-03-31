@@ -1,16 +1,17 @@
+use crate::domain::models::{permissions, LayoutTemplate};
+use crate::domain::special_kb::normalize_renderer_id;
+use crate::infrastructure::persistence::repositories::layout_template_repository::LayoutTemplateRepository;
+use crate::interface::api::auth::AuthenticatedUser;
+use crate::interface::state::AppState;
 use axum::{
     extract::{Path, State},
     response::IntoResponse,
     routing::{get, put},
     Json, Router,
 };
+use chrono::Utc;
 use serde::Deserialize;
 use uuid::Uuid;
-use chrono::Utc;
-use crate::interface::state::AppState;
-use crate::domain::models::{LayoutTemplate, permissions};
-use crate::infrastructure::persistence::repositories::layout_template_repository::LayoutTemplateRepository;
-use crate::interface::api::auth::AuthenticatedUser;
 
 #[derive(Deserialize)]
 pub struct CreateTemplateDto {
@@ -36,13 +37,16 @@ pub struct UpdateTemplateDto {
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/templates", get(list_templates).post(create_template))
-        .route("/api/templates/:id", put(update_template).delete(delete_template))
+        .route(
+            "/api/templates/:id",
+            put(update_template).delete(delete_template),
+        )
 }
 
-async fn list_templates(
-    State(state): State<AppState>,
-) -> impl IntoResponse {
-    let templates = LayoutTemplateRepository::list(&state.repo.db).await.unwrap_or_default();
+async fn list_templates(State(state): State<AppState>) -> impl IntoResponse {
+    let templates = LayoutTemplateRepository::list(&state.repo.db)
+        .await
+        .unwrap_or_default();
     Json(templates)
 }
 
@@ -57,7 +61,8 @@ async fn create_template(
 
     let template = LayoutTemplate {
         id: Uuid::new_v4(),
-        renderer_id: payload.renderer_id,
+        renderer_id: normalize_renderer_id(Some(payload.renderer_id.as_str()))
+            .unwrap_or(payload.renderer_id),
         title: payload.title,
         description: payload.description,
         thumbnail: payload.thumbnail,
@@ -82,13 +87,14 @@ async fn update_template(
     Path(id): Path<Uuid>,
     Json(payload): Json<CreateTemplateDto>, // Full replacement model
 ) -> impl IntoResponse {
-   if !user.has_permission(permissions::ADMIN) {
+    if !user.has_permission(permissions::ADMIN) {
         return Err(axum::http::StatusCode::FORBIDDEN);
     }
-    
+
     let template = LayoutTemplate {
         id: id,
-        renderer_id: payload.renderer_id,
+        renderer_id: normalize_renderer_id(Some(payload.renderer_id.as_str()))
+            .unwrap_or(payload.renderer_id),
         title: payload.title,
         description: payload.description,
         thumbnail: payload.thumbnail,
@@ -97,8 +103,8 @@ async fn update_template(
         created_at: Utc::now(), // Repo ignores this
         updated_at: Utc::now(),
     };
-    
-     match LayoutTemplateRepository::update(&state.repo.db, id, template.clone()).await {
+
+    match LayoutTemplateRepository::update(&state.repo.db, id, template.clone()).await {
         Ok(_) => Ok(Json(template)),
         Err(e) => {
             eprintln!("Failed to update template: {:?}", e);

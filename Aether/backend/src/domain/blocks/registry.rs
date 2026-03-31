@@ -1,8 +1,8 @@
 use super::models::BlockDefinition;
-use std::collections::HashMap;
-use std::sync::{Arc, RwLock};
 use jsonschema::JSONSchema;
 use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::{Arc, RwLock};
 
 #[derive(Clone)]
 #[allow(dead_code)]
@@ -19,7 +19,12 @@ impl SchemaRegistry {
     }
 
     #[allow(dead_code)]
-    pub fn register(&self, type_name: &str, schema_json: Value, complexity_score: u8) -> Result<(), String> {
+    pub fn register(
+        &self,
+        type_name: &str,
+        schema_json: Value,
+        complexity_score: u8,
+    ) -> Result<(), String> {
         // Enforce Quotas (Simplistic implementation)
         if complexity_score > 100 {
             return Err("Schema complexity too high".to_string());
@@ -35,14 +40,17 @@ impl SchemaRegistry {
             complexity_score,
         };
 
-        self.definitions.write().unwrap().insert(type_name.to_string(), def);
+        self.definitions
+            .write()
+            .unwrap()
+            .insert(type_name.to_string(), def);
         Ok(())
     }
 
     #[allow(dead_code)]
     pub fn validate(&self, type_name: &str, payload: &Value) -> Result<(), String> {
         let registry = self.definitions.read().unwrap();
-        
+
         if let Some(def) = registry.get(type_name) {
             let result = def.validation_schema.validate(payload);
             if let Err(errors) = result {
@@ -54,7 +62,7 @@ impl SchemaRegistry {
             }
             Ok(())
         } else {
-            // If unknown type, do we fail? Or allow "untyped"? 
+            // If unknown type, do we fail? Or allow "untyped"?
             // Strict mode: Fail.
             Err(format!("Unknown block type: {}", type_name))
         }

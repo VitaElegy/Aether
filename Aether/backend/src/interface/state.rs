@@ -1,13 +1,12 @@
-use std::sync::Arc;
-use axum::extract::FromRef;
-use crate::domain::ports::{
-    AuthService, CommentRepository, ArticleRepository, ExportService,
-    MemoRepository, UserRepository, VocabularyRepository, NodeRepository, VrkbRepository,
-
-};
-use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::infrastructure::dictionary::loader::DictionaryLoader;
 use crate::domain::indexer_service::IndexerService;
+use crate::domain::ports::{
+    ArticleRepository, AuthService, CommentRepository, ExportService, MemoRepository,
+    NodeRepository, UserRepository, VocabularyRepository, VrkbRepository,
+};
+use crate::infrastructure::dictionary::loader::DictionaryLoader;
+use crate::infrastructure::persistence::postgres::PostgresRepository;
+use axum::extract::FromRef;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct AppState {
@@ -89,7 +88,9 @@ impl FromRef<AppState> for Arc<dyn crate::domain::ports::KnowledgeBaseRepository
     }
 }
 
-impl FromRef<AppState> for crate::domain::permission_service::PermissionService<PostgresRepository> {
+impl FromRef<AppState>
+    for crate::domain::permission_service::PermissionService<PostgresRepository>
+{
     fn from_ref(state: &AppState) -> Self {
         state.permission_service.clone()
     }

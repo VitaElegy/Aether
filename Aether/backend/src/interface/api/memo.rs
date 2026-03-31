@@ -1,15 +1,15 @@
-use axum::{
-    extract::{Path, State, Json, Query},
-    http::StatusCode,
-    response::IntoResponse,
-};
-use sea_orm::EntityTrait;
-use uuid::Uuid;
-use chrono::{Utc, DateTime};
 use crate::domain::models::{Memo, Node, NodeType, PermissionMode, UserId};
 use crate::domain::ports::MemoRepository; // Import Trait
 use crate::interface::api::auth::{AuthenticatedUser, MaybeAuthenticatedUser};
 use crate::interface::state::AppState;
+use axum::{
+    extract::{Json, Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+};
+use chrono::{DateTime, Utc};
+use sea_orm::EntityTrait;
+use uuid::Uuid;
 
 #[derive(serde::Deserialize, Debug)]
 pub struct CreateMemoRequest {
@@ -41,7 +41,7 @@ pub async fn create_memo_handler(
     let memo = Memo {
         node: Node {
             id,
-            parent_id: None, 
+            parent_id: None,
             author_id: user.id,
             knowledge_base_id: None, // TODO: Support Project ID if passed
             r#type: NodeType::Memo,
@@ -98,28 +98,30 @@ pub async fn list_memos_handler(
     let target_author_id = author_id.or(viewer_id.clone());
 
     if target_author_id.is_none() {
-         return Json::<Vec<Memo>>(Vec::new()).into_response();
+        return Json::<Vec<Memo>>(Vec::new()).into_response();
     }
 
     match (params.start_date, params.end_date) {
         (Some(start), Some(end)) => {
-             match state.repo.find_by_date_range(target_author_id.unwrap(), start, end).await {
-                 Ok(memos) => Json::<Vec<Memo>>(memos).into_response(),
-                 Err(e) => {
-                     tracing::error!("Failed to list memos by date: {:?}", e);
-                     (StatusCode::INTERNAL_SERVER_ERROR, "Failed to list memos").into_response()
-                 }
-             }
-        },
-        _ => {
-            match state.repo.list(viewer_id, target_author_id).await {
-                 Ok(memos) => Json::<Vec<Memo>>(memos).into_response(),
-                 Err(e) => {
-                     tracing::error!("Failed to list memos: {:?}", e);
-                     (StatusCode::INTERNAL_SERVER_ERROR, "Failed to list memos").into_response()
-                 }
+            match state
+                .repo
+                .find_by_date_range(target_author_id.unwrap(), start, end)
+                .await
+            {
+                Ok(memos) => Json::<Vec<Memo>>(memos).into_response(),
+                Err(e) => {
+                    tracing::error!("Failed to list memos by date: {:?}", e);
+                    (StatusCode::INTERNAL_SERVER_ERROR, "Failed to list memos").into_response()
+                }
             }
         }
+        _ => match state.repo.list(viewer_id, target_author_id).await {
+            Ok(memos) => Json::<Vec<Memo>>(memos).into_response(),
+            Err(e) => {
+                tracing::error!("Failed to list memos: {:?}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, "Failed to list memos").into_response()
+            }
+        },
     }
 }
 
@@ -131,9 +133,10 @@ pub async fn delete_memo_handler(
     match state.repo.find_by_id(&id).await {
         Ok(Some(memo)) => {
             if memo.node.author_id != user.id {
-                return (StatusCode::FORBIDDEN, "Not authorized to delete this memo").into_response();
+                return (StatusCode::FORBIDDEN, "Not authorized to delete this memo")
+                    .into_response();
             }
-        },
+        }
         Ok(None) => return (StatusCode::NOT_FOUND, "Memo not found").into_response(),
         Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()).into_response(),
     }
@@ -181,21 +184,35 @@ pub async fn update_memo_handler(
 
     // 3. Update Fields
     let mut updated_memo = existing_memo;
-    if let Some(t) = payload.title { updated_memo.node.title = t; }
-    if let Some(c) = payload.content { updated_memo.content = c; }
-    if let Some(tags) = payload.tags { updated_memo.tags = tags; }
+    if let Some(t) = payload.title {
+        updated_memo.node.title = t;
+    }
+    if let Some(c) = payload.content {
+        updated_memo.content = c;
+    }
+    if let Some(tags) = payload.tags {
+        updated_memo.tags = tags;
+    }
     if let Some(vis) = payload.visibility {
-         updated_memo.node.permission_mode = match vis.to_lowercase().as_str() {
+        updated_memo.node.permission_mode = match vis.to_lowercase().as_str() {
             "private" => PermissionMode::Private,
             "internal" => PermissionMode::Internal,
             _ => PermissionMode::Public,
         };
     }
-    if let Some(p) = payload.priority { updated_memo.priority = p; }
-    if let Some(s) = payload.status { updated_memo.status = s; }
-    if let Some(c) = payload.color { updated_memo.color = c; }
-    if let Some(pin) = payload.is_pinned { updated_memo.is_pinned = pin; }
-    // Don't overwrite date if None is passed (Optional Update). 
+    if let Some(p) = payload.priority {
+        updated_memo.priority = p;
+    }
+    if let Some(s) = payload.status {
+        updated_memo.status = s;
+    }
+    if let Some(c) = payload.color {
+        updated_memo.color = c;
+    }
+    if let Some(pin) = payload.is_pinned {
+        updated_memo.is_pinned = pin;
+    }
+    // Don't overwrite date if None is passed (Optional Update).
     // Wait, Json(payload) with Option fields: None means field explicitly missing or null.
     // If user wants to clear the date, they might send null.
     // Deserializing Option<DateTime> from JSON null results in None.
@@ -203,10 +220,14 @@ pub async fn update_memo_handler(
     // Ideally we use a `Nullable<T>` custom type or just assume passing UpdateRequest fields usually means SET to this value.
     // But standard JSON patch behavior: undefined = ignore, null = clear.
     // Rust's Option handles both as None unless using `Option<Option<T>>` with skip_serializing_if.
-    // Defaulting to: If provided, update. If not provided, keep. 
+    // Defaulting to: If provided, update. If not provided, keep.
     // This means we can't clear dates easily. It's acceptable for now.
-    if let Some(d) = payload.due_at { updated_memo.due_at = Some(d); }
-    if let Some(r) = payload.reminder_at { updated_memo.reminder_at = Some(r); }
+    if let Some(d) = payload.due_at {
+        updated_memo.due_at = Some(d);
+    }
+    if let Some(r) = payload.reminder_at {
+        updated_memo.reminder_at = Some(r);
+    }
 
     updated_memo.node.updated_at = Utc::now();
 
@@ -233,23 +254,23 @@ pub async fn get_workflow_handler(
     // Project Spec says: Config Node.
     // Let's assume per-user config for now.
     // Query: Node type="config", title="memo_workflow", author_id=user.id
-    
+
     // We need a way to find specific config node.
     // For now, list all nodes of type "config" created by user and filter in memory, or add find_by_type_title to repo.
     // Adding `find_config` to Repo is cleaner but modifying Repo trait is heavy.
-    // Let's misuse `list` or just create a specific one-off query here using Entity if possible? 
+    // Let's misuse `list` or just create a specific one-off query here using Entity if possible?
     // Repo abstraction hides Entity.
     // Let's use `list` filter if possible, or accept we need a new repo method.
     // Actually, we can just use `find_by_title` if we had it.
     // Let's implement a simple loop over `list` for MVP since config nodes are rare.
     // IMPROVEMENT: Add `find_config(key)` to repository.
-    
+
     // WORKAROUND: Iterate list (inefficient but safe for now)
     // Real implementation: DB Query `WHERE type='config' AND title='memo_workflow' AND author_id=?`
-    
-    // But wait, `list` returns Memos only? No, repo is `MemoRepository`. 
+
+    // But wait, `list` returns Memos only? No, repo is `MemoRepository`.
     // We need generic Node access or a ConfigRepository.
-    // Let's punt and store this in a "Hidden Memo"? 
+    // Let's punt and store this in a "Hidden Memo"?
     // No, "Everything is a Node".
     // Let's use `state.repo.find_by_id` if we knew the ID. We don't.
     // We need a `ConfigRepository`.
@@ -257,26 +278,32 @@ pub async fn get_workflow_handler(
     // User requested "Convenient custom workflow".
     // Storing in User.experience is actually cleaner for "User Preferences".
     // Let's Pivot: Store in `User.experience.memo_workflow`.
-    
+
     // Fetch User
-    let user_model = match crate::infrastructure::persistence::entities::user::Entity::find_by_id(user.id)
-        .one(&state.repo.db).await {
+    let user_model =
+        match crate::infrastructure::persistence::entities::user::Entity::find_by_id(user.id)
+            .one(&state.repo.db)
+            .await
+        {
             Ok(Some(u)) => u,
             _ => return (StatusCode::INTERNAL_SERVER_ERROR, "User not found").into_response(),
-    };
+        };
 
     let default_columns = vec!["Todo".to_string(), "Doing".to_string(), "Done".to_string()];
 
     if let Some(exp) = user_model.experience {
-         if let Some(workflow) = exp.get("memo_workflow") {
-             if let Ok(cols) = serde_json::from_value::<Vec<String>>(workflow.clone()) {
-                 return Json(WorkflowConfig { columns: cols }).into_response();
-             }
-         }
+        if let Some(workflow) = exp.get("memo_workflow") {
+            if let Ok(cols) = serde_json::from_value::<Vec<String>>(workflow.clone()) {
+                return Json(WorkflowConfig { columns: cols }).into_response();
+            }
+        }
     }
 
     // Default
-    Json(WorkflowConfig { columns: default_columns }).into_response()
+    Json(WorkflowConfig {
+        columns: default_columns,
+    })
+    .into_response()
 }
 
 pub async fn update_workflow_handler(
@@ -284,8 +311,8 @@ pub async fn update_workflow_handler(
     user: AuthenticatedUser,
     Json(payload): Json<WorkflowConfig>,
 ) -> impl IntoResponse {
-    use sea_orm::*;
     use crate::infrastructure::persistence::entities::user;
+    use sea_orm::*;
 
     // 1. Fetch User
     let user_model = match user::Entity::find_by_id(user.id).one(&state.repo.db).await {
@@ -294,14 +321,20 @@ pub async fn update_workflow_handler(
     };
 
     let mut user_active: user::ActiveModel = user_model.into();
-    
+
     // 2. Update Experience JSON
-    let mut exp = user_active.experience.clone().unwrap().unwrap_or(serde_json::json!({}));
+    let mut exp = user_active
+        .experience
+        .clone()
+        .unwrap()
+        .unwrap_or(serde_json::json!({}));
     // Ensure it's an object
-    if !exp.is_object() { exp = serde_json::json!({}); }
-    
+    if !exp.is_object() {
+        exp = serde_json::json!({});
+    }
+
     exp["memo_workflow"] = serde_json::to_value(payload.columns).unwrap();
-    
+
     user_active.experience = Set(Some(exp));
 
     // 3. Save
@@ -317,7 +350,18 @@ pub async fn update_workflow_handler(
 pub fn router() -> axum::Router<AppState> {
     use axum::routing::{get, post};
     axum::Router::new()
-        .route("/api/memos", post(create_memo_handler).get(list_memos_handler))
-        .route("/api/memos/workflow", get(get_workflow_handler).put(update_workflow_handler))
-        .route("/api/memos/:id", get(get_memo_handler).delete(delete_memo_handler).put(update_memo_handler))
+        .route(
+            "/api/memos",
+            post(create_memo_handler).get(list_memos_handler),
+        )
+        .route(
+            "/api/memos/workflow",
+            get(get_workflow_handler).put(update_workflow_handler),
+        )
+        .route(
+            "/api/memos/:id",
+            get(get_memo_handler)
+                .delete(delete_memo_handler)
+                .put(update_memo_handler),
+        )
 }

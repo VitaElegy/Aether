@@ -1,6 +1,6 @@
-use serde::{Serialize, Deserialize};
-use uuid::Uuid;
 use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Author {
@@ -27,9 +27,9 @@ pub struct Signals {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BibTexInfo {
-    pub publisher: Option<String>, 
+    pub publisher: Option<String>,
     pub editor: Option<String>,
-    pub pages: Option<String>, 
+    pub pages: Option<String>,
     pub doi: Option<String>,
     pub isbn: Option<String>,
 }
@@ -75,7 +75,7 @@ pub struct PaperFilter {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Feed {
     pub id: Uuid,
-    pub name: String, // e.g., "cs.AI"
+    pub name: String,      // e.g., "cs.AI"
     pub url: String, // e.g., "http://export.arxiv.org/rss/cs.AI" or just "cs.AI" for arxiv provider
     pub feed_type: String, // "arxiv_category", "rss"
     pub last_fetched_at: Option<DateTime<Utc>>,

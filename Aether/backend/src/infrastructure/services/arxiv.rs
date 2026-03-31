@@ -1,6 +1,6 @@
-use reqwest::Client;
-use chrono::Utc;
 use crate::domain::prkb::models::InboxItem;
+use chrono::Utc;
+use reqwest::Client;
 
 #[derive(Clone)]
 pub struct ArxivService {
@@ -16,7 +16,11 @@ impl ArxivService {
         Self { client }
     }
 
-    pub async fn fetch_recent_by_category(&self, category: &str, limit: usize) -> Result<Vec<InboxItem>, anyhow::Error> {
+    pub async fn fetch_recent_by_category(
+        &self,
+        category: &str,
+        limit: usize,
+    ) -> Result<Vec<InboxItem>, anyhow::Error> {
         let url = format!(
             "http://export.arxiv.org/api/query?search_query=cat:{}&sortBy=submittedDate&sortOrder=descending&max_results={}", 
             category, limit
@@ -30,7 +34,9 @@ impl ArxivService {
         for entry in feed.entries {
             let authors: Vec<String> = entry.authors.into_iter().map(|a| a.name).collect();
 
-            let pdf_url = entry.links.iter()
+            let pdf_url = entry
+                .links
+                .iter()
                 .find(|l| {
                     let mt = l.media_type.as_deref().unwrap_or("");
                     let title = l.title.as_deref().unwrap_or("").to_lowercase();
@@ -38,28 +44,42 @@ impl ArxivService {
                 })
                 .map(|l| l.href.clone());
 
-            let abstract_text = entry.summary.map(|s| s.content)
+            let abstract_text = entry
+                .summary
+                .map(|s| s.content)
                 .or_else(|| entry.content.map(|c| c.body.unwrap_or_default()))
                 .unwrap_or_default()
-                .replace("\n", " ").trim().to_string();
+                .replace("\n", " ")
+                .trim()
+                .to_string();
 
-            let publish_date = entry.published
+            let publish_date = entry
+                .published
                 .or(entry.updated)
                 .unwrap_or_else(|| Utc::now());
 
-            let title = entry.title.map(|t| t.content).unwrap_or_else(|| "Untitled".to_string())
-                .replace("\n", " ").trim().to_string();
+            let title = entry
+                .title
+                .map(|t| t.content)
+                .unwrap_or_else(|| "Untitled".to_string())
+                .replace("\n", " ")
+                .trim()
+                .to_string();
 
             let external_id = entry.id.clone();
-            
+
             let item_url = if external_id.starts_with("http") {
                 external_id.clone()
             } else {
-                entry.links.first().map(|l| l.href.clone()).unwrap_or_else(|| external_id.clone())
+                entry
+                    .links
+                    .first()
+                    .map(|l| l.href.clone())
+                    .unwrap_or_else(|| external_id.clone())
             };
 
             items.push(InboxItem {
-                id: uuid::Uuid::new_v4(), // Transient ID
+                id: uuid::Uuid::new_v4(),   // Transient ID
                 feed_id: uuid::Uuid::nil(), // Caller sets this
                 external_id,
                 title,
@@ -74,7 +94,7 @@ impl ArxivService {
                 publication: None, // Assuming journal_ref is dropped in feed_rs Atom parse
             });
         }
-        
+
         Ok(items)
     }
 }

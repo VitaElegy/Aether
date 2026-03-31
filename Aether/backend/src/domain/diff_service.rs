@@ -1,5 +1,5 @@
+use serde::{Deserialize, Serialize};
 use similar::{ChangeTag, TextDiff};
-use serde::{Serialize, Deserialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct DiffResult {
@@ -36,4 +36,3 @@ impl DiffService {
         DiffResult { changes }
     }
 }
-

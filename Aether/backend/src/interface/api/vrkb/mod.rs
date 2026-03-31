@@ -1,12 +1,12 @@
-use axum::Router;
 use crate::interface::state::AppState;
+use axum::Router;
 
-pub mod projects;
-pub mod findings;
 pub mod assets;
-pub mod members;
-pub mod specs;
 pub mod docs;
+pub mod findings;
+pub mod members;
+pub mod projects;
+pub mod specs;
 pub mod stats;
 
 pub mod structure;
@@ -20,5 +20,8 @@ pub fn router() -> Router<AppState> {
         .merge(specs::router())
         .merge(docs::router())
         .merge(stats::router())
-        .route("/api/kb/:id/structure", axum::routing::get(structure::get_kb_structure))
+        .route(
+            "/api/kb/:id/structure",
+            axum::routing::get(structure::get_kb_structure),
+        )
 }

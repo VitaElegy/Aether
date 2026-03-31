@@ -1,11 +1,11 @@
+use crate::domain::models::{KnowledgeBase, KnowledgeBaseId, UserId, Visibility};
+use crate::domain::ports::{KnowledgeBaseRepository, PermissionRepository, RepositoryError};
+use crate::infrastructure::persistence::entities::knowledge_base;
+use crate::infrastructure::persistence::postgres::PostgresRepository;
 use async_trait::async_trait;
+use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
-use chrono::Utc;
-use crate::domain::models::{KnowledgeBase, KnowledgeBaseId, Visibility, UserId};
-use crate::domain::ports::{KnowledgeBaseRepository, PermissionRepository, RepositoryError};
-use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::infrastructure::persistence::entities::knowledge_base;
 
 #[async_trait]
 impl KnowledgeBaseRepository for PostgresRepository {
@@ -41,24 +41,31 @@ impl KnowledgeBaseRepository for PostgresRepository {
                         knowledge_base::Column::Visibility,
                         knowledge_base::Column::UpdatedAt,
                     ])
-                    .to_owned()
+                    .to_owned(),
             )
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         // ReBAC Permissions
-        let _ = self.add_relation(kb.id.0, "node", "owner", kb.author_id, "user").await;
-        
+        let _ = self
+            .add_relation(kb.id.0, "node", "owner", kb.author_id, "user")
+            .await;
+
         if let Visibility::Public = kb.visibility {
-             let public_group_id = Uuid::nil();
-             let _ = self.add_relation(kb.id.0, "node", "viewer", public_group_id, "group").await;
+            let public_group_id = Uuid::nil();
+            let _ = self
+                .add_relation(kb.id.0, "node", "viewer", public_group_id, "group")
+                .await;
         }
 
         Ok(kb.id)
     }
 
-    async fn find_by_id(&self, id: &KnowledgeBaseId) -> Result<Option<KnowledgeBase>, RepositoryError> {
+    async fn find_by_id(
+        &self,
+        id: &KnowledgeBaseId,
+    ) -> Result<Option<KnowledgeBase>, RepositoryError> {
         let result = knowledge_base::Entity::find_by_id(id.0)
             .one(&self.db)
             .await
@@ -67,7 +74,11 @@ impl KnowledgeBaseRepository for PostgresRepository {
         Ok(result.map(|m| map_to_domain(m)))
     }
 
-    async fn find_by_title(&self, author_id: &UserId, title: &str) -> Result<Option<KnowledgeBase>, RepositoryError> {
+    async fn find_by_title(
+        &self,
+        author_id: &UserId,
+        title: &str,
+    ) -> Result<Option<KnowledgeBase>, RepositoryError> {
         let result = knowledge_base::Entity::find()
             .filter(knowledge_base::Column::AuthorId.eq(author_id.0))
             .filter(knowledge_base::Column::Title.eq(title))
@@ -78,7 +89,11 @@ impl KnowledgeBaseRepository for PostgresRepository {
         Ok(result.map(|m| map_to_domain(m)))
     }
 
-    async fn list(&self, _viewer_id: Option<UserId>, author_id: Option<UserId>) -> Result<Vec<KnowledgeBase>, RepositoryError> {
+    async fn list(
+        &self,
+        _viewer_id: Option<UserId>,
+        author_id: Option<UserId>,
+    ) -> Result<Vec<KnowledgeBase>, RepositoryError> {
         let mut query = knowledge_base::Entity::find();
 
         if let Some(uid) = author_id {

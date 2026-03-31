@@ -3,13 +3,19 @@ use sea_orm::*;
 use uuid::Uuid;
 
 use crate::domain::ports::{PermissionRepository, RepositoryError};
+use crate::infrastructure::persistence::entities::{group, relationship};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::infrastructure::persistence::entities::{relationship, group};
-
 
 #[async_trait]
 impl PermissionRepository for PostgresRepository {
-    async fn add_relation(&self, entity_id: Uuid, entity_type: &str, relation: &str, subject_id: Uuid, subject_type: &str) -> Result<(), RepositoryError> {
+    async fn add_relation(
+        &self,
+        entity_id: Uuid,
+        entity_type: &str,
+        relation: &str,
+        subject_id: Uuid,
+        subject_type: &str,
+    ) -> Result<(), RepositoryError> {
         let rel = relationship::ActiveModel {
             id: Set(Uuid::new_v4()),
             entity_type: Set(entity_type.to_string()),
@@ -22,19 +28,26 @@ impl PermissionRepository for PostgresRepository {
         // Use Insert with OnConflict Do Nothing (to handle idempotency)
         match rel.insert(&self.db).await {
             Ok(_) => Ok(()),
-            Err(DbErr::Exec(err)) | Err(DbErr::Query(err)) => { 
+            Err(DbErr::Exec(err)) | Err(DbErr::Query(err)) => {
                 let msg = err.to_string();
                 if msg.contains("UNIQUE constraint failed") || msg.contains("duplicate key value") {
                     Ok(()) // Already exists, return Ok (Idempotent)
                 } else {
                     Err(RepositoryError::DatabaseError(msg))
                 }
-            },
+            }
             Err(e) => Err(RepositoryError::DatabaseError(e.to_string())),
         }
     }
 
-    async fn remove_relation(&self, entity_id: Uuid, entity_type: &str, relation: &str, subject_id: Uuid, subject_type: &str) -> Result<(), RepositoryError> {
+    async fn remove_relation(
+        &self,
+        entity_id: Uuid,
+        entity_type: &str,
+        relation: &str,
+        subject_id: Uuid,
+        subject_type: &str,
+    ) -> Result<(), RepositoryError> {
         let _res = relationship::Entity::delete_many()
             .filter(relationship::Column::EntityType.eq(entity_type))
             .filter(relationship::Column::EntityId.eq(entity_id))
@@ -47,7 +60,14 @@ impl PermissionRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn has_relation(&self, entity_id: Uuid, entity_type: &str, relation: &str, subject_id: Uuid, subject_type: &str) -> Result<bool, RepositoryError> {
+    async fn has_relation(
+        &self,
+        entity_id: Uuid,
+        entity_type: &str,
+        relation: &str,
+        subject_id: Uuid,
+        subject_type: &str,
+    ) -> Result<bool, RepositoryError> {
         let count = relationship::Entity::find()
             .filter(relationship::Column::EntityType.eq(entity_type))
             .filter(relationship::Column::EntityId.eq(entity_id))
@@ -69,7 +89,7 @@ impl PermissionRepository for PostgresRepository {
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
-        
+
         Ok(rels.into_iter().map(|r| r.entity_id).collect())
     }
 
@@ -83,7 +103,7 @@ impl PermissionRepository for PostgresRepository {
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
-        
+
         Ok(rels.into_iter().map(|r| r.subject_id).collect())
     }
 
@@ -101,7 +121,12 @@ impl PermissionRepository for PostgresRepository {
         }
     }
 
-    async fn get_collaborators(&self, entity_id: Uuid, entity_type: &str, relation: &str) -> Result<Vec<Uuid>, RepositoryError> {
+    async fn get_collaborators(
+        &self,
+        entity_id: Uuid,
+        entity_type: &str,
+        relation: &str,
+    ) -> Result<Vec<Uuid>, RepositoryError> {
         let rels = relationship::Entity::find()
             .filter(relationship::Column::EntityType.eq(entity_type))
             .filter(relationship::Column::EntityId.eq(entity_id))
@@ -114,7 +139,10 @@ impl PermissionRepository for PostgresRepository {
         Ok(rels.into_iter().map(|r| r.subject_id).collect())
     }
 
-    async fn get_direct_relations(&self, subject_id: Uuid) -> Result<Vec<(Uuid, String, String)>, RepositoryError> {
+    async fn get_direct_relations(
+        &self,
+        subject_id: Uuid,
+    ) -> Result<Vec<(Uuid, String, String)>, RepositoryError> {
         let rels = relationship::Entity::find()
             .filter(relationship::Column::SubjectId.eq(subject_id))
             .filter(relationship::Column::SubjectType.eq("user"))
@@ -122,14 +150,17 @@ impl PermissionRepository for PostgresRepository {
             // But actually, get_subject_groups handles group memberships.
             // Direct relations usually means "editor of file X".
             // Group membership is "member of Group Y".
-            // We should filter out "member" relations to groups to avoid duplication if desired, 
+            // We should filter out "member" relations to groups to avoid duplication if desired,
             // or include them. The UI wants specific resource grants.
             // Let's exclude 'member' relation to 'group' entity.
-            .filter(relationship::Column::EntityType.ne("group")) 
+            .filter(relationship::Column::EntityType.ne("group"))
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
 
-        Ok(rels.into_iter().map(|r| (r.entity_id, r.entity_type, r.relation)).collect())
+        Ok(rels
+            .into_iter()
+            .map(|r| (r.entity_id, r.entity_type, r.relation))
+            .collect())
     }
 }

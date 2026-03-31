@@ -1,15 +1,15 @@
+use crate::interface::api::{
+    assets, auth, backup, comment, content, dictionary, export, graph, group, knowledge_base, memo,
+    openapi::ApiDoc, permission, portability, prkb, system, tags, template, upload, user,
+    user_settings, vocabulary, vrkb,
+};
+use crate::interface::state::AppState;
+use axum::http::{HeaderValue, Method};
 use axum::Router;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
-use tower_http::cors::{CorsLayer, Any};
-use axum::http::{Method, HeaderValue};
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
-use crate::interface::state::AppState;
-use crate::interface::api::{
-    auth, content, comment, memo, knowledge_base, export, upload, 
-    tags, vocabulary, dictionary, permission, user, system, template, group, prkb, graph, vrkb, assets, backup, portability, user_settings,
-    openapi::ApiDoc
-};
 
 pub fn build_router(state: AppState) -> Router {
     let api_routes = Router::new()
@@ -65,7 +65,7 @@ pub fn build_router(state: AppState) -> Router {
                     axum::http::header::AUTHORIZATION,
                     axum::http::header::ACCEPT,
                 ])
-                .allow_credentials(true)
+                .allow_credentials(true),
         )
 }
 

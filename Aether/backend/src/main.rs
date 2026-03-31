@@ -1,29 +1,29 @@
+use dotenvy::dotenv;
 use std::env;
 use tokio::net::TcpListener;
-use dotenvy::dotenv;
 
 mod domain;
 mod infrastructure;
 mod interface;
 
-use infrastructure::bootstrap::{database, seeding, services, router};
+use infrastructure::bootstrap::{database, router, seeding, services};
 
 #[tokio::main]
 async fn main() {
     dotenv().ok();
-    
+
     // 1. Logger
     // Force aggressive filtering: Only show INFO for our app, ERROR for everything else.
     // This overrides RUST_LOG env var to ensure silence as requested.
-    let filter = "error,aether_backend=info".parse::<tracing_subscriber::EnvFilter>().unwrap();
+    let filter = "error,aether_backend=info"
+        .parse::<tracing_subscriber::EnvFilter>()
+        .unwrap();
 
-    tracing_subscriber::fmt()
-        .with_env_filter(filter)
-        .init();
+    tracing_subscriber::fmt().with_env_filter(filter).init();
 
     // 2. Database
     let db = database::init_pool().await;
-    
+
     // 3. Migrations (CLI or Auto)
     let args: Vec<String> = env::args().collect();
     if args.len() > 1 && args[1] == "migrate" {
@@ -31,7 +31,7 @@ async fn main() {
         database::run_bulk_migration(db).await;
         return;
     }
-    
+
     // Auto Schema Migrations
     database::run_migrations(&db).await;
 
@@ -43,12 +43,14 @@ async fn main() {
 
     // 6. Router & Server
     let app = router::build_router(state);
-    
+
     // Configurable Port for Tauri/Desktop
     let port = env::var("PORT").unwrap_or_else(|_| "3000".to_string());
     let addr = format!("0.0.0.0:{}", port);
-    
-    let listener = TcpListener::bind(&addr).await.expect(&format!("Failed to bind port {}", port));
+
+    let listener = TcpListener::bind(&addr)
+        .await
+        .expect(&format!("Failed to bind port {}", port));
     tracing::info!("Aether Core online at {} (Refactored)", addr);
     axum::serve(listener, app).await.unwrap();
 }

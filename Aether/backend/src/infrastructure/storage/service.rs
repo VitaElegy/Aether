@@ -1,10 +1,10 @@
-use std::sync::Arc;
+use crate::domain::models::VrkbAsset;
+use crate::domain::ports::VrkbRepository;
+use chrono::Utc;
 use sha2::{Digest, Sha256};
+use std::sync::Arc;
 use tokio::io::AsyncWriteExt;
 use uuid::Uuid;
-use chrono::Utc;
-use crate::domain::models::VrkbAsset;
-use crate::domain::ports::{VrkbRepository};
 // use std::path::Path;
 
 #[derive(Clone)]
@@ -18,7 +18,12 @@ impl AssetStorageService {
         Self { repo, storage_root }
     }
 
-    pub async fn store_asset(&self, _mapped_file_name: &str, data: &[u8], mime_type: &str) -> Result<VrkbAsset, String> {
+    pub async fn store_asset(
+        &self,
+        _mapped_file_name: &str,
+        data: &[u8],
+        mime_type: &str,
+    ) -> Result<VrkbAsset, String> {
         // 1. Compute Hash
         let mut hasher = Sha256::new();
         hasher.update(data);
@@ -34,10 +39,14 @@ impl AssetStorageService {
         // Use first 2 chars for subfolder to avoid directory bloat: objects/ab/abcdef...
         let sharded_dir = format!("{}/objects/{}", self.storage_root, &hash_hex[0..2]);
         let file_path = format!("{}/{}", sharded_dir, hash_hex);
-        
-        tokio::fs::create_dir_all(&sharded_dir).await.map_err(|e| e.to_string())?;
-        
-        let mut file = tokio::fs::File::create(&file_path).await.map_err(|e| e.to_string())?;
+
+        tokio::fs::create_dir_all(&sharded_dir)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        let mut file = tokio::fs::File::create(&file_path)
+            .await
+            .map_err(|e| e.to_string())?;
         file.write_all(data).await.map_err(|e| e.to_string())?;
 
         // 4. Create Entity
@@ -50,7 +59,8 @@ impl AssetStorageService {
             created_at: Utc::now(),
         };
 
-        self.repo.create_asset(asset.clone())
+        self.repo
+            .create_asset(asset.clone())
             .await
             .map_err(|e| e.to_string())?;
 

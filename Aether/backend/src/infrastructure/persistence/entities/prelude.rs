@@ -3,8 +3,8 @@
 // pub use super::comment::Entity as Comment;
 // pub use super::content_version::Entity as ContentVersion;
 // pub use super::knowledge_base::Entity as KnowledgeBase;
-pub use super::memo_detail::Entity as MemoDetail; 
-pub use super::node::Entity as Node; 
+pub use super::memo_detail::Entity as MemoDetail;
+pub use super::node::Entity as Node;
 pub use super::user::Entity as User;
 // pub use super::vocab_detail::Entity as VocabDetail;
 // pub use super::vocab_example::Entity as VocabExample;

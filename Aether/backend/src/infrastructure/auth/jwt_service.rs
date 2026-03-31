@@ -1,18 +1,15 @@
-use async_trait::async_trait;
-use jsonwebtoken::{decode, encode, Header, Validation, DecodingKey, EncodingKey, Algorithm};
-use argon2::{
-    password_hash::{
-        rand_core::OsRng,
-        PasswordHash, PasswordHasher, PasswordVerifier, SaltString
-    },
-    Argon2
-};
-use std::sync::Arc;
 use crate::domain::{
-    ports::{AuthService, AuthError, UserRepository},
     models::AuthClaims,
+    ports::{AuthError, AuthService, UserRepository},
 };
-use chrono::{Utc, Duration};
+use argon2::{
+    password_hash::{rand_core::OsRng, PasswordHash, PasswordHasher, PasswordVerifier, SaltString},
+    Argon2,
+};
+use async_trait::async_trait;
+use chrono::{Duration, Utc};
+use jsonwebtoken::{decode, encode, Algorithm, DecodingKey, EncodingKey, Header, Validation};
+use std::sync::Arc;
 
 pub struct Arg2JwtAuthService {
     user_repo: Arc<dyn UserRepository>,
@@ -21,7 +18,10 @@ pub struct Arg2JwtAuthService {
 
 impl Arg2JwtAuthService {
     pub fn new(user_repo: Arc<dyn UserRepository>, secret: String) -> Self {
-        Self { user_repo, jwt_secret: secret }
+        Self {
+            user_repo,
+            jwt_secret: secret,
+        }
     }
 }
 
@@ -29,15 +29,19 @@ impl Arg2JwtAuthService {
 impl AuthService for Arg2JwtAuthService {
     async fn authenticate(&self, username: &str, password: &str) -> Result<AuthClaims, AuthError> {
         // 1. Fetch User
-        let user = self.user_repo.find_by_username(username).await
+        let user = self
+            .user_repo
+            .find_by_username(username)
+            .await
             .map_err(AuthError::RepoError)?
             .ok_or(AuthError::InvalidCredentials)?;
 
         // 2. Verify Password (Argon2)
-        let parsed_hash = PasswordHash::new(&user.password_hash)
-            .map_err(|_| AuthError::InvalidCredentials)?;
+        let parsed_hash =
+            PasswordHash::new(&user.password_hash).map_err(|_| AuthError::InvalidCredentials)?;
 
-        Argon2::default().verify_password(password.as_bytes(), &parsed_hash)
+        Argon2::default()
+            .verify_password(password.as_bytes(), &parsed_hash)
             .map_err(|_| AuthError::InvalidCredentials)?;
 
         // 3. Generate Claims
@@ -60,7 +64,8 @@ impl AuthService for Arg2JwtAuthService {
             token,
             &DecodingKey::from_secret(self.jwt_secret.as_bytes()),
             &Validation::new(Algorithm::HS256),
-        ).map_err(|_| AuthError::InvalidToken)?;
+        )
+        .map_err(|_| AuthError::InvalidToken)?;
 
         Ok(token_data.claims)
     }
@@ -69,13 +74,17 @@ impl AuthService for Arg2JwtAuthService {
         encode(
             &Header::default(),
             claims,
-            &EncodingKey::from_secret(self.jwt_secret.as_bytes())
-        ).map_err(|e| AuthError::TokenGenerationError(e.to_string()))
+            &EncodingKey::from_secret(self.jwt_secret.as_bytes()),
+        )
+        .map_err(|e| AuthError::TokenGenerationError(e.to_string()))
     }
 }
 
 // Utility to hash passwords (useful for registration or seeding)
 pub fn hash_password(password: &str) -> String {
     let salt = SaltString::generate(&mut OsRng);
-    Argon2::default().hash_password(password.as_bytes(), &salt).unwrap().to_string()
+    Argon2::default()
+        .hash_password(password.as_bytes(), &salt)
+        .unwrap()
+        .to_string()
 }

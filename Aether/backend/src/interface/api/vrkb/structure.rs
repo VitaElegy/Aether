@@ -17,7 +17,9 @@ pub async fn get_kb_structure(
 ) -> Result<Json<Vec<Value>>, (axum::http::StatusCode, String)> {
     // 1. Fetch all raw blocks
     let repo = BlockRepository::new(state.repo.db.clone());
-    let blocks = repo.find_by_kb_id(kb_id).await
+    let blocks = repo
+        .find_by_kb_id(kb_id)
+        .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     // 2. Compute Topology
@@ -28,7 +30,8 @@ pub async fn get_kb_structure(
     // 3. Serialize
     // Convert to JSON Value for response
     // Ideally we return DTOs, but here we reuse the Block model which is Serialize
-    let json_blocks = sorted_blocks.into_iter()
+    let json_blocks = sorted_blocks
+        .into_iter()
         .map(|b| serde_json::to_value(b).unwrap())
         .collect();
 

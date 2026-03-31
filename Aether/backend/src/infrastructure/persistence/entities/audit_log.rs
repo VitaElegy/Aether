@@ -6,10 +6,10 @@ use serde::{Deserialize, Serialize};
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
-    pub action: String, // e.g. "grant_permission", "break_glass"
-    pub actor_id: Uuid, // Who did it
+    pub action: String,          // e.g. "grant_permission", "break_glass"
+    pub actor_id: Uuid,          // Who did it
     pub target_resource: String, // e.g. "kb:123"
-    pub details: Json, // e.g. { "role": "editor", "previous": "viewer" }
+    pub details: Json,           // e.g. { "role": "editor", "previous": "viewer" }
     pub created_at: DateTimeWithTimeZone,
 }
 

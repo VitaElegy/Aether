@@ -1,10 +1,10 @@
-use async_trait::async_trait;
-use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, Set, QueryOrder};
-use uuid::Uuid;
 use crate::domain::models::GraphNode;
 use crate::domain::ports::{GraphRepository, RepositoryError};
 use crate::infrastructure::persistence::entities::graph_node;
 use crate::infrastructure::persistence::postgres::PostgresRepository;
+use async_trait::async_trait;
+use sea_orm::{ColumnTrait, EntityTrait, QueryFilter, QueryOrder, Set};
+use uuid::Uuid;
 
 #[async_trait]
 impl GraphRepository for PostgresRepository {
@@ -30,7 +30,7 @@ impl GraphRepository for PostgresRepository {
                         graph_node::Column::Rank,
                         graph_node::Column::UpdatedAt,
                     ])
-                    .to_owned()
+                    .to_owned(),
             )
             .exec(&self.db)
             .await
@@ -47,16 +47,19 @@ impl GraphRepository for PostgresRepository {
             .await
             .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
 
-        Ok(nodes.into_iter().map(|n| GraphNode {
-            id: n.id,
-            knowledge_base_id: n.knowledge_base_id,
-            parent_id: n.parent_id,
-            label: n.label,
-            data: n.data,
-            rank: n.rank,
-            created_at: n.created_at.into(),
-            updated_at: n.updated_at.into(),
-        }).collect())
+        Ok(nodes
+            .into_iter()
+            .map(|n| GraphNode {
+                id: n.id,
+                knowledge_base_id: n.knowledge_base_id,
+                parent_id: n.parent_id,
+                label: n.label,
+                data: n.data,
+                rank: n.rank,
+                created_at: n.created_at.into(),
+                updated_at: n.updated_at.into(),
+            })
+            .collect())
     }
 
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<GraphNode>, RepositoryError> {

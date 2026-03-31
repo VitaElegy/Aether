@@ -39,7 +39,7 @@ pub enum Relation {
         on_delete = "SetNull"
     )]
     Root,
-    
+
     #[sea_orm(has_many = "super::vocab_example::Entity")]
     Examples,
 }

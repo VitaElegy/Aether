@@ -1,20 +1,22 @@
+use crate::domain::prkb::models::{Author, Feed, Paper};
+use crate::domain::prkb::ports::PrkbRepository;
+use crate::interface::api::auth::AuthenticatedUser;
+use crate::interface::state::AppState;
 use axum::{
-    extract::{Path, State, Query},
-    routing::{get, post, delete, patch},
-    Json, Router, response::IntoResponse, http::StatusCode,
+    extract::{Path, Query, State},
+    http::StatusCode,
+    response::IntoResponse,
+    routing::{delete, get, patch, post},
+    Json, Router,
 };
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
-use crate::interface::state::AppState;
-use crate::interface::api::auth::AuthenticatedUser;
-use crate::domain::prkb::models::{Feed, Paper, Author};
-use crate::domain::prkb::ports::PrkbRepository;
 
 // --- DTOs ---
 #[derive(Deserialize)]
 pub struct CreateFeedRequest {
     pub name: String,
-    pub url: String, // or category for arxiv
+    pub url: String,       // or category for arxiv
     pub feed_type: String, // 'arxiv', 'rss'
 }
 
@@ -66,7 +68,11 @@ pub async fn list_feeds(
 ) -> impl IntoResponse {
     match state.repo.list_feeds().await {
         Ok(feeds) => (StatusCode::OK, Json(feeds)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -83,10 +89,14 @@ pub async fn create_feed(
         last_fetched_at: None,
         created_at: chrono::Utc::now(),
     };
-    
+
     match state.repo.create_feed(feed).await {
         Ok(id) => (StatusCode::OK, Json(serde_json::json!({"id": id}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -96,8 +106,16 @@ pub async fn delete_feed(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     match state.repo.delete_feed(id).await {
-        Ok(_) => (StatusCode::OK, Json(serde_json::json!({"status": "deleted"}))).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({"status": "deleted"})),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -111,18 +129,33 @@ pub async fn get_inbox(
     let offset = q.offset.unwrap_or(0);
     let publication = q.publication;
 
-    let items_result = state.repo.get_inbox(limit, offset, unread_only, publication.clone()).await;
+    let items_result = state
+        .repo
+        .get_inbox(limit, offset, unread_only, publication.clone())
+        .await;
     let count_result = state.repo.count_inbox(unread_only, publication).await;
 
     match (items_result, count_result) {
-        (Ok(items), Ok(total)) => (StatusCode::OK, Json(serde_json::json!({
-            "items": items,
-            "total": total,
-            "limit": limit,
-            "offset": offset
-        }))).into_response(),
-        (Err(e), _) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
-        (_, Err(e)) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        (Ok(items), Ok(total)) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "items": items,
+                "total": total,
+                "limit": limit,
+                "offset": offset
+            })),
+        )
+            .into_response(),
+        (Err(e), _) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
+        (_, Err(e)) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -134,24 +167,35 @@ pub async fn update_inbox_item(
 ) -> impl IntoResponse {
     // We reuse UpdatePaperRequest for simplicity if fields match ("state", "is_read")
     // Note: Request struct has Option<String> state, Option<bool> is_read.
-    
+
     if let Some(s) = payload.state {
         if let Err(e) = state.repo.update_inbox_state(id, s).await {
-              return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response();
         }
     }
-    
+
     if let Some(read) = payload.is_read {
         if read {
-             if let Err(e) = state.repo.markup_inbox_item_read(id).await {
-                  return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
-             }
+            if let Err(e) = state.repo.markup_inbox_item_read(id).await {
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(serde_json::json!({"error": e.to_string()})),
+                )
+                    .into_response();
+            }
         }
     }
 
-    (StatusCode::OK, Json(serde_json::json!({"status": "updated"}))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"status": "updated"})),
+    )
+        .into_response()
 }
-
 
 pub async fn get_publications(
     State(state): State<AppState>,
@@ -159,7 +203,11 @@ pub async fn get_publications(
 ) -> impl IntoResponse {
     match state.repo.get_unique_publications().await {
         Ok(pubs) => (StatusCode::OK, Json(pubs)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -171,75 +219,97 @@ pub async fn fetch_feeds(
     // 1. List feeds
     let all_feeds = match state.repo.list_feeds().await {
         Ok(f) => f,
-        Err(e) => return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response()
+        }
     };
 
     // Filter if feed_id provided
     let feeds_to_fetch: Vec<Feed> = if let Some(target_id) = payload.feed_id {
-        all_feeds.into_iter().filter(|f| f.id == target_id).collect()
+        all_feeds
+            .into_iter()
+            .filter(|f| f.id == target_id)
+            .collect()
     } else {
         all_feeds
     };
 
     let mut total_count = 0;
     let mut details = Vec::new();
-    
+
     // 2. Iterate and fetch
     for feed in feeds_to_fetch {
         tracing::info!("Fetching feed: {}", feed.name);
-        
+
         let items_result = if feed.feed_type == "arxiv" {
-            state.arxiv_service.fetch_recent_by_category(&feed.url, 100).await
+            state
+                .arxiv_service
+                .fetch_recent_by_category(&feed.url, 100)
+                .await
         } else if feed.feed_type == "rss" {
             state.rss_service.fetch_feed(&feed.url).await
         } else {
-            details.push(FeedFetchResult { 
-                feed_name: feed.name.clone(), 
-                count: 0, 
-                status: "skipped_unknown_type".to_string() 
+            details.push(FeedFetchResult {
+                feed_name: feed.name.clone(),
+                count: 0,
+                status: "skipped_unknown_type".to_string(),
             });
-            continue; 
+            continue;
         };
 
         match items_result {
             Ok(mut items) => {
-                 // Update feed_id
+                // Update feed_id
                 for item in &mut items {
                     item.feed_id = feed.id;
                 }
-                
+
                 if let Err(e) = state.repo.save_inbox_items(items.clone()).await {
-                     tracing::error!("Failed to save items for feed {}: {}", feed.name, e);
-                     details.push(FeedFetchResult { 
-                        feed_name: feed.name.clone(), 
-                        count: 0, 
-                        status: format!("save_error: {}", e)
+                    tracing::error!("Failed to save items for feed {}: {}", feed.name, e);
+                    details.push(FeedFetchResult {
+                        feed_name: feed.name.clone(),
+                        count: 0,
+                        status: format!("save_error: {}", e),
                     });
                 } else {
                     let new_count = items.len();
                     total_count += new_count;
                     tracing::info!("Saved {} items for feed {}", new_count, feed.name);
-                    let _ = state.repo.update_feed_last_fetched(feed.id, chrono::Utc::now()).await;
-                    
-                    details.push(FeedFetchResult { 
-                        feed_name: feed.name.clone(), 
-                        count: new_count, 
-                        status: "ok".to_string()
+                    let _ = state
+                        .repo
+                        .update_feed_last_fetched(feed.id, chrono::Utc::now())
+                        .await;
+
+                    details.push(FeedFetchResult {
+                        feed_name: feed.name.clone(),
+                        count: new_count,
+                        status: "ok".to_string(),
                     });
                 }
-            },
+            }
             Err(e) => {
                 tracing::error!("Failed to fetch feed {}: {}", feed.name, e);
-                details.push(FeedFetchResult { 
-                    feed_name: feed.name.clone(), 
-                    count: 0, 
-                    status: format!("fetch_error: {}", e)
+                details.push(FeedFetchResult {
+                    feed_name: feed.name.clone(),
+                    count: 0,
+                    status: format!("fetch_error: {}", e),
                 });
             }
         }
     }
 
-    (StatusCode::OK, Json(FetchStats { total_count, details })).into_response()
+    (
+        StatusCode::OK,
+        Json(FetchStats {
+            total_count,
+            details,
+        }),
+    )
+        .into_response()
 }
 
 pub async fn save_paper(
@@ -247,13 +317,16 @@ pub async fn save_paper(
     _user: AuthenticatedUser,
     Json(payload): Json<SavePaperRequest>,
 ) -> impl IntoResponse {
-
-    let authors: Vec<Author> = payload.authors.into_iter().map(|name| Author {
-        id: Uuid::new_v4(),
-        name,
-        canonical_name: None,
-        profile_url: None,
-    }).collect();
+    let authors: Vec<Author> = payload
+        .authors
+        .into_iter()
+        .map(|name| Author {
+            id: Uuid::new_v4(),
+            name,
+            canonical_name: None,
+            profile_url: None,
+        })
+        .collect();
 
     let paper = Paper {
         id: Uuid::new_v4(),
@@ -270,25 +343,28 @@ pub async fn save_paper(
         state: "Inbox".to_string(),
         tags: payload.tags,
         arxiv_id: payload.arxiv_id,
-        venue: None, 
+        venue: None,
         signals: None,
         metadata: None,
-
     };
-    
+
     match state.repo.save_paper(paper).await {
         Ok(id) => {
             // Markup inbox item as saved if provided
             if let Some(_inbox_id) = payload.inbox_item_id {
-                 // We don't have a direct method to mark "saved" in repo yet?
-                 // Wait, PrkbRepository has generic inbox update? No. 
-                 // We added 'is_saved' column. Ideally we update it.
-                 // For now, let's just mark it read or ignore.
-                 // Actually, let's just update read status as a proxy or leave it.
+                // We don't have a direct method to mark "saved" in repo yet?
+                // Wait, PrkbRepository has generic inbox update? No.
+                // We added 'is_saved' column. Ideally we update it.
+                // For now, let's just mark it read or ignore.
+                // Actually, let's just update read status as a proxy or leave it.
             }
             (StatusCode::OK, Json(serde_json::json!({"id": id}))).into_response()
-        },
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        }
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -316,7 +392,11 @@ pub async fn list_papers(
 
     match state.repo.list_papers(filter, limit, offset).await {
         Ok(papers) => (StatusCode::OK, Json(papers)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -332,7 +412,11 @@ pub async fn list_venues(
 ) -> impl IntoResponse {
     match state.repo.list_venues().await {
         Ok(venues) => (StatusCode::OK, Json(venues)).into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({"error": e.to_string()})),
+        )
+            .into_response(),
     }
 }
 
@@ -344,15 +428,27 @@ pub async fn update_paper(
 ) -> impl IntoResponse {
     if let Some(is_read) = payload.is_read {
         if let Err(e) = state.repo.update_paper_read_status(id, is_read).await {
-             return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response();
         }
     }
     if let Some(s) = payload.state {
         if let Err(e) = state.repo.update_paper_state(id, s).await {
-             return (StatusCode::INTERNAL_SERVER_ERROR, Json(serde_json::json!({"error": e.to_string()}))).into_response();
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({"error": e.to_string()})),
+            )
+                .into_response();
         }
     }
-    (StatusCode::OK, Json(serde_json::json!({"status": "updated"}))).into_response()
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({"status": "updated"})),
+    )
+        .into_response()
 }
 
 pub fn router() -> Router<AppState> {

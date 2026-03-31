@@ -48,10 +48,11 @@ impl SchemaRegistry {
     /// Validate a single Block against its registered schema.
     pub fn validate_block(&self, block: &Block) -> Result<(), SchemaError> {
         let map = self.schemas.read().expect("Registry lock poisoned");
-        
-        let schema = map.get(&block.block_type)
+
+        let schema = map
+            .get(&block.block_type)
             .ok_or_else(|| SchemaError::UnknownType(block.block_type.clone()))?;
-            
+
         schema.validate(&block.payload)
     }
 
@@ -60,12 +61,13 @@ impl SchemaRegistry {
     /// or we could decide to error out. For now, strictness suggests error or warning.
     pub fn extract_text(&self, block: &Block) -> Result<String, SchemaError> {
         let map = self.schemas.read().expect("Registry lock poisoned");
-        
+
         // If type is missing, we might skip indexing or error.
         // Let's error to be consistent with Strict mode.
-        let schema = map.get(&block.block_type)
+        let schema = map
+            .get(&block.block_type)
             .ok_or_else(|| SchemaError::UnknownType(block.block_type.clone()))?;
-            
+
         Ok(schema.to_searchable_text(&block.payload))
     }
 }

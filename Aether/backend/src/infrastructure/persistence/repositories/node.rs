@@ -1,11 +1,11 @@
+use crate::domain::models::UserId;
+use crate::domain::models::{Node, NodeType, PermissionMode};
+use crate::domain::ports::{NodeRepository, RepositoryError};
+use crate::infrastructure::persistence::entities::node;
+use crate::infrastructure::persistence::postgres::PostgresRepository;
 use async_trait::async_trait;
 use sea_orm::*;
 use uuid::Uuid;
-use crate::domain::models::{Node, NodeType, PermissionMode};
-use crate::domain::models::UserId;
-use crate::domain::ports::{NodeRepository, RepositoryError};
-use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::infrastructure::persistence::entities::node;
 
 #[async_trait]
 impl NodeRepository for PostgresRepository {
@@ -26,7 +26,7 @@ impl NodeRepository for PostgresRepository {
                     "vocabulary" => NodeType::Vocabulary,
                     "memo" => NodeType::Memo,
                     "folder" => NodeType::Folder,
-                    _ => NodeType::Article, 
+                    _ => NodeType::Article,
                 },
                 title: n.title,
                 permission_mode: match n.permission_mode.as_str() {
@@ -60,7 +60,7 @@ impl NodeRepository for PostgresRepository {
                 PermissionMode::Private => "private".to_string(),
                 PermissionMode::Internal => "internal".to_string(),
             }),
-            permission_data: Set(None), 
+            permission_data: Set(None),
             created_at: Set(node.created_at.into()),
             updated_at: Set(node.updated_at.into()),
         };
@@ -70,21 +70,21 @@ impl NodeRepository for PostgresRepository {
         // SeaORM doesn't have "Save" (Upsert) easily without OnConflict which caused syntax earlier.
         // Let's Try Insert, if fails (Duplicate), then Update.
         // OR simpler: Try Find first? No, extra query.
-        // Use OnConflict correctly? 
+        // Use OnConflict correctly?
         // Let's just do Insert for now. If ID exists error, we can handle it later or use OnConflict if I can write it correctly.
         // But for "Refactor compilation fix", Insert is safe enough to compile.
-        
+
         node::Entity::insert(model)
             .on_conflict(
                 sea_orm::sea_query::OnConflict::column(node::Column::Id)
                     .update_columns([
-                        node::Column::Title, 
-                        node::Column::ParentId, 
-                        node::Column::PermissionMode, 
+                        node::Column::Title,
+                        node::Column::ParentId,
+                        node::Column::PermissionMode,
                         node::Column::UpdatedAt,
-                        node::Column::KnowledgeBaseId
+                        node::Column::KnowledgeBaseId,
                     ])
-                    .to_owned()
+                    .to_owned(),
             )
             .exec(&self.db)
             .await
@@ -106,27 +106,30 @@ impl NodeRepository for PostgresRepository {
             .await
             .map_err(|e| RepositoryError::DatabaseError(e.to_string()))?;
 
-        Ok(nodes.into_iter().map(|n| Node {
-            id: n.id,
-            parent_id: n.parent_id,
-            author_id: n.author_id,
-            knowledge_base_id: n.knowledge_base_id,
-            r#type: match n.r#type.as_str() {
-                "article" => NodeType::Article,
-                "vocabulary" => NodeType::Vocabulary,
-                "memo" => NodeType::Memo,
-                "folder" => NodeType::Folder,
-                _ => NodeType::Article, 
-            },
-            title: n.title,
-            permission_mode: match n.permission_mode.as_str() {
-                "private" => PermissionMode::Private,
-                "internal" => PermissionMode::Internal,
-                _ => PermissionMode::Public,
-            },
-            created_at: n.created_at.into(),
-            updated_at: n.updated_at.into(),
-        }).collect())
+        Ok(nodes
+            .into_iter()
+            .map(|n| Node {
+                id: n.id,
+                parent_id: n.parent_id,
+                author_id: n.author_id,
+                knowledge_base_id: n.knowledge_base_id,
+                r#type: match n.r#type.as_str() {
+                    "article" => NodeType::Article,
+                    "vocabulary" => NodeType::Vocabulary,
+                    "memo" => NodeType::Memo,
+                    "folder" => NodeType::Folder,
+                    _ => NodeType::Article,
+                },
+                title: n.title,
+                permission_mode: match n.permission_mode.as_str() {
+                    "private" => PermissionMode::Private,
+                    "internal" => PermissionMode::Internal,
+                    _ => PermissionMode::Public,
+                },
+                created_at: n.created_at.into(),
+                updated_at: n.updated_at.into(),
+            })
+            .collect())
     }
 
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError> {

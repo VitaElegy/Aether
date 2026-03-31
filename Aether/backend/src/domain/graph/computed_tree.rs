@@ -1,7 +1,7 @@
-use std::collections::{HashMap, HashSet, VecDeque};
-use uuid::Uuid;
 use crate::domain::blocks::models::Block;
 use crate::domain::blocks::strategies::extract_references;
+use std::collections::{HashMap, HashSet, VecDeque};
+use uuid::Uuid;
 
 pub struct ComputedTreeService;
 
@@ -34,17 +34,18 @@ impl ComputedTreeService {
 
         // 3. Kahn's Algorithm
         let mut queue: VecDeque<Uuid> = VecDeque::new();
-        
+
         // Push 0 in-degree nodes (Axioms, Independent Definitions)
         // Sort by ordinal to keep original author intent for ties
-        let mut independent: Vec<Uuid> = in_degree.iter()
+        let mut independent: Vec<Uuid> = in_degree
+            .iter()
             .filter(|(_, &deg)| deg == 0)
             .map(|(&id, _)| id)
             .collect();
-            
+
         // Sort key: Ordinal from original block
         independent.sort_by_key(|id| block_map.get(id).unwrap().ordinal);
-        
+
         for id in independent {
             queue.push_back(id);
         }
@@ -58,8 +59,8 @@ impl ComputedTreeService {
 
             if let Some(neighbors) = adj_list.get(&u) {
                 // Determine order for neighbors too
-                 let mut next_batch = Vec::new();
-                 
+                let mut next_batch = Vec::new();
+
                 for &v in neighbors {
                     if let Some(deg) = in_degree.get_mut(&v) {
                         *deg -= 1;
@@ -68,25 +69,25 @@ impl ComputedTreeService {
                         }
                     }
                 }
-                
+
                 // Sort next batch by ordinal
                 next_batch.sort_by_key(|id| block_map.get(id).unwrap().ordinal);
-                
+
                 for v in next_batch {
                     queue.push_back(v);
                 }
             }
         }
-        
+
         // TODO: Detect cycles? If sorted_blocks.len() != blocks.len(), cycle exists.
         // For now, append remaining blocks (cycle participants) at the end.
         if sorted_blocks.len() != blocks.len() {
-             let processed: HashSet<Uuid> = sorted_blocks.iter().map(|b| b.id).collect();
-             for block in blocks {
-                 if !processed.contains(&block.id) {
-                     sorted_blocks.push(block);
-                 }
-             }
+            let processed: HashSet<Uuid> = sorted_blocks.iter().map(|b| b.id).collect();
+            for block in blocks {
+                if !processed.contains(&block.id) {
+                    sorted_blocks.push(block);
+                }
+            }
         }
 
         sorted_blocks

@@ -1,5 +1,5 @@
-use utoipa::OpenApi;
 use super::vocabulary;
+use utoipa::OpenApi;
 
 #[derive(OpenApi)]
 #[openapi(

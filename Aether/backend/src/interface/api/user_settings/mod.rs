@@ -7,11 +7,8 @@ use serde_json::Value;
 
 use crate::{
     domain::dtos::user::UserSettingsDto,
-    interface::{
-        state::AppState,
-        api::auth::AuthenticatedUser,
-    },
     infrastructure::persistence::repositories::settings::SettingsRepository,
+    interface::{api::auth::AuthenticatedUser, state::AppState},
 };
 
 #[utoipa::path(
@@ -31,7 +28,7 @@ pub async fn get_user_settings(
     State(state): State<AppState>,
     user: AuthenticatedUser,
     Path(module_key): Path<String>,
-) ->  Result<impl IntoResponse, (axum::http::StatusCode, String)> {
+) -> Result<impl IntoResponse, (axum::http::StatusCode, String)> {
     let settings = SettingsRepository::get_settings(&state.repo.db, user.id, &module_key)
         .await
         .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -58,17 +55,18 @@ pub async fn update_user_settings(
     Path(module_key): Path<String>,
     Json(payload): Json<Value>,
 ) -> Result<impl IntoResponse, (axum::http::StatusCode, String)> {
-    let updated = SettingsRepository::update_settings(&state.repo.db, user.id, &module_key, payload)
-        .await
-        .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let updated =
+        SettingsRepository::update_settings(&state.repo.db, user.id, &module_key, payload)
+            .await
+            .map_err(|e| (axum::http::StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     Ok(Json(updated))
 }
 
 pub fn router() -> axum::Router<AppState> {
     use axum::routing::get;
-    axum::Router::new()
-        .route("/api/users/settings/:module_key", 
-            get(get_user_settings).put(update_user_settings)
-        )
+    axum::Router::new().route(
+        "/api/users/settings/:module_key",
+        get(get_user_settings).put(update_user_settings),
+    )
 }

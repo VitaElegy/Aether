@@ -1,18 +1,20 @@
+use crate::domain::models::VrkbSpec;
+use crate::domain::ports::VrkbRepository;
+use crate::interface::state::AppState;
+use axum::http::StatusCode;
 use axum::{
     extract::{Path, State},
     routing::get,
     Json, Router,
 };
-use uuid::Uuid;
-use crate::interface::state::AppState;
-use crate::domain::models::VrkbSpec;
-use crate::domain::ports::VrkbRepository;
-use axum::http::StatusCode;
 use chrono::Utc;
+use uuid::Uuid;
 
 pub fn router() -> Router<AppState> {
-    Router::new()
-        .route("/api/vrkb/projects/:id/specs", get(get_specs).put(save_spec))
+    Router::new().route(
+        "/api/vrkb/projects/:id/specs",
+        get(get_specs).put(save_spec),
+    )
 }
 
 #[derive(serde::Deserialize)]
@@ -27,7 +29,11 @@ async fn get_specs(
     State(state): State<AppState>,
     Path(project_id): Path<Uuid>,
 ) -> Result<Json<Vec<VrkbSpec>>, (StatusCode, String)> {
-    let specs = state.repo.get_specs(&project_id).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let specs = state
+        .repo
+        .get_specs(&project_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(specs))
 }
 
@@ -44,6 +50,10 @@ async fn save_spec(
         version: payload.version,
         updated_at: Utc::now(),
     };
-    let id = state.repo.save_spec(spec).await.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let id = state
+        .repo
+        .save_spec(spec)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     Ok(Json(id))
 }

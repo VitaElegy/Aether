@@ -1,7 +1,7 @@
-use std::sync::Arc;
-use sea_orm::{DatabaseConnection, EntityTrait, ActiveValue, ActiveModelTrait};
 use crate::infrastructure::persistence::entities::system_setting;
+use sea_orm::{ActiveModelTrait, ActiveValue, DatabaseConnection, EntityTrait};
 use serde_json::Value;
+use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct SystemSettingsRepository {
@@ -32,7 +32,7 @@ impl SystemSettingsRepository {
 
     pub async fn set(&self, key: &str, value: Value) -> Result<(), sea_orm::DbErr> {
         let db = self.db.as_ref();
-        
+
         let existing = system_setting::Entity::find_by_id(key).one(db).await?;
 
         match existing {
@@ -41,7 +41,7 @@ impl SystemSettingsRepository {
                 active.value = ActiveValue::Set(value);
                 active.updated_at = ActiveValue::Set(chrono::Utc::now());
                 active.update(db).await?;
-            },
+            }
             None => {
                 let active = system_setting::ActiveModel {
                     key: ActiveValue::Set(key.to_string()),

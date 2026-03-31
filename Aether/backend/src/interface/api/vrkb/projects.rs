@@ -1,14 +1,17 @@
-use axum::{
-    Json, extract::{State, Path}, http::StatusCode, routing::{get}, Router
-};
-use uuid::Uuid;
-use chrono::Utc;
-use crate::interface::state::AppState;
-use crate::interface::api::auth::AuthenticatedUser;
 use crate::domain::models::{VrkbProject, VrkbSection};
-use crate::domain::ports::{VrkbRepository};
+use crate::domain::ports::VrkbRepository;
+use crate::interface::api::auth::AuthenticatedUser;
+use crate::interface::state::AppState;
+use axum::{
+    extract::{Path, State},
+    http::StatusCode,
+    routing::get,
+    Json, Router,
+};
+use chrono::Utc;
+use serde::Deserialize;
 use std::sync::Arc;
-use serde::{Deserialize};
+use uuid::Uuid;
 
 #[derive(Deserialize)]
 pub struct CreateProjectRequest {
@@ -43,7 +46,7 @@ async fn create_project(
     Json(payload): Json<CreateProjectRequest>,
 ) -> Result<Json<VrkbProject>, StatusCode> {
     let repo = state.repo.clone() as Arc<dyn VrkbRepository>;
-    
+
     let new_project = VrkbProject {
         id: Uuid::new_v4(),
         name: payload.name,
@@ -92,7 +95,7 @@ async fn create_section(
     Json(payload): Json<CreateSectionRequest>,
 ) -> Result<Json<VrkbSection>, StatusCode> {
     let repo = state.repo.clone() as Arc<dyn VrkbRepository>;
-    
+
     let new_section = VrkbSection {
         id: Uuid::new_v4(),
         project_id,
@@ -110,7 +113,13 @@ async fn create_section(
 
 pub fn router() -> Router<AppState> {
     Router::new()
-        .route("/api/vrkb/projects", get(list_projects).post(create_project))
+        .route(
+            "/api/vrkb/projects",
+            get(list_projects).post(create_project),
+        )
         .route("/api/vrkb/projects/:id", get(get_project))
-        .route("/api/vrkb/projects/:id/sections", get(list_sections).post(create_section))
+        .route(
+            "/api/vrkb/projects/:id/sections",
+            get(list_sections).post(create_section),
+        )
 }

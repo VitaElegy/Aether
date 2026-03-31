@@ -36,9 +36,9 @@ pub enum MemoColor {
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid, // FK to nodes.id
-    
+
     // Project/Board Context (Can be null if in Global Inbox)
-    pub project_id: Option<Uuid>, 
+    pub project_id: Option<Uuid>,
 
     // Visualization
     pub color: MemoColor,
@@ -48,7 +48,7 @@ pub struct Model {
     // Content
     #[sea_orm(column_type = "JsonBinary")]
     pub content: Json,
-    
+
     // GTD Fields
     pub status: String,
     pub priority: MemoPriority,

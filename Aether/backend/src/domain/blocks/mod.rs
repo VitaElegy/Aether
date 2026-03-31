@@ -1,5 +1,5 @@
 pub mod models;
-pub mod registry;
 pub mod parser;
+pub mod registry;
 pub mod schemas;
 pub mod strategies;

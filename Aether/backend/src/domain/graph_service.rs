@@ -1,8 +1,8 @@
-use uuid::Uuid;
-use chrono::Utc;
-use std::sync::Arc;
 use crate::domain::models::GraphNode;
 use crate::domain::ports::{GraphRepository, RepositoryError};
+use chrono::Utc;
+use std::sync::Arc;
+use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct GraphService {
@@ -23,7 +23,7 @@ impl GraphService {
         kb_id: Uuid,
         parent_id: Option<Uuid>,
         label: String,
-        data: serde_json::Value
+        data: serde_json::Value,
     ) -> Result<Uuid, RepositoryError> {
         let node = GraphNode {
             id: Uuid::new_v4(),

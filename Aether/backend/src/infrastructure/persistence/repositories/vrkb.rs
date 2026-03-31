@@ -1,11 +1,15 @@
+use crate::domain::models::{
+    VrkbAsset, VrkbDoc, VrkbFinding, VrkbMember, VrkbProject, VrkbSection, VrkbSpec,
+};
+use crate::domain::ports::{RepositoryError, VrkbRepository};
+use crate::infrastructure::persistence::entities::vrkb::{
+    asset, doc, finding, member, project, project_asset, section, spec,
+};
+use crate::infrastructure::persistence::postgres::PostgresRepository;
 use async_trait::async_trait;
+use chrono::Utc;
 use sea_orm::*;
 use uuid::Uuid;
-use chrono::Utc;
-use crate::domain::models::{VrkbProject, VrkbSection, VrkbFinding, VrkbAsset, VrkbMember, VrkbSpec, VrkbDoc};
-use crate::domain::ports::{VrkbRepository, RepositoryError};
-use crate::infrastructure::persistence::postgres::PostgresRepository;
-use crate::infrastructure::persistence::entities::vrkb::{project, section, finding, asset, project_asset, member, spec, doc};
 
 #[async_trait]
 impl VrkbRepository for PostgresRepository {
@@ -33,7 +37,7 @@ impl VrkbRepository for PostgresRepository {
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
+
         Ok(model.map(|m| VrkbProject {
             id: m.id,
             name: m.name,
@@ -51,16 +55,19 @@ impl VrkbRepository for PostgresRepository {
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
-        Ok(models.into_iter().map(|m| VrkbProject {
-            id: m.id,
-            name: m.name,
-            repository_url: m.repository_url,
-            quota_bytes: m.quota_bytes,
-            settings: m.settings,
-            created_at: m.created_at.with_timezone(&Utc),
-            updated_at: m.updated_at.with_timezone(&Utc),
-        }).collect())
+
+        Ok(models
+            .into_iter()
+            .map(|m| VrkbProject {
+                id: m.id,
+                name: m.name,
+                repository_url: m.repository_url,
+                quota_bytes: m.quota_bytes,
+                settings: m.settings,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
+            })
+            .collect())
     }
 
     // --- Section ---
@@ -88,15 +95,18 @@ impl VrkbRepository for PostgresRepository {
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
-        Ok(models.into_iter().map(|m| VrkbSection {
-            id: m.id,
-            project_id: m.project_id,
-            title: m.title,
-            checklist: m.checklist,
-            created_at: m.created_at.with_timezone(&Utc),
-            updated_at: m.updated_at.with_timezone(&Utc),
-        }).collect())
+
+        Ok(models
+            .into_iter()
+            .map(|m| VrkbSection {
+                id: m.id,
+                project_id: m.project_id,
+                title: m.title,
+                checklist: m.checklist,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
+            })
+            .collect())
     }
 
     // --- Finding ---
@@ -126,7 +136,7 @@ impl VrkbRepository for PostgresRepository {
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
+
         Ok(model.map(|m| VrkbFinding {
             id: m.id,
             section_id: m.section_id,
@@ -141,13 +151,17 @@ impl VrkbRepository for PostgresRepository {
         }))
     }
 
-    async fn list_findings(&self, section_id: Option<Uuid>, project_id: Option<Uuid>) -> Result<Vec<VrkbFinding>, RepositoryError> {
+    async fn list_findings(
+        &self,
+        section_id: Option<Uuid>,
+        project_id: Option<Uuid>,
+    ) -> Result<Vec<VrkbFinding>, RepositoryError> {
         let mut query = finding::Entity::find();
 
         if let Some(sid) = section_id {
             query = query.filter(finding::Column::SectionId.eq(sid));
         }
-        
+
         // If filtering by Project ID, we need to join with Section
         if let Some(pid) = project_id {
             query = query
@@ -160,33 +174,46 @@ impl VrkbRepository for PostgresRepository {
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
-        Ok(models.into_iter().map(|m| VrkbFinding {
-            id: m.id,
-            section_id: m.section_id,
-            title: m.title,
-            status: m.status,
-            severity: m.severity,
-            content: m.content,
-            is_triage: m.is_triage,
-            author_id: m.author_id,
-            created_at: m.created_at.with_timezone(&Utc),
-            updated_at: m.updated_at.with_timezone(&Utc),
-        }).collect())
+
+        Ok(models
+            .into_iter()
+            .map(|m| VrkbFinding {
+                id: m.id,
+                section_id: m.section_id,
+                title: m.title,
+                status: m.status,
+                severity: m.severity,
+                content: m.content,
+                is_triage: m.is_triage,
+                author_id: m.author_id,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
+            })
+            .collect())
     }
-    
-    async fn update_finding_status(&self, id: &Uuid, status: String) -> Result<(), RepositoryError> {
-        let finding_res = finding::Entity::find_by_id(*id).one(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-        
+
+    async fn update_finding_status(
+        &self,
+        id: &Uuid,
+        status: String,
+    ) -> Result<(), RepositoryError> {
+        let finding_res = finding::Entity::find_by_id(*id)
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
         if let Some(f) = finding_res {
             let mut active: finding::ActiveModel = f.into();
             active.status = Set(status);
             if active.is_triage.as_ref() == &true {
-                 // If updating status, assume triage is passed? 
-                 // Or require explicit toggle? For now, let's keep it manual.
-                 // But typically status changes imply workflow progress.
+                // If updating status, assume triage is passed?
+                // Or require explicit toggle? For now, let's keep it manual.
+                // But typically status changes imply workflow progress.
             }
-            active.update(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            active
+                .update(&self.db)
+                .await
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         }
         Ok(())
     }
@@ -215,7 +242,7 @@ impl VrkbRepository for PostgresRepository {
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
+
         Ok(model.map(|m| VrkbAsset {
             id: m.id,
             hash: m.hash,
@@ -226,7 +253,12 @@ impl VrkbRepository for PostgresRepository {
         }))
     }
 
-    async fn link_asset_to_project(&self, project_id: Uuid, asset_id: Uuid, virtual_path: String) -> Result<(), RepositoryError> {
+    async fn link_asset_to_project(
+        &self,
+        project_id: Uuid,
+        asset_id: Uuid,
+        virtual_path: String,
+    ) -> Result<(), RepositoryError> {
         let active_model = project_asset::ActiveModel {
             project_id: Set(project_id),
             asset_id: Set(asset_id),
@@ -234,10 +266,13 @@ impl VrkbRepository for PostgresRepository {
             created_at: Set(Utc::now().into()),
         };
         project_asset::Entity::insert(active_model)
-             .on_conflict(
-                sea_orm::sea_query::OnConflict::columns([project_asset::Column::ProjectId, project_asset::Column::AssetId])
-                    .do_nothing() // Already linked? do nothing. Or update path?
-                    .to_owned()
+            .on_conflict(
+                sea_orm::sea_query::OnConflict::columns([
+                    project_asset::Column::ProjectId,
+                    project_asset::Column::AssetId,
+                ])
+                .do_nothing() // Already linked? do nothing. Or update path?
+                .to_owned(),
             )
             .exec(&self.db)
             .await
@@ -245,23 +280,32 @@ impl VrkbRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn list_project_assets(&self, project_id: &Uuid) -> Result<Vec<VrkbAsset>, RepositoryError> {
+    async fn list_project_assets(
+        &self,
+        project_id: &Uuid,
+    ) -> Result<Vec<VrkbAsset>, RepositoryError> {
         // We need to join project_asset and asset
         let assets = asset::Entity::find()
-            .join(JoinType::InnerJoin, project_asset::Relation::Asset.def().rev())
+            .join(
+                JoinType::InnerJoin,
+                project_asset::Relation::Asset.def().rev(),
+            )
             .filter(project_asset::Column::ProjectId.eq(*project_id))
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        Ok(assets.into_iter().map(|m| VrkbAsset {
-            id: m.id,
-            hash: m.hash,
-            storage_path: m.storage_path,
-            mime_type: m.mime_type,
-            size_bytes: m.size_bytes,
-            created_at: m.created_at.with_timezone(&Utc),
-        }).collect())
+        Ok(assets
+            .into_iter()
+            .map(|m| VrkbAsset {
+                id: m.id,
+                hash: m.hash,
+                storage_path: m.storage_path,
+                mime_type: m.mime_type,
+                size_bytes: m.size_bytes,
+                created_at: m.created_at.with_timezone(&Utc),
+            })
+            .collect())
     }
 
     async fn delete_asset(&self, id: &Uuid) -> Result<(), RepositoryError> {
@@ -283,9 +327,12 @@ impl VrkbRepository for PostgresRepository {
         };
         member::Entity::insert(active_model)
             .on_conflict(
-                sea_orm::sea_query::OnConflict::columns([member::Column::ProjectId, member::Column::UserId])
-                    .update_column(member::Column::Role) // Update role if exists
-                    .to_owned()
+                sea_orm::sea_query::OnConflict::columns([
+                    member::Column::ProjectId,
+                    member::Column::UserId,
+                ])
+                .update_column(member::Column::Role) // Update role if exists
+                .to_owned(),
             )
             .exec(&self.db)
             .await
@@ -293,7 +340,11 @@ impl VrkbRepository for PostgresRepository {
         Ok(())
     }
 
-    async fn remove_member(&self, project_id: &Uuid, user_id: &Uuid) -> Result<(), RepositoryError> {
+    async fn remove_member(
+        &self,
+        project_id: &Uuid,
+        user_id: &Uuid,
+    ) -> Result<(), RepositoryError> {
         member::Entity::delete_many()
             .filter(member::Column::ProjectId.eq(*project_id))
             .filter(member::Column::UserId.eq(*user_id))
@@ -309,28 +360,36 @@ impl VrkbRepository for PostgresRepository {
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
+
         // TODO: Join with User table to fill user details
-        
-        Ok(models.into_iter().map(|m| VrkbMember {
-            project_id: m.project_id,
-            user_id: m.user_id,
-            role: m.role,
-            joined_at: m.joined_at.with_timezone(&Utc),
-            user: None,
-        }).collect())
+
+        Ok(models
+            .into_iter()
+            .map(|m| VrkbMember {
+                project_id: m.project_id,
+                user_id: m.user_id,
+                role: m.role,
+                joined_at: m.joined_at.with_timezone(&Utc),
+                user: None,
+            })
+            .collect())
     }
 
-    async fn update_member_role(&self, project_id: &Uuid, user_id: &Uuid, role: String) -> Result<(), RepositoryError> {
-         // Re-using add_member since we set upsert logic there
-         let member = VrkbMember {
-             project_id: *project_id,
-             user_id: *user_id,
-             role,
-             joined_at: Utc::now(),
-             user: None
-         };
-         self.add_member(member).await
+    async fn update_member_role(
+        &self,
+        project_id: &Uuid,
+        user_id: &Uuid,
+        role: String,
+    ) -> Result<(), RepositoryError> {
+        // Re-using add_member since we set upsert logic there
+        let member = VrkbMember {
+            project_id: *project_id,
+            user_id: *user_id,
+            role,
+            joined_at: Utc::now(),
+            user: None,
+        };
+        self.add_member(member).await
     }
 
     // --- Specs ---
@@ -341,15 +400,18 @@ impl VrkbRepository for PostgresRepository {
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
-        Ok(models.into_iter().map(|m| VrkbSpec {
-            id: m.id,
-            project_id: m.project_id,
-            title: m.title,
-            content: m.content,
-            version: m.version,
-            updated_at: m.updated_at.with_timezone(&Utc),
-        }).collect())
+
+        Ok(models
+            .into_iter()
+            .map(|m| VrkbSpec {
+                id: m.id,
+                project_id: m.project_id,
+                title: m.title,
+                content: m.content,
+                version: m.version,
+                updated_at: m.updated_at.with_timezone(&Utc),
+            })
+            .collect())
     }
 
     async fn save_spec(&self, spec_data: VrkbSpec) -> Result<Uuid, RepositoryError> {
@@ -361,17 +423,22 @@ impl VrkbRepository for PostgresRepository {
             version: Set(spec_data.version),
             updated_at: Set(spec_data.updated_at.into()),
         };
-        
+
         spec::Entity::insert(active_model)
             .on_conflict(
                 sea_orm::sea_query::OnConflict::column(spec::Column::Id)
-                    .update_columns([spec::Column::Title, spec::Column::Content, spec::Column::Version, spec::Column::UpdatedAt])
-                    .to_owned()
+                    .update_columns([
+                        spec::Column::Title,
+                        spec::Column::Content,
+                        spec::Column::Version,
+                        spec::Column::UpdatedAt,
+                    ])
+                    .to_owned(),
             )
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
+
         Ok(spec_data.id)
     }
 
@@ -401,7 +468,7 @@ impl VrkbRepository for PostgresRepository {
             .one(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
+
         Ok(model.map(|m| VrkbDoc {
             id: m.id,
             project_id: m.project_id,
@@ -428,28 +495,34 @@ impl VrkbRepository for PostgresRepository {
             deleted_at: Set(doc_data.deleted_at.map(|d| d.into())),
             ..Default::default() // Important strictly for partial updates if we were doing find first, but here we replace all fields we set.
         };
-        
+
         // Use update method which expects model to result from find
         // Or clearer: find -> update.
         // But for upsert-like behavior we can just do insert ... on conflict update
-        
+
         // Let's stick to update logic:
-         doc::Entity::update(active_model)
+        doc::Entity::update(active_model)
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
+
         Ok(())
     }
 
     async fn delete_doc(&self, id: &Uuid) -> Result<(), RepositoryError> {
         // Soft Delete
-        let doc_res = doc::Entity::find_by_id(*id).one(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-        
+        let doc_res = doc::Entity::find_by_id(*id)
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
         if let Some(d) = doc_res {
             let mut active: doc::ActiveModel = d.into();
             active.deleted_at = Set(Some(Utc::now().into()));
-            active.update(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            active
+                .update(&self.db)
+                .await
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         }
         Ok(())
     }
@@ -462,51 +535,63 @@ impl VrkbRepository for PostgresRepository {
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
-        Ok(models.into_iter().map(|m| VrkbDoc {
-            id: m.id,
-            project_id: m.project_id,
-            title: m.title,
-            content: m.content,
-            parent_id: m.parent_id,
-            author_id: m.author_id,
-            created_at: m.created_at.with_timezone(&Utc),
-            updated_at: m.updated_at.with_timezone(&Utc),
-            deleted_at: m.deleted_at.map(|d| d.with_timezone(&Utc)),
-        }).collect())
+
+        Ok(models
+            .into_iter()
+            .map(|m| VrkbDoc {
+                id: m.id,
+                project_id: m.project_id,
+                title: m.title,
+                content: m.content,
+                parent_id: m.parent_id,
+                author_id: m.author_id,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
+                deleted_at: m.deleted_at.map(|d| d.with_timezone(&Utc)),
+            })
+            .collect())
     }
 
     // --- Trash Management ---
 
     async fn list_trash(&self, project_id: &Uuid) -> Result<Vec<VrkbDoc>, RepositoryError> {
-         let models = doc::Entity::find()
+        let models = doc::Entity::find()
             .filter(doc::Column::ProjectId.eq(*project_id))
             .filter(doc::Column::DeletedAt.is_not_null()) // Only deleted
             .order_by_desc(doc::Column::DeletedAt)
             .all(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
-        Ok(models.into_iter().map(|m| VrkbDoc {
-            id: m.id,
-            project_id: m.project_id,
-            title: m.title,
-            content: m.content,
-            parent_id: m.parent_id,
-            author_id: m.author_id,
-            created_at: m.created_at.with_timezone(&Utc),
-            updated_at: m.updated_at.with_timezone(&Utc),
-            deleted_at: m.deleted_at.map(|d| d.with_timezone(&Utc)),
-        }).collect())
+
+        Ok(models
+            .into_iter()
+            .map(|m| VrkbDoc {
+                id: m.id,
+                project_id: m.project_id,
+                title: m.title,
+                content: m.content,
+                parent_id: m.parent_id,
+                author_id: m.author_id,
+                created_at: m.created_at.with_timezone(&Utc),
+                updated_at: m.updated_at.with_timezone(&Utc),
+                deleted_at: m.deleted_at.map(|d| d.with_timezone(&Utc)),
+            })
+            .collect())
     }
 
     async fn restore_doc(&self, id: &Uuid) -> Result<(), RepositoryError> {
-        let doc_res = doc::Entity::find_by_id(*id).one(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-        
+        let doc_res = doc::Entity::find_by_id(*id)
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
         if let Some(d) = doc_res {
             let mut active: doc::ActiveModel = d.into();
             active.deleted_at = Set(None); // Clear deleted_at
-            active.update(&self.db).await.map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            active
+                .update(&self.db)
+                .await
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
         }
         Ok(())
     }
@@ -522,36 +607,39 @@ impl VrkbRepository for PostgresRepository {
     async fn cleanup_trash(&self, days: i64) -> Result<u64, RepositoryError> {
         // Should execute a raw SQL delete for efficiency or use a complex filter
         // "DELETE FROM vrkb_docs WHERE deleted_at < NOW() - INTERVAL 'days' DAYS"
-        
+
         let time_threshold = Utc::now() - chrono::Duration::days(days);
-        
+
         let res = doc::Entity::delete_many()
             .filter(doc::Column::DeletedAt.lt(time_threshold))
             .exec(&self.db)
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
-            
+
         Ok(res.rows_affected)
     }
 
-    async fn get_project_stats(&self, project_id: &Uuid) -> Result<crate::domain::models::VrkbStats, RepositoryError> {
+    async fn get_project_stats(
+        &self,
+        project_id: &Uuid,
+    ) -> Result<crate::domain::models::VrkbStats, RepositoryError> {
+        use crate::domain::models::{VrkbHeatmapItem, VrkbMetrics, VrkbModuleStat};
         use crate::infrastructure::persistence::entities::vrkb::finding;
-        use crate::domain::models::{VrkbMetrics, VrkbModuleStat, VrkbHeatmapItem};
-        
+
         // 1. Fetch all findings (joined with sections to filter by project)
         let findings = finding::Entity::find()
-             .join(JoinType::InnerJoin, finding::Relation::Section.def())
-             .filter(section::Column::ProjectId.eq(*project_id))
-             .all(&self.db)
-             .await
-             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            .join(JoinType::InnerJoin, finding::Relation::Section.def())
+            .filter(section::Column::ProjectId.eq(*project_id))
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         // 2. Calculate Metrics
         let total = findings.len() as i64;
         let mut critical = 0;
         let mut triage = 0;
         let mut fixed = 0;
-        
+
         for f in &findings {
             match f.status.as_str() {
                 "Verified" => fixed += 1,
@@ -562,39 +650,60 @@ impl VrkbRepository for PostgresRepository {
                 critical += 1;
             }
             if f.is_triage {
-                 triage += 1; // Assuming overlap or distinct definition
+                triage += 1; // Assuming overlap or distinct definition
             }
         }
-        
-        let metrics = VrkbMetrics { total, critical, triage, fixed };
+
+        let metrics = VrkbMetrics {
+            total,
+            critical,
+            triage,
+            fixed,
+        };
 
         // 3. Module Stats (from sections)
         let sections = section::Entity::find()
-             .filter(section::Column::ProjectId.eq(*project_id))
-             .all(&self.db)
-             .await
-             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+            .filter(section::Column::ProjectId.eq(*project_id))
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         let mut modules = Vec::new();
         // Naive module generation from sections
         for s in sections {
-             // Find bugs for this section
-             let section_bugs = findings.iter().filter(|f| f.section_id == s.id).count() as i64;
-             modules.push(VrkbModuleStat {
-                 name: s.title,
-                 status: "Active".to_string(), // Placeholder
-                 progress: 50, // Placeholder
-                 bugs: section_bugs,
-                 last_audit: "Today".to_string(), // Placeholder
-             });
+            // Find bugs for this section
+            let section_bugs = findings.iter().filter(|f| f.section_id == s.id).count() as i64;
+            modules.push(VrkbModuleStat {
+                name: s.title,
+                status: "Active".to_string(), // Placeholder
+                progress: 50,                 // Placeholder
+                bugs: section_bugs,
+                last_audit: "Today".to_string(), // Placeholder
+            });
         }
-        
+
         // 4. Heatmap (Placeholder for now, could be derived from findings path metadata if stored)
         let heatmap = vec![
-             VrkbHeatmapItem { path: "src".to_string(), name: "src".to_string(), r#type: "folder".to_string(), level: 0, vulns: total / 2 },
-             VrkbHeatmapItem { path: "src/main.rs".to_string(), name: "main.rs".to_string(), r#type: "file".to_string(), level: 1, vulns: total / 2 },
+            VrkbHeatmapItem {
+                path: "src".to_string(),
+                name: "src".to_string(),
+                r#type: "folder".to_string(),
+                level: 0,
+                vulns: total / 2,
+            },
+            VrkbHeatmapItem {
+                path: "src/main.rs".to_string(),
+                name: "main.rs".to_string(),
+                r#type: "file".to_string(),
+                level: 1,
+                vulns: total / 2,
+            },
         ];
-        
-        Ok(crate::domain::models::VrkbStats { metrics, modules, heatmap })
+
+        Ok(crate::domain::models::VrkbStats {
+            metrics,
+            modules,
+            heatmap,
+        })
     }
 }
