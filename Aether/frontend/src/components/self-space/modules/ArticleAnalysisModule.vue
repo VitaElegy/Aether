@@ -20,6 +20,16 @@ interface ArticleMeta {
     references?: Array<{ title: string; url: string }>;
 }
 
+/** Analysis status for article workspace state machine */
+type AnalysisStatus = 'pending' | 'analyzing' | 'analyzed' | 'failed' | 'archived';
+
+interface AnalysisDiagnostics {
+    error_code?: string;
+    error_message: string;
+    failed_at: string;
+    retry_count: number;
+}
+
 interface EnglishArticle {
     id: string;
     title: string;
@@ -30,6 +40,9 @@ interface EnglishArticle {
     body: ArticleMeta; // We store JSON in the body string
     author_name?: string;
     derived_data?: any;
+    /** Article analysis state machine status */
+    analysis_status: AnalysisStatus;
+    analysis_diagnostics?: AnalysisDiagnostics;
 }
 
 // --- State ---
@@ -141,7 +154,9 @@ const fetchArticles = async () => {
                 category: item.category,
                 body: parsedBody,
                 author_name: item.author_name,
-                derived_data: item.derived_data
+                derived_data: item.derived_data,
+                analysis_status: item.analysis_status || (item.derived_data?.sentence_map ? 'analyzed' : 'pending'),
+                analysis_diagnostics: item.analysis_diagnostics,
             };
         });
     } catch (e: any) {
@@ -300,6 +315,83 @@ import { useAuthStore } from '@/stores/auth';
 import { generateContentHash, migrateSentenceMap } from '@/utils/text-anchoring';
 
 const navStore = useNavigationStore();
+
+// --- ENG-02: Article Workspace Actions ---
+
+/** Trigger re-analysis of an article */
+const reanalyzeArticle = async (articleId: string) => {
+    try {
+        await axios.post(`/api/english/articles/${articleId}/reanalyze`);
+        MessagePlugin.success('Re-analysis triggered');
+        // Update local state
+        const article = articles.value.find(a => a.id === articleId);
+        if (article) {
+            article.analysis_status = 'analyzing';
+        }
+    } catch (e: any) {
+        const msg = e.response?.data?.error || 'Failed to trigger re-analysis';
+        MessagePlugin.error(msg);
+    }
+};
+
+/** Archive an article (soft-delete from active view) */
+const archiveArticle = async (articleId: string) => {
+    try {
+        await axios.post(`/api/english/articles/${articleId}/analysis-status`, {
+            status: 'archived'
+        });
+        MessagePlugin.success('Article archived');
+        // Remove from local view
+        articles.value = articles.value.filter(a => a.id !== articleId);
+    } catch (e: any) {
+        const msg = e.response?.data?.error || 'Failed to archive';
+        MessagePlugin.error(msg);
+    }
+};
+
+/** Export analysis data for a single article */
+const exportAnalysis = async (article: EnglishArticle) => {
+    const exportData = {
+        title: article.title,
+        body: article.body,
+        derived_data: article.derived_data,
+        analysis_status: article.analysis_status,
+        exported_at: new Date().toISOString(),
+    };
+
+    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${article.title.replace(/[^a-zA-Z0-9]/g, '_')}_analysis.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    MessagePlugin.success('Analysis exported');
+};
+
+/** Get CSS class for analysis status badge */
+const getAnalysisStatusClass = (status: AnalysisStatus): string => {
+    switch (status) {
+        case 'pending': return 'bg-gray-500/30 text-gray-100 border-gray-500/20';
+        case 'analyzing': return 'bg-blue-500/30 text-blue-100 border-blue-500/20';
+        case 'analyzed': return 'bg-green-500/30 text-green-100 border-green-500/20';
+        case 'failed': return 'bg-red-500/30 text-red-100 border-red-500/20';
+        case 'archived': return 'bg-amber-500/30 text-amber-100 border-amber-500/20';
+        default: return 'bg-gray-500/30 text-gray-100 border-gray-500/20';
+    }
+};
+
+/** Get display label for analysis status */
+const getAnalysisStatusLabel = (status: AnalysisStatus): string => {
+    switch (status) {
+        case 'pending': return 'Pending';
+        case 'analyzing': return 'Analyzing...';
+        case 'analyzed': return 'Analyzed';
+        case 'failed': return 'Failed';
+        case 'archived': return 'Archived';
+        default: return status;
+    }
+};
 
 
 const handleSelection = (data: { word: string, sentences: any[] }) => {
@@ -655,19 +747,62 @@ const filteredArticles = computed(() => {
                             <h3 class="text-xl font-bold leading-tight mb-2 drop-shadow-md line-clamp-2 text-white">{{ article.title }}</h3>
                             <div class="flex items-center justify-between text-white/80 text-xs font-medium uppercase tracking-wider">
                                 <span>{{ new Date(article.created_at).toLocaleDateString() }}</span>
-                                <span v-if="article.status === 'Draft'" class="bg-yellow-500/30 backdrop-blur px-2 py-0.5 rounded text-yellow-100 border border-yellow-500/20">Draft</span>
-                                <span v-else class="bg-green-500/30 backdrop-blur px-2 py-0.5 rounded text-green-100 border border-green-500/20">Published</span>
+                                <div class="flex items-center gap-2">
+                                    <!-- Analysis Status Badge -->
+                                    <span
+                                        :class="getAnalysisStatusClass(article.analysis_status)"
+                                        class="backdrop-blur px-2 py-0.5 rounded border text-[10px] font-bold uppercase tracking-wider"
+                                    >
+                                        {{ getAnalysisStatusLabel(article.analysis_status) }}
+                                    </span>
+                                    <!-- Content Status Badge -->
+                                    <span v-if="article.status === 'Draft'" class="bg-yellow-500/30 backdrop-blur px-2 py-0.5 rounded text-yellow-100 border border-yellow-500/20">Draft</span>
+                                    <span v-else class="bg-green-500/30 backdrop-blur px-2 py-0.5 rounded text-green-100 border border-green-500/20">Published</span>
+                                </div>
+                            </div>
+                            <!-- Failure Diagnostics Indicator -->
+                            <div v-if="article.analysis_status === 'failed' && article.analysis_diagnostics" class="mt-2 text-xs text-red-200/80 truncate">
+                                <i class="ri-error-warning-line mr-1"></i>{{ article.analysis_diagnostics.error_message }}
                             </div>
                         </div>
-                        
-                        <!-- Delete Action (Hover) -->
-                        <button 
-                            @click.stop="deleteArticle(article.id)"
-                            class="absolute top-4 right-4 p-2 bg-black/40 backdrop-blur rounded-full text-white/70 hover:bg-red-500 hover:text-white transition-all opacity-0 group-hover:opacity-100 transform translate-y-[-10px] group-hover:translate-y-0"
-                            title="Delete Analysis"
-                        >
-                            <i class="ri-delete-bin-line"></i>
-                        </button>
+
+                        <!-- Action Buttons (Hover) -->
+                        <div class="absolute top-4 right-4 flex items-center gap-2 opacity-0 group-hover:opacity-100 transform translate-y-[-10px] group-hover:translate-y-0 transition-all">
+                            <!-- Reanalyze -->
+                            <button
+                                v-if="article.analysis_status === 'analyzed' || article.analysis_status === 'failed' || article.analysis_status === 'pending'"
+                                @click.stop="reanalyzeArticle(article.id)"
+                                class="p-2 bg-black/40 backdrop-blur rounded-full text-white/70 hover:bg-blue-500 hover:text-white transition-all"
+                                title="Re-analyze"
+                            >
+                                <i class="ri-refresh-line"></i>
+                            </button>
+                            <!-- Export Analysis -->
+                            <button
+                                v-if="article.analysis_status === 'analyzed'"
+                                @click.stop="exportAnalysis(article)"
+                                class="p-2 bg-black/40 backdrop-blur rounded-full text-white/70 hover:bg-emerald-500 hover:text-white transition-all"
+                                title="Export Analysis"
+                            >
+                                <i class="ri-download-line"></i>
+                            </button>
+                            <!-- Archive -->
+                            <button
+                                @click.stop="archiveArticle(article.id)"
+                                class="p-2 bg-black/40 backdrop-blur rounded-full text-white/70 hover:bg-amber-500 hover:text-white transition-all"
+                                title="Archive"
+                            >
+                                <i class="ri-archive-line"></i>
+                            </button>
+                            <!-- Delete -->
+                            <button
+                                @click.stop="deleteArticle(article.id)"
+                                class="p-2 bg-black/40 backdrop-blur rounded-full text-white/70 hover:bg-red-500 hover:text-white transition-all"
+                                title="Delete"
+                            >
+                                <i class="ri-delete-bin-line"></i>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>

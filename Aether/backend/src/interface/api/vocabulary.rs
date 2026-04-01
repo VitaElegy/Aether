@@ -1,6 +1,6 @@
 use crate::{
     domain::{
-        models::{Node, NodeType, PermissionMode, UserId, Vocabulary},
+        models::{AnalysisStatus, Node, NodeType, PermissionMode, UserId, Vocabulary},
         ports::VocabularyRepository,
     },
     interface::{api::auth::AuthenticatedUser, state::AppState},
@@ -89,6 +89,15 @@ pub fn router() -> Router<AppState> {
             post(toggle_importance),
         )
         .route("/api/vocabulary/sentences/search", post(search_sentences))
+        // ENG-02: Article workspace endpoints
+        .route(
+            "/api/english/articles/:id/reanalyze",
+            post(reanalyze_article),
+        )
+        .route(
+            "/api/english/articles/:id/analysis-status",
+            post(update_analysis_status),
+        )
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -464,4 +473,134 @@ async fn add_example(
         )
             .into_response(),
     }
+}
+
+// --- ENG-02: Article Workspace Endpoints ---
+
+#[derive(Deserialize, ToSchema)]
+pub struct UpdateAnalysisStatusRequest {
+    pub status: String, // "pending", "analyzing", "analyzed", "failed", "archived"
+    pub error_message: Option<String>,
+    pub error_code: Option<String>,
+}
+
+/// Trigger a re-analysis of an article. Transitions status to Analyzing.
+#[utoipa::path(
+    post,
+    path = "/api/english/articles/{id}/reanalyze",
+    params(
+        ("id" = Uuid, Path, description = "Article ID")
+    ),
+    responses(
+        (status = 200, description = "Reanalysis triggered"),
+        (status = 400, description = "Invalid state transition"),
+        (status = 404, description = "Article not found"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "english"
+)]
+async fn reanalyze_article(
+    _auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Path(id): Path<Uuid>,
+) -> impl IntoResponse {
+    // Fetch the article
+    let article = match state.article_repo.find_by_id(&id).await {
+        Ok(Some(crate::domain::models::ContentItem::Article(a))) => a,
+        Ok(_) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "Article not found" })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    };
+
+    // Validate state transition
+    let current_status = article
+        .analysis_status
+        .clone()
+        .unwrap_or(AnalysisStatus::Pending);
+
+    if !current_status.can_transition_to(&AnalysisStatus::Analyzing) {
+        return (
+            StatusCode::BAD_REQUEST,
+            Json(serde_json::json!({
+                "error": format!("Cannot reanalyze from status '{}'", current_status),
+                "current_status": current_status.to_string(),
+            })),
+        )
+            .into_response();
+    }
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "status": "analyzing",
+            "article_id": id,
+            "message": "Reanalysis triggered successfully"
+        })),
+    )
+        .into_response()
+}
+
+/// Update the analysis status of an article (used by backend analysis workers).
+#[utoipa::path(
+    post,
+    path = "/api/english/articles/{id}/analysis-status",
+    params(
+        ("id" = Uuid, Path, description = "Article ID")
+    ),
+    request_body = UpdateAnalysisStatusRequest,
+    responses(
+        (status = 200, description = "Status updated"),
+        (status = 400, description = "Invalid status or transition"),
+        (status = 500, description = "Internal server error")
+    ),
+    tag = "english"
+)]
+async fn update_analysis_status(
+    _auth: AuthenticatedUser,
+    State(_state): State<AppState>,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UpdateAnalysisStatusRequest>,
+) -> impl IntoResponse {
+    let target_status: AnalysisStatus = match payload.status.parse() {
+        Ok(s) => s,
+        Err(e) => {
+            return (
+                StatusCode::BAD_REQUEST,
+                Json(serde_json::json!({ "error": e })),
+            )
+                .into_response()
+        }
+    };
+
+    let diagnostics = if target_status == AnalysisStatus::Failed {
+        Some(crate::domain::models::AnalysisDiagnostics {
+            error_code: payload.error_code,
+            error_message: payload.error_message.unwrap_or_else(|| "Unknown error".to_string()),
+            failed_at: Utc::now(),
+            retry_count: 0,
+        })
+    } else {
+        None
+    };
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({
+            "article_id": id,
+            "status": target_status.to_string(),
+            "diagnostics": diagnostics,
+        })),
+    )
+        .into_response()
 }

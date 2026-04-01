@@ -48,6 +48,80 @@ pub struct Node {
 
 // --- Specific Domains (Article, Vocabulary, Memo) ---
 
+/// Article analysis status for the English workspace state machine.
+/// Transitions: Pending → Analyzing → Analyzed | Failed → Archived
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum AnalysisStatus {
+    /// Article is in inbox, not yet analyzed
+    Pending,
+    /// Analysis is in progress (NLP pipeline running)
+    Analyzing,
+    /// Analysis completed successfully
+    Analyzed,
+    /// Analysis failed — stores diagnostic info
+    Failed,
+    /// Article has been archived (soft-delete from active view)
+    Archived,
+}
+
+impl AnalysisStatus {
+    /// Returns true if a transition from self → target is valid.
+    pub fn can_transition_to(&self, target: &AnalysisStatus) -> bool {
+        matches!(
+            (self, target),
+            (AnalysisStatus::Pending, AnalysisStatus::Analyzing)
+                | (AnalysisStatus::Analyzing, AnalysisStatus::Analyzed)
+                | (AnalysisStatus::Analyzing, AnalysisStatus::Failed)
+                | (AnalysisStatus::Analyzed, AnalysisStatus::Analyzing) // re-analyze
+                | (AnalysisStatus::Analyzed, AnalysisStatus::Archived)
+                | (AnalysisStatus::Failed, AnalysisStatus::Analyzing) // retry
+                | (AnalysisStatus::Failed, AnalysisStatus::Archived)
+                | (AnalysisStatus::Archived, AnalysisStatus::Pending) // restore
+        )
+    }
+}
+
+impl Default for AnalysisStatus {
+    fn default() -> Self {
+        AnalysisStatus::Pending
+    }
+}
+
+impl std::fmt::Display for AnalysisStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            AnalysisStatus::Pending => write!(f, "pending"),
+            AnalysisStatus::Analyzing => write!(f, "analyzing"),
+            AnalysisStatus::Analyzed => write!(f, "analyzed"),
+            AnalysisStatus::Failed => write!(f, "failed"),
+            AnalysisStatus::Archived => write!(f, "archived"),
+        }
+    }
+}
+
+impl std::str::FromStr for AnalysisStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "pending" => Ok(AnalysisStatus::Pending),
+            "analyzing" => Ok(AnalysisStatus::Analyzing),
+            "analyzed" => Ok(AnalysisStatus::Analyzed),
+            "failed" => Ok(AnalysisStatus::Failed),
+            "archived" => Ok(AnalysisStatus::Archived),
+            _ => Err(format!("Unknown analysis status: {}", s)),
+        }
+    }
+}
+
+/// Failure diagnostics for article analysis
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AnalysisDiagnostics {
+    pub error_code: Option<String>,
+    pub error_message: String,
+    pub failed_at: DateTime<Utc>,
+    pub retry_count: u32,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Article {
     #[serde(flatten)]
@@ -60,6 +134,12 @@ pub struct Article {
     pub author_name: Option<String>,
     pub author_avatar: Option<String>,
     pub derived_data: Option<serde_json::Value>,
+    /// Analysis status for the English article workspace state machine
+    #[serde(default)]
+    pub analysis_status: Option<AnalysisStatus>,
+    /// Failure diagnostics when analysis_status is Failed
+    #[serde(default)]
+    pub analysis_diagnostics: Option<AnalysisDiagnostics>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
