@@ -142,6 +142,57 @@ pub struct Article {
     pub analysis_diagnostics: Option<AnalysisDiagnostics>,
 }
 
+/// CEFR-aligned proficiency level for vocabulary items
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VocabularyLevel {
+    A1,
+    A2,
+    B1,
+    B2,
+    C1,
+    C2,
+    Unknown,
+}
+
+impl Default for VocabularyLevel {
+    fn default() -> Self {
+        VocabularyLevel::Unknown
+    }
+}
+
+impl std::fmt::Display for VocabularyLevel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VocabularyLevel::A1 => write!(f, "A1"),
+            VocabularyLevel::A2 => write!(f, "A2"),
+            VocabularyLevel::B1 => write!(f, "B1"),
+            VocabularyLevel::B2 => write!(f, "B2"),
+            VocabularyLevel::C1 => write!(f, "C1"),
+            VocabularyLevel::C2 => write!(f, "C2"),
+            VocabularyLevel::Unknown => write!(f, "Unknown"),
+        }
+    }
+}
+
+/// Mastery status tracking for spaced repetition
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum MasteryStatus {
+    /// First seen, never reviewed
+    New,
+    /// Seen a few times, still learning
+    Learning,
+    /// Comfortable but not automatic
+    Familiar,
+    /// Well known, recall is fast
+    Mastered,
+}
+
+impl Default for MasteryStatus {
+    fn default() -> Self {
+        MasteryStatus::New
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VocabularyExample {
     pub id: Uuid,
@@ -159,28 +210,44 @@ pub struct VocabularyExample {
 pub struct Vocabulary {
     #[serde(flatten)]
     pub node: Node,
+    /// The canonical lemma form (e.g. "run" for "running")
+    pub lemma: Option<String>,
+    /// The actual word as queried/saved by user
     pub word: String,
     pub definition: String,
     pub translation: Option<String>,
     pub phonetic: Option<String>,
-    // Removed old context_sentence/image_url in favor of examples list,
-    // but keeping for backward compat if needed, or just deprecate.
-    // User wants "multiple examples".
-    // Let's deprecate single context_sentence/image_url or map the first example to them.
-    // Ideally we return the full objects.
+
+    // Deprecated fields kept for backward compat
     pub context_sentence: Option<String>,
     pub image_url: Option<String>,
 
     pub language: String,
     pub status: String,
 
-    // New Fields
-    pub root: Option<String>, // The actual root string, e.g. "spec"
+    /// Word root / morphology string (e.g. "[Root] spec : to look | [Suffix] tion : noun form")
+    pub root: Option<String>,
     pub examples: Vec<VocabularyExample>,
     #[serde(default)]
     pub query_count: i32,
     #[serde(default)]
     pub is_important: bool,
+
+    // ENG-03: New formal fields
+    /// CEFR proficiency level
+    #[serde(default)]
+    pub level: VocabularyLevel,
+    /// User-defined tags for grouping (e.g. "academic", "ielts", "tech")
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Mastery status for spaced repetition
+    #[serde(default)]
+    pub mastery: MasteryStatus,
+    /// Source KB ID where this word was first encountered
+    pub source_kb_id: Option<Uuid>,
+    /// Soft-delete: archived words are hidden from default view
+    #[serde(default)]
+    pub is_archived: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

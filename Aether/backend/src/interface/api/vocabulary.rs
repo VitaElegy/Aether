@@ -47,10 +47,17 @@ pub struct CreateVocabularyRequest {
     #[schema(example = "en")]
     pub language: Option<String>,
 
-    // New
+    // Core fields
     pub root: Option<String>,
     pub examples: Option<Vec<ExampleRequest>>,
     pub kb_id: Option<Uuid>,
+
+    // ENG-03: New formal fields
+    pub lemma: Option<String>,
+    pub level: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub mastery: Option<String>,
+    pub source_kb_id: Option<Uuid>,
 }
 
 #[derive(Deserialize, IntoParams)]
@@ -98,6 +105,15 @@ pub fn router() -> Router<AppState> {
             "/api/english/articles/:id/analysis-status",
             post(update_analysis_status),
         )
+        // ENG-03: Vocabulary batch operations
+        .route("/api/vocabulary/batch-tag", post(batch_tag))
+        .route(
+            "/api/vocabulary/batch-importance",
+            post(batch_importance),
+        )
+        .route("/api/vocabulary/batch-archive", post(batch_archive))
+        .route("/api/vocabulary/batch-restore", post(batch_restore))
+        .route("/api/vocabulary/merge", post(merge_duplicates))
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -199,6 +215,7 @@ async fn save_vocabulary(
             created_at: Utc::now(),
             updated_at: Utc::now(),
         },
+        lemma: payload.lemma,
         word: payload.word,
         definition: payload.definition,
         translation: payload.translation,
@@ -209,8 +226,19 @@ async fn save_vocabulary(
         status: "New".to_string(),
         root: payload.root,
         examples,
-        query_count: existing_count,       // Preserve or 0
-        is_important: existing_importance, // Preserve or false
+        query_count: existing_count,
+        is_important: existing_importance,
+        level: payload
+            .level
+            .and_then(|l| serde_json::from_value(serde_json::Value::String(l)).ok())
+            .unwrap_or_default(),
+        tags: payload.tags.unwrap_or_default(),
+        mastery: payload
+            .mastery
+            .and_then(|m| serde_json::from_value(serde_json::Value::String(m)).ok())
+            .unwrap_or_default(),
+        source_kb_id: payload.source_kb_id.or(payload.kb_id),
+        is_archived: false,
     };
 
     match state.repo.save(vocab).await {
@@ -603,4 +631,214 @@ async fn update_analysis_status(
         })),
     )
         .into_response()
+}
+
+// --- ENG-03: Vocabulary Batch Operations ---
+
+#[derive(Deserialize, ToSchema)]
+pub struct BatchTagRequest {
+    pub ids: Vec<Uuid>,
+    pub tags: Vec<String>,
+    /// "add" or "set" — add appends tags, set replaces them
+    pub mode: Option<String>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct BatchImportanceRequest {
+    pub ids: Vec<Uuid>,
+    pub is_important: bool,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct BatchArchiveRequest {
+    pub ids: Vec<Uuid>,
+}
+
+#[derive(Deserialize, ToSchema)]
+pub struct MergeDuplicatesRequest {
+    /// The ID to keep (primary)
+    pub primary_id: Uuid,
+    /// IDs to merge into the primary and then delete
+    pub duplicate_ids: Vec<Uuid>,
+}
+
+async fn batch_tag(
+    _auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Json(payload): Json<BatchTagRequest>,
+) -> impl IntoResponse {
+    let mode = payload.mode.unwrap_or_else(|| "add".to_string());
+    let mut updated = 0u32;
+
+    for id in &payload.ids {
+        if let Ok(Some(mut vocab)) = state.repo.find_by_id(id).await {
+            match mode.as_str() {
+                "set" => {
+                    vocab.tags = payload.tags.clone();
+                }
+                _ => {
+                    // "add" mode — append tags avoiding duplicates
+                    for tag in &payload.tags {
+                        if !vocab.tags.contains(tag) {
+                            vocab.tags.push(tag.clone());
+                        }
+                    }
+                }
+            }
+            if state.repo.save(vocab).await.is_ok() {
+                updated += 1;
+            }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "status": "batch_tagged", "updated": updated })),
+    )
+        .into_response()
+}
+
+async fn batch_importance(
+    _auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Json(payload): Json<BatchImportanceRequest>,
+) -> impl IntoResponse {
+    let mut updated = 0u32;
+    for id in &payload.ids {
+        if state.repo.set_importance(id, payload.is_important).await.is_ok() {
+            updated += 1;
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "status": "batch_importance", "updated": updated })),
+    )
+        .into_response()
+}
+
+async fn batch_archive(
+    _auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Json(payload): Json<BatchArchiveRequest>,
+) -> impl IntoResponse {
+    let mut updated = 0u32;
+    for id in &payload.ids {
+        if let Ok(Some(mut vocab)) = state.repo.find_by_id(id).await {
+            vocab.is_archived = true;
+            if state.repo.save(vocab).await.is_ok() {
+                updated += 1;
+            }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "status": "batch_archived", "updated": updated })),
+    )
+        .into_response()
+}
+
+async fn batch_restore(
+    _auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Json(payload): Json<BatchArchiveRequest>,
+) -> impl IntoResponse {
+    let mut updated = 0u32;
+    for id in &payload.ids {
+        if let Ok(Some(mut vocab)) = state.repo.find_by_id(id).await {
+            vocab.is_archived = false;
+            if state.repo.save(vocab).await.is_ok() {
+                updated += 1;
+            }
+        }
+    }
+
+    (
+        StatusCode::OK,
+        Json(serde_json::json!({ "status": "batch_restored", "updated": updated })),
+    )
+        .into_response()
+}
+
+async fn merge_duplicates(
+    auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Json(payload): Json<MergeDuplicatesRequest>,
+) -> impl IntoResponse {
+    let user_id = UserId(auth.id);
+
+    // 1. Load the primary vocabulary
+    let mut primary = match state.repo.find_by_id(&payload.primary_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "Primary vocabulary not found" })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    };
+
+    // 2. Check ownership
+    if primary.node.author_id != user_id.0 {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "Access denied" })),
+        )
+            .into_response();
+    }
+
+    // 3. Merge data from duplicates
+    let mut merged_count = 0u32;
+    for dup_id in &payload.duplicate_ids {
+        if let Ok(Some(dup)) = state.repo.find_by_id(dup_id).await {
+            // Merge examples (avoid duplicates by sentence text)
+            for ex in dup.examples {
+                if !primary.examples.iter().any(|e| e.sentence == ex.sentence) {
+                    primary.examples.push(ex);
+                }
+            }
+            // Merge tags
+            for tag in dup.tags {
+                if !primary.tags.contains(&tag) {
+                    primary.tags.push(tag);
+                }
+            }
+            // Accumulate query count
+            primary.query_count += dup.query_count;
+            // Keep importance if any is important
+            if dup.is_important {
+                primary.is_important = true;
+            }
+            // Delete the duplicate
+            let _ = state.repo.delete(dup_id).await;
+            merged_count += 1;
+        }
+    }
+
+    // 4. Save the merged primary
+    match state.repo.save(primary).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({
+                "status": "merged",
+                "primary_id": payload.primary_id,
+                "merged_count": merged_count,
+            })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
 }
