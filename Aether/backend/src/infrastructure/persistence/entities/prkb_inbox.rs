@@ -20,6 +20,10 @@ pub struct Model {
     pub is_saved: bool,
     pub fetched_at: DateTimeUtc,
     pub state: String,
+    // PRKB-02 additions
+    pub priority: Option<i32>,
+    #[sea_orm(column_type = "Text", nullable)]
+    pub note: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

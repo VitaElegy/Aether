@@ -2,23 +2,26 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Deserialize, Serialize)]
-#[sea_orm(table_name = "prkb_signals")]
+#[sea_orm(table_name = "prkb_collection_items")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
+    pub collection_id: Uuid,
+    #[sea_orm(primary_key, auto_increment = false)]
     pub paper_id: Uuid,
-    pub citation_count: i32,
-    pub github_stars: i32,
-    pub sota_rank: Option<String>,
-    pub last_updated: DateTimeUtc,
-    // PRKB-07 additions
-    pub feed_freshness: Option<String>,
-    pub venue_tier: Option<String>,
-    pub author_recurrence: Option<i32>,
-    pub custom_importance: Option<i32>,
+    pub added_at: DateTimeUtc,
+    pub sort_order: i32,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
 pub enum Relation {
+    #[sea_orm(
+        belongs_to = "super::prkb_collections::Entity",
+        from = "Column::CollectionId",
+        to = "super::prkb_collections::Column::Id",
+        on_update = "NoAction",
+        on_delete = "Cascade"
+    )]
+    Collection,
     #[sea_orm(
         belongs_to = "super::prkb_papers::Entity",
         from = "Column::PaperId",
@@ -27,6 +30,12 @@ pub enum Relation {
         on_delete = "Cascade"
     )]
     Paper,
+}
+
+impl Related<super::prkb_collections::Entity> for Entity {
+    fn to() -> RelationDef {
+        Relation::Collection.def()
+    }
 }
 
 impl Related<super::prkb_papers::Entity> for Entity {
