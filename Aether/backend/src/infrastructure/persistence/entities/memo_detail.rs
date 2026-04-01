@@ -45,7 +45,6 @@ pub struct Model {
     pub is_pinned: bool,
 
     // Content
-    // Content
     #[sea_orm(column_type = "JsonBinary")]
     pub content: Json,
 
@@ -58,6 +57,19 @@ pub struct Model {
     // Tags
     #[sea_orm(column_type = "JsonBinary")]
     pub tags: Json,
+
+    // MEMO-01: Stream Core — channel
+    #[sea_orm(column_type = "Text", nullable)]
+    pub channel: Option<String>,
+
+    // MEMO-05: Linked entities stored as JSONB array
+    #[sea_orm(column_type = "JsonBinary", nullable)]
+    pub linked_entities: Option<Json>,
+
+    // MEMO-06: Rhythm and Review
+    pub scheduled_at: Option<DateTimeWithTimeZone>,
+    pub snoozed_until: Option<DateTimeWithTimeZone>,
+    pub reviewed_at: Option<DateTimeWithTimeZone>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
