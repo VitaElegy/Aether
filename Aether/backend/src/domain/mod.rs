@@ -5,6 +5,7 @@ pub mod graph;
 pub mod graph_service;
 pub mod indexer_service;
 pub mod kb;
+pub mod math;
 pub mod memos;
 pub mod models;
 pub mod permission_service;

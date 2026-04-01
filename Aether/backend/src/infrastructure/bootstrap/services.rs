@@ -155,6 +155,10 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
 
     let system_settings_repository = Arc::new(SystemSettingsRepository::new(Arc::new(db.clone())));
 
+    // Math Service (MATH-01 through MATH-06)
+    let math_service = Arc::new(crate::domain::math::service::MathService::new());
+    tracing::info!("Math Service initialized (formal object model + graph semantics)");
+
     AppState {
         repo,
         auth_service,
@@ -172,5 +176,6 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
         arxiv_service,
         rss_service,
         system_settings_repository,
+        math_service,
     }
 }
