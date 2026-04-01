@@ -23,6 +23,11 @@ pub struct Model {
     pub state: String,
     pub pdf_local_path: Option<String>,
     pub metadata: Option<Json>,
+    // PRKB-06: PDF lifecycle
+    pub pdf_status: String,
+    // PRKB-03: notes
+    #[sea_orm(column_type = "Text", nullable)]
+    pub notes: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]
@@ -39,6 +44,8 @@ pub enum Relation {
     Signals,
     #[sea_orm(has_many = "super::prkb_papers_authors::Entity")]
     PapersAuthors,
+    #[sea_orm(has_many = "super::prkb_collection_items::Entity")]
+    CollectionItems,
 }
 
 impl Related<super::prkb_venues::Entity> for Entity {

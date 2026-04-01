@@ -1,7 +1,6 @@
 
-
-// PRKB Entitites
-// We organize them in submodules to ensure generic names like 'Model' don't clash.
+// DEPRECATED: Legacy PRKB entities. Use prkb_feeds, prkb_papers, prkb_inbox modules instead.
+// Kept for backward compatibility only. New code should use the top-level entity modules.
 
 pub mod papers {
     use sea_orm::entity::prelude::*;
