@@ -1,7 +1,14 @@
 import axios from 'axios';
 
-export type AssetType = 'image_asset' | 'pdf_asset' | 'file_asset';
-export type AssetPreviewKind = 'image' | 'document' | 'file';
+export type AssetType =
+  | 'image_asset'
+  | 'pdf_asset'
+  | 'file_asset'
+  | 'ip_asset'
+  | 'domain_asset'
+  | 'credential_stub'
+  | 'snippet_asset';
+export type AssetPreviewKind = 'image' | 'document' | 'file' | 'structured';
 
 export interface AssetMetadata {
     extension?: string | null;
@@ -38,6 +45,10 @@ export interface AssetStats {
     images: number;
     pdfs: number;
     files: number;
+    ip_assets: number;
+    domain_assets: number;
+    credential_stubs: number;
+    snippets: number;
 }
 
 export interface ListAssetsParams {
@@ -45,6 +56,7 @@ export interface ListAssetsParams {
     asset_type?: AssetType;
     limit?: number;
     offset?: number;
+    sort_by?: 'newest' | 'largest' | 'name';
 }
 
 export interface AssetCatalogResponse {
@@ -106,6 +118,14 @@ export function getAssetTypeLabel(assetType: AssetType): string {
             return 'Image';
         case 'pdf_asset':
             return 'PDF';
+        case 'ip_asset':
+            return 'IP';
+        case 'domain_asset':
+            return 'Domain';
+        case 'credential_stub':
+            return 'Credential';
+        case 'snippet_asset':
+            return 'Snippet';
         default:
             return 'File';
     }
@@ -120,6 +140,11 @@ export function inferAssetType(
     normalizedMimeType = payload.mime_type?.trim().toLowerCase() || '',
     extension = payload.metadata?.extension || payload.original_filename?.split('.').pop()?.trim().toLowerCase() || payload.display_name?.split('.').pop()?.trim().toLowerCase() || null,
 ): AssetType {
+    // Explicit asset_type in payload takes precedence for structured types
+    if (payload.asset_type && isStructuredAssetType(payload.asset_type)) {
+        return payload.asset_type;
+    }
+
     if (normalizedMimeType.startsWith('image/')) {
         return 'image_asset';
     }
@@ -131,12 +156,22 @@ export function inferAssetType(
     return 'file_asset';
 }
 
+/** Returns true for asset types that are not inferred from MIME/extension. */
+export function isStructuredAssetType(assetType: AssetType): boolean {
+    return ['ip_asset', 'domain_asset', 'credential_stub', 'snippet_asset'].includes(assetType);
+}
+
 function inferPreviewKind(assetType: AssetType): AssetPreviewKind {
     switch (assetType) {
         case 'image_asset':
             return 'image';
         case 'pdf_asset':
             return 'document';
+        case 'ip_asset':
+        case 'domain_asset':
+        case 'credential_stub':
+        case 'snippet_asset':
+            return 'structured';
         default:
             return 'file';
     }

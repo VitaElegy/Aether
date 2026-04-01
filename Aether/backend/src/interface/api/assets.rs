@@ -26,6 +26,7 @@ pub struct ListAssetsQuery {
     asset_type: Option<String>,
     limit: Option<u64>,
     offset: Option<u64>,
+    sort_by: Option<String>,
 }
 
 #[derive(serde::Serialize, Default)]
@@ -34,6 +35,10 @@ pub struct AssetStats {
     pub images: u64,
     pub pdfs: u64,
     pub files: u64,
+    pub ip_assets: u64,
+    pub domain_assets: u64,
+    pub credential_stubs: u64,
+    pub snippets: u64,
 }
 
 #[derive(serde::Serialize)]
@@ -130,7 +135,41 @@ async fn list_assets(
     let offset = query.offset.unwrap_or(0) as usize;
     let limit = query.limit.unwrap_or(100).min(200) as usize;
     let filtered_count = filtered_assets.len() as u64;
-    let paged_items = filtered_assets.into_iter().skip(offset).take(limit).collect();
+
+    // Apply sort_by before pagination
+    let sort_by = query
+        .sort_by
+        .as_deref()
+        .unwrap_or("newest")
+        .trim()
+        .to_lowercase();
+    let mut sorted_assets = filtered_assets;
+    match sort_by.as_str() {
+        "largest" => {
+            sorted_assets.sort_by(|a, b| {
+                let size_a = content_item_size_bytes(a);
+                let size_b = content_item_size_bytes(b);
+                size_b.cmp(&size_a)
+            });
+        }
+        "name" => {
+            sorted_assets.sort_by(|a, b| {
+                let name_a = content_item_title(a).to_lowercase();
+                let name_b = content_item_title(b).to_lowercase();
+                name_a.cmp(&name_b)
+            });
+        }
+        // "newest" is the default — sort by updated_at descending
+        _ => {
+            sorted_assets.sort_by(|a, b| {
+                let date_a = content_item_updated_at(a);
+                let date_b = content_item_updated_at(b);
+                date_b.cmp(&date_a)
+            });
+        }
+    }
+
+    let paged_items = sorted_assets.into_iter().skip(offset).take(limit).collect();
 
     Ok(Json(AssetListResponse {
         items: paged_items,
@@ -319,7 +358,18 @@ fn normalize_search_text(input: &str) -> String {
 fn normalize_asset_type(asset_type: Option<&str>) -> Option<String> {
     asset_type
         .map(|value| value.trim().to_lowercase())
-        .filter(|value| matches!(value.as_str(), "image_asset" | "pdf_asset" | "file_asset"))
+        .filter(|value| {
+            matches!(
+                value.as_str(),
+                "image_asset"
+                    | "pdf_asset"
+                    | "file_asset"
+                    | "ip_asset"
+                    | "domain_asset"
+                    | "credential_stub"
+                    | "snippet_asset"
+            )
+        })
 }
 
 fn asset_payload(article: &Article) -> Option<&serde_json::Value> {
@@ -337,7 +387,16 @@ fn asset_type_for_article(article: &Article) -> String {
 
     if let Some(asset_type) = payload.get("asset_type").and_then(|value| value.as_str()) {
         let normalized = asset_type.trim().to_lowercase();
-        if matches!(normalized.as_str(), "image_asset" | "pdf_asset" | "file_asset") {
+        if matches!(
+            normalized.as_str(),
+            "image_asset"
+                | "pdf_asset"
+                | "file_asset"
+                | "ip_asset"
+                | "domain_asset"
+                | "credential_stub"
+                | "snippet_asset"
+        ) {
             return normalized;
         }
     }
@@ -414,6 +473,32 @@ fn article_body_text(article: &Article) -> String {
     }
 }
 
+fn content_item_size_bytes(item: &ContentItem) -> u64 {
+    match item {
+        ContentItem::Article(article) => {
+            asset_payload(article)
+                .and_then(|p| p.get("size_bytes"))
+                .and_then(|v| v.as_u64())
+                .unwrap_or(0)
+        }
+        _ => 0,
+    }
+}
+
+fn content_item_title(item: &ContentItem) -> &str {
+    match item {
+        ContentItem::Article(article) => article.node.title.as_str(),
+        _ => "",
+    }
+}
+
+fn content_item_updated_at(item: &ContentItem) -> chrono::DateTime<chrono::Utc> {
+    match item {
+        ContentItem::Article(article) => article.node.updated_at,
+        _ => chrono::Utc::now(),
+    }
+}
+
 fn extract_asset_reference_context<'a>(
     article: &'a Article,
     asset_marker: &str,
@@ -454,6 +539,10 @@ fn increment_asset_stats(stats: &mut AssetStats, asset_type: &str) {
     match asset_type {
         "image_asset" => stats.images += 1,
         "pdf_asset" => stats.pdfs += 1,
+        "ip_asset" => stats.ip_assets += 1,
+        "domain_asset" => stats.domain_assets += 1,
+        "credential_stub" => stats.credential_stubs += 1,
+        "snippet_asset" => stats.snippets += 1,
         _ => stats.files += 1,
     }
 }
@@ -535,17 +624,29 @@ mod tests {
     fn normalizes_asset_queries_and_stats() {
         assert_eq!(normalize_search_text("  Diagram  "), "diagram");
         assert_eq!(normalize_asset_type(Some(" PDF_ASSET ")).as_deref(), Some("pdf_asset"));
-        assert_eq!(normalize_asset_type(Some("credential_stub")), None);
+        assert_eq!(normalize_asset_type(Some("credential_stub")).as_deref(), Some("credential_stub"));
+        assert_eq!(normalize_asset_type(Some("ip_asset")).as_deref(), Some("ip_asset"));
+        assert_eq!(normalize_asset_type(Some("domain_asset")).as_deref(), Some("domain_asset"));
+        assert_eq!(normalize_asset_type(Some("snippet_asset")).as_deref(), Some("snippet_asset"));
+        assert_eq!(normalize_asset_type(Some("unknown_type")), None);
 
         let mut stats = AssetStats::default();
         increment_asset_stats(&mut stats, "image_asset");
         increment_asset_stats(&mut stats, "pdf_asset");
         increment_asset_stats(&mut stats, "file_asset");
+        increment_asset_stats(&mut stats, "ip_asset");
+        increment_asset_stats(&mut stats, "domain_asset");
+        increment_asset_stats(&mut stats, "credential_stub");
+        increment_asset_stats(&mut stats, "snippet_asset");
 
-        assert_eq!(stats.total, 3);
+        assert_eq!(stats.total, 7);
         assert_eq!(stats.images, 1);
         assert_eq!(stats.pdfs, 1);
         assert_eq!(stats.files, 1);
+        assert_eq!(stats.ip_assets, 1);
+        assert_eq!(stats.domain_assets, 1);
+        assert_eq!(stats.credential_stubs, 1);
+        assert_eq!(stats.snippets, 1);
     }
 
     #[test]

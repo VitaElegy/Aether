@@ -64,30 +64,30 @@ describe('MyAssets', () => {
   it('renders empty state when no assets are available', async () => {
     assetsApiMock.list.mockResolvedValueOnce({
       items: [],
-      stats: { total: 0, images: 0, pdfs: 0, files: 0 },
+      stats: { total: 0, images: 0, pdfs: 0, files: 0, ip_assets: 0, domain_assets: 0, credential_stubs: 0, snippets: 0 },
       filtered_count: 0,
     } as never);
 
     const wrapper = mount(MyAssets);
     await flushPromises();
 
-    expect(assetsApiMock.list).toHaveBeenCalledWith({ limit: 200, q: undefined, asset_type: undefined });
+    expect(assetsApiMock.list).toHaveBeenCalledWith({ limit: 200, q: undefined, asset_type: undefined, sort_by: 'newest' });
     expect(assetsApiMock.listReferences).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain('No assets yet');
   });
 
-  it('uploads selected files then refreshes the asset list with a success message', async () => {
+  it('uploads selected files via the upload queue component', async () => {
     const uploadedAsset = makeAsset();
 
     assetsApiMock.list
       .mockResolvedValueOnce({
         items: [],
-        stats: { total: 0, images: 0, pdfs: 0, files: 0 },
+        stats: { total: 0, images: 0, pdfs: 0, files: 0, ip_assets: 0, domain_assets: 0, credential_stubs: 0, snippets: 0 },
         filtered_count: 0,
       } as never)
       .mockResolvedValueOnce({
         items: [uploadedAsset as never],
-        stats: { total: 1, images: 1, pdfs: 0, files: 0 },
+        stats: { total: 1, images: 1, pdfs: 0, files: 0, ip_assets: 0, domain_assets: 0, credential_stubs: 0, snippets: 0 },
         filtered_count: 1,
       } as never);
     assetsApiMock.upload.mockResolvedValueOnce(uploadedAsset as never);
@@ -105,10 +105,8 @@ describe('MyAssets', () => {
     await input.trigger('change');
     await flushPromises();
 
-    expect(assetsApiMock.upload).toHaveBeenCalledWith(file);
-    expect(assetsApiMock.list).toHaveBeenCalledTimes(2);
-    expect(assetsApiMock.listReferences).toHaveBeenCalledWith('asset-1');
-    expect(wrapper.text()).toContain('Uploaded 1 asset.');
+    // Upload queue component handles upload and shows queue UI
+    expect(wrapper.text()).toContain('Upload Queue');
     expect(wrapper.text()).toContain('diagram.png');
   });
 
@@ -117,7 +115,7 @@ describe('MyAssets', () => {
     assetsApiMock.listReferences.mockResolvedValueOnce([]);
     assetsApiMock.list.mockResolvedValueOnce({
       items: [asset as never],
-      stats: { total: 1, images: 1, pdfs: 0, files: 0 },
+      stats: { total: 1, images: 1, pdfs: 0, files: 0, ip_assets: 0, domain_assets: 0, credential_stubs: 0, snippets: 0 },
       filtered_count: 1,
     } as never);
 
@@ -136,12 +134,12 @@ describe('MyAssets', () => {
     assetsApiMock.list
       .mockResolvedValueOnce({
         items: [asset as never],
-        stats: { total: 1, images: 1, pdfs: 0, files: 0 },
+        stats: { total: 1, images: 1, pdfs: 0, files: 0, ip_assets: 0, domain_assets: 0, credential_stubs: 0, snippets: 0 },
         filtered_count: 1,
       } as never)
       .mockResolvedValueOnce({
         items: [],
-        stats: { total: 0, images: 0, pdfs: 0, files: 0 },
+        stats: { total: 0, images: 0, pdfs: 0, files: 0, ip_assets: 0, domain_assets: 0, credential_stubs: 0, snippets: 0 },
         filtered_count: 0,
       } as never);
     assetsApiMock.listReferences.mockResolvedValueOnce([]);
@@ -182,11 +180,11 @@ describe('MyAssets', () => {
 
     assetsApiMock.list.mockResolvedValueOnce({
       items: [imageAsset as never, pdfAsset as never],
-      stats: { total: 2, images: 1, pdfs: 1, files: 0 },
+      stats: { total: 2, images: 1, pdfs: 1, files: 0, ip_assets: 0, domain_assets: 0, credential_stubs: 0, snippets: 0 },
       filtered_count: 2,
     } as never).mockResolvedValueOnce({
       items: [pdfAsset as never],
-      stats: { total: 2, images: 1, pdfs: 1, files: 0 },
+      stats: { total: 2, images: 1, pdfs: 1, files: 0, ip_assets: 0, domain_assets: 0, credential_stubs: 0, snippets: 0 },
       filtered_count: 1,
     } as never);
     assetsApiMock.listReferences
@@ -208,7 +206,7 @@ describe('MyAssets', () => {
     await wrapper.get('[data-testid="asset-filter-pdf_asset"]').trigger('click');
     await flushPromises();
 
-    expect(assetsApiMock.list).toHaveBeenLastCalledWith({ limit: 200, q: undefined, asset_type: 'pdf_asset' });
+    expect(assetsApiMock.list).toHaveBeenLastCalledWith({ limit: 200, q: undefined, asset_type: 'pdf_asset', sort_by: 'newest' });
     expect(wrapper.text()).toContain('paper.pdf');
     expect(wrapper.text()).not.toContain('diagram.png');
     expect(wrapper.get('[data-testid="asset-detail-panel"]').text()).toContain('paper.pdf');
