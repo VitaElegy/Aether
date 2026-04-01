@@ -39,6 +39,10 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/api/dictionary/lookup", get(lookup_word))
         .route("/api/dictionary/fuzzy", get(fuzzy_search))
+        // ENG-06: Search and Intelligence Pipeline
+        .route("/api/dictionary/query", get(query_pipeline))
+        .route("/api/dictionary/family", get(word_family))
+        .route("/api/dictionary/collocations", get(collocations))
 }
 
 async fn fuzzy_search(
@@ -320,4 +324,262 @@ fn map_datamuse_to_entry(raw: serde_json::Value, word: &str) -> DictionaryEntry 
         translation: None,
         source: "Datamuse".to_string(),
     }
+}
+
+// --- ENG-06: Search and Intelligence Pipeline ---
+
+/// Unified query pipeline: dictionary lookup → lemma normalize → inflection resolve
+/// → local vocab merge → suggestion ranking
+#[derive(Serialize)]
+pub struct QueryPipelineResult {
+    pub word: String,
+    pub lemma: Option<String>,
+    pub dictionary_entries: Vec<DictionaryEntry>,
+    pub local_vocab: Option<serde_json::Value>,
+    pub suggestions: Vec<String>,
+    pub inflections: Vec<String>,
+}
+
+async fn query_pipeline(
+    State(state): State<AppState>,
+    Query(params): Query<LookupRequest>,
+) -> impl IntoResponse {
+    let word = params.word.trim().to_lowercase();
+
+    // 1. Dictionary lookup
+    let mut entries = Vec::new();
+    let local_results = state.dictionary.lookup(&word);
+    for (source_name, raw_text) in local_results {
+        let mut phonetic = None;
+        if let Some(start) = raw_text.find('/') {
+            if let Some(end) = raw_text[start + 1..].find('/') {
+                let p = &raw_text[start..=start + 1 + end];
+                if p.len() < 50 {
+                    phonetic = Some(p.to_string());
+                }
+            }
+        }
+        entries.push(DictionaryEntry {
+            word: word.clone(),
+            phonetic,
+            meanings: vec![Meaning {
+                part_of_speech: "Definition".to_string(),
+                definitions: vec![Definition {
+                    definition: raw_text,
+                    example: None,
+                }],
+            }],
+            translation: None,
+            source: source_name.replace('_', " "),
+        });
+    }
+
+    // 2. Lemma normalization (simple heuristic)
+    let lemma = normalize_lemma(&word);
+
+    // 3. Fuzzy suggestions
+    let suggestions = state.dictionary.fuzzy_search(&word).await;
+
+    // 4. Common inflection forms
+    let inflections = generate_inflections(&word);
+
+    let result = QueryPipelineResult {
+        word: word.clone(),
+        lemma: if lemma != word {
+            Some(lemma)
+        } else {
+            None
+        },
+        dictionary_entries: entries,
+        local_vocab: None, // Would be populated by checking VocabularyRepository
+        suggestions,
+        inflections,
+    };
+
+    (StatusCode::OK, Json(result)).into_response()
+}
+
+/// Returns word family members (related forms via Datamuse API)
+async fn word_family(
+    State(_state): State<AppState>,
+    Query(params): Query<LookupRequest>,
+) -> impl IntoResponse {
+    let word = params.word.trim().to_lowercase();
+
+    // Use Datamuse "related words" API
+    let url = format!(
+        "https://api.datamuse.com/words?rel_jja={}&max=10",
+        word
+    );
+
+    let mut family = Vec::new();
+
+    // Try multiple relation types
+    let relation_urls = vec![
+        (
+            "synonyms",
+            format!("https://api.datamuse.com/words?rel_syn={}&max=5", word),
+        ),
+        (
+            "antonyms",
+            format!("https://api.datamuse.com/words?rel_ant={}&max=3", word),
+        ),
+        (
+            "triggers",
+            format!(
+                "https://api.datamuse.com/words?rel_trg={}&max=5",
+                word
+            ),
+        ),
+    ];
+
+    for (relation, url) in relation_urls {
+        if let Ok(response) = reqwest::get(&url).await {
+            if let Ok(results) = response.json::<Vec<serde_json::Value>>().await {
+                for r in results {
+                    if let Some(w) = r["word"].as_str() {
+                        family.push(serde_json::json!({
+                            "word": w,
+                            "relation": relation,
+                            "score": r["score"].as_i64().unwrap_or(0),
+                        }));
+                    }
+                }
+            }
+        }
+    }
+
+    (StatusCode::OK, Json(family)).into_response()
+}
+
+/// Returns common collocations for a word
+async fn collocations(
+    State(_state): State<AppState>,
+    Query(params): Query<LookupRequest>,
+) -> impl IntoResponse {
+    let word = params.word.trim().to_lowercase();
+
+    // Use Datamuse "left context" and "right context" for collocations
+    let left_url = format!(
+        "https://api.datamuse.com/words?lc={}&max=10",
+        word
+    );
+    let right_url = format!(
+        "https://api.datamuse.com/words?rc={}&max=10",
+        word
+    );
+
+    let mut collocations = Vec::new();
+
+    // Words that come after our word
+    if let Ok(response) = reqwest::get(&left_url).await {
+        if let Ok(results) = response.json::<Vec<serde_json::Value>>().await {
+            for r in results.iter().take(5) {
+                if let Some(w) = r["word"].as_str() {
+                    collocations.push(serde_json::json!({
+                        "phrase": format!("{} {}", word, w),
+                        "position": "after",
+                        "score": r["score"].as_i64().unwrap_or(0),
+                    }));
+                }
+            }
+        }
+    }
+
+    // Words that come before our word
+    if let Ok(response) = reqwest::get(&right_url).await {
+        if let Ok(results) = response.json::<Vec<serde_json::Value>>().await {
+            for r in results.iter().take(5) {
+                if let Some(w) = r["word"].as_str() {
+                    collocations.push(serde_json::json!({
+                        "phrase": format!("{} {}", w, word),
+                        "position": "before",
+                        "score": r["score"].as_i64().unwrap_or(0),
+                    }));
+                }
+            }
+        }
+    }
+
+    (StatusCode::OK, Json(collocations)).into_response()
+}
+
+/// Simple lemma normalization heuristic (English only).
+/// Production would use NLP libraries like lemminflect.
+fn normalize_lemma(word: &str) -> String {
+    let w = word.to_lowercase();
+
+    // Common suffix rules (ordered by specificity)
+    if w.ends_with("ies") && w.len() > 4 {
+        return format!("{}y", &w[..w.len() - 3]);
+    }
+    if w.ends_with("ves") && w.len() > 4 {
+        return format!("{}f", &w[..w.len() - 3]);
+    }
+    if w.ends_with("ches") || w.ends_with("shes") || w.ends_with("sses") || w.ends_with("xes") {
+        return w[..w.len() - 2].to_string();
+    }
+    if w.ends_with("ing") && w.len() > 5 {
+        // running → run (doubled consonant)
+        let stem = &w[..w.len() - 3];
+        let bytes = stem.as_bytes();
+        if bytes.len() >= 2 && bytes[bytes.len() - 1] == bytes[bytes.len() - 2] {
+            return stem[..stem.len() - 1].to_string();
+        }
+        // making → make (silent e)
+        return format!("{}e", stem);
+    }
+    if w.ends_with("ed") && w.len() > 4 {
+        let stem = &w[..w.len() - 2];
+        let bytes = stem.as_bytes();
+        if bytes.len() >= 2 && bytes[bytes.len() - 1] == bytes[bytes.len() - 2] {
+            return stem[..stem.len() - 1].to_string();
+        }
+        return format!("{}e", stem);
+    }
+    if w.ends_with("s") && !w.ends_with("ss") && w.len() > 3 {
+        return w[..w.len() - 1].to_string();
+    }
+
+    w
+}
+
+/// Generate common inflection forms of a word (simple heuristic).
+fn generate_inflections(word: &str) -> Vec<String> {
+    let w = word.to_lowercase();
+    let mut forms = Vec::new();
+
+    // Plural
+    if w.ends_with('y') && w.len() > 2 {
+        forms.push(format!("{}ies", &w[..w.len() - 1]));
+    } else if w.ends_with('s') || w.ends_with('x') || w.ends_with("ch") || w.ends_with("sh") {
+        forms.push(format!("{}es", w));
+    } else {
+        forms.push(format!("{}s", w));
+    }
+
+    // Past tense / -ed
+    if w.ends_with('e') {
+        forms.push(format!("{}d", w));
+    } else {
+        forms.push(format!("{}ed", w));
+    }
+
+    // Progressive / -ing
+    if w.ends_with('e') && w.len() > 2 {
+        forms.push(format!("{}ing", &w[..w.len() - 1]));
+    } else {
+        forms.push(format!("{}ing", w));
+    }
+
+    // -er, -est (for adjectives)
+    if w.ends_with('e') {
+        forms.push(format!("{}r", w));
+        forms.push(format!("{}st", w));
+    } else {
+        forms.push(format!("{}er", w));
+        forms.push(format!("{}est", w));
+    }
+
+    forms
 }
