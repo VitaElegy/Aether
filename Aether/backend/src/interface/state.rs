@@ -26,6 +26,7 @@ pub struct AppState {
     pub backup_service: Arc<crate::infrastructure::services::backup_service::BackupService>,
     pub portability_service: Arc<crate::infrastructure::services::portability_service::PortabilityService>,
     pub system_settings_repository: Arc<crate::infrastructure::persistence::repositories::system_settings_repository::SystemSettingsRepository>,
+    pub math_service: Arc<crate::domain::math::service::MathService>,
 }
 
 impl FromRef<AppState> for Arc<dyn AuthService> {

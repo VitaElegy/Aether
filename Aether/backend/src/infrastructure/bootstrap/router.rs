@@ -1,6 +1,6 @@
 use crate::interface::api::{
-    assets, auth, backup, comment, content, dictionary, export, graph, group, knowledge_base, memo,
-    openapi::ApiDoc, permission, portability, prkb, system, tags, template, upload, user,
+    assets, auth, backup, comment, content, dictionary, export, graph, group, knowledge_base, math,
+    memo, openapi::ApiDoc, permission, portability, prkb, system, tags, template, upload, user,
     user_settings, vocabulary, vrkb,
 };
 use crate::interface::state::AppState;
@@ -31,6 +31,7 @@ pub fn build_router(state: AppState) -> Router {
         .merge(prkb::router())
         .merge(template::router())
         .merge(graph::router())
+        .merge(math::router())
         .merge(vrkb::router())
         .nest("/api/assets", assets::router())
         .nest("/api/backups", backup::router())

@@ -22,6 +22,7 @@ pub mod vrkb;
 // router function removed as it is handled by bootstrap/router.rs
 pub mod assets;
 pub mod backup;
+pub mod math;
 pub mod openapi;
 pub mod portability;
 pub mod prkb;
