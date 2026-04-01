@@ -25,6 +25,7 @@ function makeMemo(overrides: Partial<Memo>): Memo {
     color: 'Yellow',
     is_pinned: false,
     tags: [],
+    linked_entities: [],
     ...overrides,
   };
 }

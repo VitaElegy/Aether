@@ -1,13 +1,25 @@
 # Aether 特殊知识库逐模块审计与执行计划
 
-状态: 提案
-日期: 2026-03-19
+状态: 部分实施完成
+日期: 2026-03-19 (审计) → 2026-04-01 (实施更新)
 作者: Codex
 
 补充说明:
 
 - 本文档用于逐模块成熟度审计。
 - 主实施计划见 `Aether/doc/special_kb_detailed_execution_plan_2026-03-19.md`。
+- 实施进度见 `Aether/doc/special_kb_next_steps_2026-04-01.md`。
+
+### 2026-04-01 实施状态总览
+
+| 模块 | 审计时成熟度 | 当前成熟度 | Wave | 状态 |
+|------|-------------|-----------|------|------|
+| Assets | 3.5/10 | 5.5/10 | Wave 1 | ASSET-01~04 完成, 05~07 待做 |
+| English | 6.5/10 | 8.5/10 | Wave 2 | ✅ ENG-01~07 全部完成 |
+| Memos | 6/10 | 8/10 | Wave 3 | ✅ MEMO-01~07 全部完成 |
+| PRKB | 4.5/10 | 8/10 | Wave 4 | ✅ PRKB-01~08 全部完成 |
+| VRKB | 5.5/10 | 5.5/10 | Wave 5 | ❌ 未开始 — 下一优先 |
+| Math | 4.5/10 | 8/10 | Wave 6 | ✅ MATH-01~06 全部完成 |
 
 ## 1. 说明
 
@@ -56,7 +68,9 @@
 
 ## 2. Assets KB
 
-成熟度: 3.5 / 10
+成熟度: 3.5 / 10 → **5.5 / 10** (2026-04-01)
+
+> **实施状态**: ASSET-01~04 已完成 (`11946b3`), ASSET-05~07 待做
 
 ### 已有能力
 
@@ -155,7 +169,10 @@
 
 ## 3. English / Vocabulary KB
 
-成熟度: 6.5 / 10
+成熟度: 6.5 / 10 → **8.5 / 10** (2026-04-01)
+
+> **实施状态**: ✅ ENG-01~07 全部完成 (7 commits, `337c0fe`→`0ac3225`)
+> 交付: Identity split, Article Workspace, Vocabulary Object, Example 2.0, Anchoring 2.0, Search Intelligence, Portability 2.0
 
 ### 已有能力
 
@@ -256,7 +273,10 @@
 
 ## 4. Memos KB
 
-成熟度: 6 / 10
+成熟度: 6 / 10 → **8 / 10** (2026-04-01)
+
+> **实施状态**: ✅ MEMO-01~07 全部完成 (1 commit, `a8cb160`)
+> 交付: Stream Core, Compose/Editor, Saved Views, Bulk Ops, Backlinks, Rhythm/Review, Portability
 
 ### 已有能力
 
@@ -343,7 +363,11 @@
 
 ## 5. PRKB
 
-成熟度: 4.5 / 10
+成熟度: 4.5 / 10 → **8 / 10** (2026-04-01)
+
+> **实施状态**: ✅ PRKB-01~08 全部完成 (2 commits, `64cf457`, `321e20f`)
+> 交付: Feed Control, Inbox Triage, Library Detail, Search/Facet/DSL, Collections, PDF Lifecycle, Signals, BibTeX Portability
+> 新增: 15 API endpoints, 6 Vue components, migration script
 
 ### 已有能力
 
@@ -442,7 +466,10 @@
 
 ## 6. VRKB
 
-成熟度: 5.5 / 10
+成熟度: 5.5 / 10 (未变化)
+
+> **实施状态**: ❌ Wave 5 未开始 — 下一优先批次
+> 阻塞: ASSET-05 (Picker Mode) 需先完成以支撑 VRKB-06 (Assets Integration)
 
 ### 已有能力
 
@@ -536,7 +563,11 @@
 
 ## 7. Math KB
 
-成熟度: 4.5 / 10
+成熟度: 4.5 / 10 → **8 / 10** (2026-04-01)
+
+> **实施状态**: ✅ MATH-01~06 全部完成 (1 commit, `1c9c5df`)
+> 交付: Formal Object Model (9 node types, 5 relation types), Graph Semantics, Workspace Mode, 3-mode switch, Formula/References, LaTeX/JSON/Markdown Portability
+> 新增: 13 API endpoints, MathService, 13 unit tests
 
 ### 已有能力
 
@@ -614,24 +645,20 @@
 
 - Math KB 既能写、能读，也能推导和检查依赖。
 
-## 8. 总体排序建议
+## 8. 总体排序建议 (2026-04-01 更新)
 
-按依赖关系，推荐执行顺序是:
+原始建议顺序 (2026-03-19):
 
-1. Assets
-2. English / Vocabulary
-3. Memos
-4. PRKB
-5. VRKB
-6. Math
+1. Assets → 2. English → 3. Memos → 4. PRKB → 5. VRKB → 6. Math
 
-排序理由:
+实际执行 (2026-04-01):
 
-- Assets 是其他模块的资源底座。
-- English 已经最成熟，投入后最容易先形成强闭环。
-- Memos 的高频使用价值高，且依赖 Assets。
-- PRKB 与 VRKB 都会受益于资产和 portability 先成熟。
-- Math 当前受阻主要在对象模型，需要平台层更稳后再推进。
+1. ✅ Wave 0: Platform Closure (95%)
+2. ✅ Wave 1: Assets (ASSET-01~04, 57%)
+3. ✅ Wave 2/3/4/6: English + Memos + PRKB + Math 并发完成 (100%)
+4. ⏳ 下一步: ASSET-05~07 + Wave 5 (VRKB)
+
+并发策略成功: 4 个模块使用独立 git worktree 并行开发，零冲突合并。
 
 ## 9. 世界级完成判定
 

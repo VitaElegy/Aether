@@ -1,6 +1,7 @@
 <template>
   <t-drawer
-    v-model:visible="visible"
+    :visible="visible"
+    @update:visible="$emit('update:visible', $event)"
     size="600px"
     :header="paper?.title || 'Paper Details'"
     :footer="false"
@@ -142,7 +143,7 @@ import { MessagePlugin } from 'tdesign-vue-next';
 import type { Paper } from '@/stores/prkb';
 
 const props = defineProps<{ paper: Paper | null; visible: boolean }>();
-const emit = defineEmits(['close', 'toggle-read', 'update-signals', 'queue-pdf', 'export-bib', 'update-tags', 'update-notes']);
+const emit = defineEmits(['close', 'update:visible', 'toggle-read', 'update-signals', 'queue-pdf', 'export-bib', 'update-tags', 'update-notes']);
 
 const newTag = ref('');
 const localNotes = ref('');
