@@ -253,6 +253,56 @@ pub struct Vocabulary {
     pub is_archived: bool,
 }
 
+// --- Memo Linked Entity (MEMO-05: Backlinks) ---
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LinkedEntity {
+    pub target_id: Uuid,
+    pub target_type: String, // "article", "asset", "paper", "finding", "doc", "memo"
+    pub target_title: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub anchor_text: Option<String>,
+}
+
+// --- Memo Reference (MEMO-05: mention / backlink) ---
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoReference {
+    pub source_id: Uuid,
+    pub target_id: Uuid,
+    pub ref_type: String, // "mention", "backlink", "embed"
+    pub context: Option<String>,
+}
+
+// --- Saved View (MEMO-03) ---
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedView {
+    pub id: Uuid,
+    pub name: String,
+    pub icon: Option<String>,
+    pub filters: SavedViewFilters,
+    pub sort_by: Option<String>,
+    pub sort_dir: Option<String>,
+    pub view_mode: Option<String>, // stream, masonry, kanban, timeline, calendar
+    pub pinned: bool,
+    pub position: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SavedViewFilters {
+    #[serde(default)]
+    pub tags: Vec<String>,
+    pub channel: Option<String>,
+    pub status: Option<String>,
+    pub priority: Option<String>,
+    pub search: Option<String>,
+    pub date_from: Option<DateTime<Utc>>,
+    pub date_to: Option<DateTime<Utc>>,
+    pub is_pinned: Option<bool>,
+    // MEMO-06: review queue filters
+    pub queue: Option<String>, // "due_today", "overdue", "stale", "unresolved"
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Memo {
     #[serde(flatten)]
@@ -265,6 +315,17 @@ pub struct Memo {
     pub due_at: Option<DateTime<Utc>>,
     pub reminder_at: Option<DateTime<Utc>>,
     pub tags: Vec<String>,
+    // MEMO-01: Stream Core
+    pub channel: Option<String>,
+    #[serde(default)]
+    pub excerpt: Option<String>,
+    // MEMO-05: Backlinks and References
+    #[serde(default)]
+    pub linked_entities: Vec<LinkedEntity>,
+    // MEMO-06: Rhythm and Review
+    pub scheduled_at: Option<DateTime<Utc>>,
+    pub snoozed_until: Option<DateTime<Utc>>,
+    pub reviewed_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

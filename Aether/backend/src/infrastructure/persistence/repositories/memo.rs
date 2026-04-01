@@ -1,6 +1,6 @@
-use crate::domain::models::UserId;
+use crate::domain::models::{LinkedEntity, UserId};
 use crate::domain::models::{Memo, Node, NodeType, PermissionMode};
-use crate::domain::ports::{MemoRepository, RepositoryError};
+use crate::domain::ports::{MemoBulkUpdate, MemoRepository, RepositoryError};
 use crate::infrastructure::persistence::entities::{memo_detail, node};
 use crate::infrastructure::persistence::postgres::PostgresRepository;
 use async_trait::async_trait;
@@ -45,7 +45,6 @@ impl MemoRepository for PostgresRepository {
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
         // 2. Save Detail
-        // Status is now dynamic (String)
         let status_val = memo.status.clone();
 
         let priority_enum = match memo.priority.as_str() {
@@ -53,7 +52,7 @@ impl MemoRepository for PostgresRepository {
             "P1" => memo_detail::MemoPriority::P1,
             "P2" => memo_detail::MemoPriority::P2,
             "P3" => memo_detail::MemoPriority::P3,
-            _ => memo_detail::MemoPriority::P2, // Default Normal
+            _ => memo_detail::MemoPriority::P2,
         };
 
         let color_enum = match memo.color.as_str() {
@@ -65,27 +64,16 @@ impl MemoRepository for PostgresRepository {
             _ => memo_detail::MemoColor::Yellow,
         };
 
+        let linked_entities_json = if memo.linked_entities.is_empty() {
+            None
+        } else {
+            Some(serde_json::to_value(&memo.linked_entities).unwrap_or(serde_json::json!([])))
+        };
+
         let detail_model = memo_detail::ActiveModel {
             id: Set(memo.node.id),
             project_id: Set(memo.node.knowledge_base_id),
             content: Set(serde_json::json!(memo.content)),
-            // In Step 191 I made memo_detail.rs have `content: String` but `column_type = "Text"`.
-            // But main.rs SQL says `content JSONB`.
-            // If main.rs creates JSONB, SeaORM model MUST match.
-            // I should have made memo_detail.rs use JSONB for content?
-            // "Block-First" -> Content is Blocks.
-            // Domain `Memo` has `content: String`.
-            // If Domain is string (JSON string), DB can be JSONB.
-            // Let's assume content is Stringified JSON for now to be safe with types, OR update entity to Json.
-            // Wait, article_details uses JSONB.
-            // I should update memo_detail.rs to use Json for content.
-            // But for this step let's assume String for now and fix Entity later if it crashes.
-            // Actively, Step 191 defined content as String with column_type="Text".
-            // Step 201 defined SQL as JSONB. This WILL crash.
-            // I MUST FIX memo_detail.rs first or concurrent.
-            // I'll assume I fix it concurrently or after.
-            // For now, let's proceed with String <-> JSONB casting logic if possible or just use whatever type aligns.
-            // I will stick to what's defined in the FILE currently (String).
             priority: Set(priority_enum),
             status: Set(status_val),
             color: Set(color_enum),
@@ -93,6 +81,11 @@ impl MemoRepository for PostgresRepository {
             due_at: Set(memo.due_at.map(|d| d.into())),
             reminder_at: Set(memo.reminder_at.map(|d| d.into())),
             tags: Set(serde_json::to_value(&memo.tags).unwrap_or(serde_json::json!([]))),
+            channel: Set(memo.channel),
+            linked_entities: Set(linked_entities_json),
+            scheduled_at: Set(memo.scheduled_at.map(|d| d.into())),
+            snoozed_until: Set(memo.snoozed_until.map(|d| d.into())),
+            reviewed_at: Set(memo.reviewed_at.map(|d| d.into())),
         };
         memo_detail::Entity::insert(detail_model)
             .on_conflict(
@@ -106,6 +99,11 @@ impl MemoRepository for PostgresRepository {
                         memo_detail::Column::DueAt,
                         memo_detail::Column::ReminderAt,
                         memo_detail::Column::Tags,
+                        memo_detail::Column::Channel,
+                        memo_detail::Column::LinkedEntities,
+                        memo_detail::Column::ScheduledAt,
+                        memo_detail::Column::SnoozedUntil,
+                        memo_detail::Column::ReviewedAt,
                     ])
                     .to_owned(),
             )
@@ -138,7 +136,7 @@ impl MemoRepository for PostgresRepository {
         author_id: Option<UserId>,
     ) -> Result<Vec<Memo>, RepositoryError> {
         let mut query = node::Entity::find()
-            .filter(node::Column::Type.eq("memo")) // Lowercase 'memo' to match Insert
+            .filter(node::Column::Type.eq("memo"))
             .find_also_related(memo_detail::Entity)
             .order_by_desc(node::Column::CreatedAt);
 
@@ -193,9 +191,240 @@ impl MemoRepository for PostgresRepository {
         }
         Ok(memos)
     }
+
+    // MEMO-04: Bulk Update
+    async fn bulk_update(
+        &self,
+        ids: Vec<Uuid>,
+        update: MemoBulkUpdate,
+    ) -> Result<usize, RepositoryError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+
+        let txn = self
+            .db
+            .begin()
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let mut count = 0usize;
+        for id in &ids {
+            let existing = node::Entity::find_by_id(*id)
+                .find_also_related(memo_detail::Entity)
+                .one(&txn)
+                .await
+                .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+            if let Some((_n, Some(d))) = existing {
+                let mut active: memo_detail::ActiveModel = d.into();
+
+                if let Some(ref status) = update.status {
+                    active.status = Set(status.clone());
+                }
+                if let Some(ref channel) = update.channel {
+                    active.channel = Set(Some(channel.clone()));
+                }
+                if let Some(pinned) = update.is_pinned {
+                    active.is_pinned = Set(pinned);
+                }
+                if let Some(ref priority) = update.priority {
+                    let p = match priority.as_str() {
+                        "P0" => memo_detail::MemoPriority::P0,
+                        "P1" => memo_detail::MemoPriority::P1,
+                        "P3" => memo_detail::MemoPriority::P3,
+                        _ => memo_detail::MemoPriority::P2,
+                    };
+                    active.priority = Set(p);
+                }
+                if let Some(ref snoozed) = update.snoozed_until {
+                    active.snoozed_until = Set(Some((*snoozed).into()));
+                }
+
+                // Handle tag add/remove
+                if update.tags_add.is_some() || update.tags_remove.is_some() {
+                    let current_tags_val = active.tags.clone().unwrap();
+                    let mut current_tags: Vec<String> =
+                        serde_json::from_value(current_tags_val).unwrap_or_default();
+                    if let Some(ref add) = update.tags_add {
+                        for t in add {
+                            if !current_tags.contains(t) {
+                                current_tags.push(t.clone());
+                            }
+                        }
+                    }
+                    if let Some(ref remove) = update.tags_remove {
+                        current_tags.retain(|t| !remove.contains(t));
+                    }
+                    active.tags =
+                        Set(serde_json::to_value(&current_tags).unwrap_or(serde_json::json!([])));
+                }
+
+                active
+                    .update(&txn)
+                    .await
+                    .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+                // Also bump node.updated_at
+                let mut node_active = node::ActiveModel {
+                    id: Set(*id),
+                    ..Default::default()
+                };
+                node_active.updated_at = Set(Utc::now().into());
+                node_active
+                    .update(&txn)
+                    .await
+                    .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+                count += 1;
+            }
+        }
+
+        txn.commit()
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(count)
+    }
+
+    // MEMO-04: Bulk Delete
+    async fn bulk_delete(&self, ids: Vec<Uuid>) -> Result<usize, RepositoryError> {
+        if ids.is_empty() {
+            return Ok(0);
+        }
+        let result = node::Entity::delete_many()
+            .filter(node::Column::Id.is_in(ids))
+            .exec(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+        Ok(result.rows_affected as usize)
+    }
+
+    // MEMO-05: Find backlinks — memos whose linked_entities reference target_id
+    async fn find_backlinks(&self, target_id: &Uuid) -> Result<Vec<Memo>, RepositoryError> {
+        // Use JSON contains query on linked_entities
+        // For PostgreSQL JSONB: linked_entities @> '[{"target_id": "..."}]'
+        let target_str = target_id.to_string();
+        let results = node::Entity::find()
+            .filter(node::Column::Type.eq("memo"))
+            .find_also_related(memo_detail::Entity)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        // In-memory filter for backlinks (ideal: use DB JSONB query)
+        let mut memos = Vec::new();
+        for (n, d) in results {
+            if let Some(detail) = d {
+                let has_link = detail
+                    .linked_entities
+                    .as_ref()
+                    .map(|le| le.to_string().contains(&target_str))
+                    .unwrap_or(false);
+                // Also check content for @mentions
+                let content_str = detail
+                    .content
+                    .as_str()
+                    .unwrap_or(&detail.content.to_string());
+                let has_mention = content_str.contains(&target_str);
+
+                if has_link || has_mention {
+                    memos.push(map_memo(n, detail));
+                }
+            }
+        }
+        Ok(memos)
+    }
+
+    // MEMO-06: Review Queue — due today
+    async fn find_due_today(&self, author_id: UserId) -> Result<Vec<Memo>, RepositoryError> {
+        let today_start = Utc::now()
+            .date_naive()
+            .and_hms_opt(0, 0, 0)
+            .unwrap();
+        let today_end = Utc::now()
+            .date_naive()
+            .and_hms_opt(23, 59, 59)
+            .unwrap();
+
+        let results = node::Entity::find()
+            .filter(node::Column::Type.eq("memo"))
+            .filter(node::Column::AuthorId.eq(author_id.0))
+            .find_also_related(memo_detail::Entity)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let mut memos = Vec::new();
+        for (n, d) in results {
+            if let Some(detail) = d {
+                if let Some(due) = &detail.due_at {
+                    let due_naive = due.naive_utc();
+                    if due_naive >= today_start && due_naive <= today_end {
+                        memos.push(map_memo(n, detail));
+                    }
+                }
+            }
+        }
+        Ok(memos)
+    }
+
+    // MEMO-06: Review Queue — overdue
+    async fn find_overdue(&self, author_id: UserId) -> Result<Vec<Memo>, RepositoryError> {
+        let now = Utc::now();
+        let results = node::Entity::find()
+            .filter(node::Column::Type.eq("memo"))
+            .filter(node::Column::AuthorId.eq(author_id.0))
+            .find_also_related(memo_detail::Entity)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let mut memos = Vec::new();
+        for (n, d) in results {
+            if let Some(detail) = d {
+                if let Some(due) = &detail.due_at {
+                    let due_utc = due.with_timezone(&Utc);
+                    if due_utc < now && detail.status != "Done" && detail.status != "Archived" {
+                        memos.push(map_memo(n, detail));
+                    }
+                }
+            }
+        }
+        Ok(memos)
+    }
+
+    // MEMO-06: Review Queue — stale (not updated in N days)
+    async fn find_stale(&self, author_id: UserId, days: i64) -> Result<Vec<Memo>, RepositoryError> {
+        let cutoff = Utc::now() - chrono::Duration::days(days);
+        let results = node::Entity::find()
+            .filter(node::Column::Type.eq("memo"))
+            .filter(node::Column::AuthorId.eq(author_id.0))
+            .filter(node::Column::UpdatedAt.lte(cutoff))
+            .find_also_related(memo_detail::Entity)
+            .order_by_asc(node::Column::UpdatedAt)
+            .all(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        let mut memos = Vec::new();
+        for (n, d) in results {
+            if let Some(detail) = d {
+                if detail.status != "Done" && detail.status != "Archived" {
+                    memos.push(map_memo(n, detail));
+                }
+            }
+        }
+        Ok(memos)
+    }
 }
 
 fn map_memo(n: node::Model, d: memo_detail::Model) -> Memo {
+    let linked_entities: Vec<LinkedEntity> = d
+        .linked_entities
+        .as_ref()
+        .and_then(|v| serde_json::from_value(v.clone()).ok())
+        .unwrap_or_default();
+
     Memo {
         node: Node {
             id: n.id,
@@ -237,5 +466,12 @@ fn map_memo(n: node::Model, d: memo_detail::Model) -> Memo {
         due_at: d.due_at.map(|dt| dt.with_timezone(&Utc)),
         reminder_at: d.reminder_at.map(|dt| dt.with_timezone(&Utc)),
         tags: serde_json::from_value(d.tags).unwrap_or_default(),
+        // New fields
+        channel: d.channel,
+        excerpt: None, // Computed from content on the fly
+        linked_entities,
+        scheduled_at: d.scheduled_at.map(|dt| dt.with_timezone(&Utc)),
+        snoozed_until: d.snoozed_until.map(|dt| dt.with_timezone(&Utc)),
+        reviewed_at: d.reviewed_at.map(|dt| dt.with_timezone(&Utc)),
     }
 }

@@ -16,7 +16,7 @@ use crate::domain::models::{
     Vocabulary,
 };
 use async_trait::async_trait;
-use serde::Serialize;
+use serde::{Serialize, Deserialize};
 use thiserror::Error; // Added back
 use uuid::Uuid;
 // use crate::infrastructure::persistence::entities::audit_log; // Removed unused import if I had one.
@@ -205,6 +205,32 @@ pub trait MemoRepository: Send + Sync {
         end: chrono::DateTime<chrono::Utc>,
     ) -> Result<Vec<Memo>, RepositoryError>;
     async fn delete(&self, id: &Uuid) -> Result<(), RepositoryError>;
+    // MEMO-04: Bulk Operations
+    async fn bulk_update(
+        &self,
+        ids: Vec<Uuid>,
+        update: MemoBulkUpdate,
+    ) -> Result<usize, RepositoryError>;
+    async fn bulk_delete(&self, ids: Vec<Uuid>) -> Result<usize, RepositoryError>;
+    // MEMO-05: Backlinks
+    async fn find_backlinks(&self, target_id: &Uuid) -> Result<Vec<Memo>, RepositoryError>;
+    // MEMO-06: Review Queues
+    async fn find_due_today(&self, author_id: UserId) -> Result<Vec<Memo>, RepositoryError>;
+    async fn find_overdue(&self, author_id: UserId) -> Result<Vec<Memo>, RepositoryError>;
+    async fn find_stale(&self, author_id: UserId, days: i64) -> Result<Vec<Memo>, RepositoryError>;
+    // MEMO-03: Saved Views (stored in user experience JSON)
+}
+
+/// Bulk update payload — each field is optional, only set fields are applied.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MemoBulkUpdate {
+    pub status: Option<String>,
+    pub tags_add: Option<Vec<String>>,
+    pub tags_remove: Option<Vec<String>>,
+    pub channel: Option<String>,
+    pub is_pinned: Option<bool>,
+    pub priority: Option<String>,
+    pub snoozed_until: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 #[async_trait]
