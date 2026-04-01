@@ -27,6 +27,9 @@ pub struct ExampleRequest {
     pub image_url: Option<String>,
     pub article_id: Option<Uuid>,
     pub sentence_uuid: Option<Uuid>,
+    pub global_sentence_id: Option<Uuid>,
+    /// If true, set this as the primary example for the word
+    pub is_primary: Option<bool>,
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -114,6 +117,15 @@ pub fn router() -> Router<AppState> {
         .route("/api/vocabulary/batch-archive", post(batch_archive))
         .route("/api/vocabulary/batch-restore", post(batch_restore))
         .route("/api/vocabulary/merge", post(merge_duplicates))
+        // ENG-04: Example system 2.0
+        .route(
+            "/api/vocabulary/:id/examples/:example_id/primary",
+            post(set_primary_example),
+        )
+        .route(
+            "/api/vocabulary/:id/examples/:example_id",
+            delete(delete_example),
+        )
 }
 
 #[derive(Deserialize, ToSchema)]
@@ -187,7 +199,8 @@ async fn save_vocabulary(
         .examples
         .unwrap_or_default()
         .into_iter()
-        .map(|e| {
+        .enumerate()
+        .map(|(i, e)| {
             use crate::domain::models::VocabularyExample;
             VocabularyExample {
                 id: Uuid::new_v4(),
@@ -198,7 +211,8 @@ async fn save_vocabulary(
                 article_id: e.article_id,
                 sentence_uuid: e.sentence_uuid,
                 created_at: Utc::now(),
-                global_sentence_id: None,
+                global_sentence_id: e.global_sentence_id,
+                is_primary: e.is_primary.unwrap_or(i == 0), // First example is primary by default
             }
         })
         .collect();
@@ -475,6 +489,15 @@ async fn add_example(
 
     // 3. Add Example
     use crate::domain::models::VocabularyExample;
+    let is_primary = payload.is_primary.unwrap_or(false);
+
+    // If marking as primary, un-primary all existing
+    if is_primary {
+        for ex in &mut vocab.examples {
+            ex.is_primary = false;
+        }
+    }
+
     let new_example = VocabularyExample {
         id: Uuid::new_v4(),
         sentence: payload.sentence,
@@ -484,7 +507,8 @@ async fn add_example(
         article_id: payload.article_id,
         sentence_uuid: payload.sentence_uuid,
         created_at: Utc::now(),
-        global_sentence_id: None,
+        global_sentence_id: payload.global_sentence_id,
+        is_primary,
     };
     vocab.examples.push(new_example);
 
@@ -833,6 +857,139 @@ async fn merge_duplicates(
                 "primary_id": payload.primary_id,
                 "merged_count": merged_count,
             })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+// --- ENG-04: Example System 2.0 ---
+
+/// Set an example as the primary example for a vocabulary entry.
+async fn set_primary_example(
+    auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Path((vocab_id, example_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+    let user_id = UserId(auth.id);
+
+    let mut vocab = match state.repo.find_by_id(&vocab_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "Vocabulary not found" })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    };
+
+    if vocab.node.author_id != user_id.0 {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "Access denied" })),
+        )
+            .into_response();
+    }
+
+    // Find and set primary
+    let mut found = false;
+    for ex in &mut vocab.examples {
+        if ex.id == example_id {
+            ex.is_primary = true;
+            found = true;
+        } else {
+            ex.is_primary = false;
+        }
+    }
+
+    if !found {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "Example not found" })),
+        )
+            .into_response();
+    }
+
+    match state.repo.save(vocab).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "primary_set", "example_id": example_id })),
+        )
+            .into_response(),
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(serde_json::json!({ "error": e.to_string() })),
+        )
+            .into_response(),
+    }
+}
+
+/// Delete a specific example from a vocabulary entry.
+async fn delete_example(
+    auth: AuthenticatedUser,
+    State(state): State<AppState>,
+    Path((vocab_id, example_id)): Path<(Uuid, Uuid)>,
+) -> impl IntoResponse {
+    let user_id = UserId(auth.id);
+
+    let mut vocab = match state.repo.find_by_id(&vocab_id).await {
+        Ok(Some(v)) => v,
+        Ok(None) => {
+            return (
+                StatusCode::NOT_FOUND,
+                Json(serde_json::json!({ "error": "Vocabulary not found" })),
+            )
+                .into_response()
+        }
+        Err(e) => {
+            return (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(serde_json::json!({ "error": e.to_string() })),
+            )
+                .into_response()
+        }
+    };
+
+    if vocab.node.author_id != user_id.0 {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(serde_json::json!({ "error": "Access denied" })),
+        )
+            .into_response();
+    }
+
+    let original_len = vocab.examples.len();
+    vocab.examples.retain(|ex| ex.id != example_id);
+
+    if vocab.examples.len() == original_len {
+        return (
+            StatusCode::NOT_FOUND,
+            Json(serde_json::json!({ "error": "Example not found" })),
+        )
+            .into_response();
+    }
+
+    // If we removed the primary example, make the first remaining one primary
+    if !vocab.examples.is_empty() && !vocab.examples.iter().any(|e| e.is_primary) {
+        vocab.examples[0].is_primary = true;
+    }
+
+    match state.repo.save(vocab).await {
+        Ok(_) => (
+            StatusCode::OK,
+            Json(serde_json::json!({ "status": "example_deleted" })),
         )
             .into_response(),
         Err(e) => (

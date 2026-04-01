@@ -204,6 +204,9 @@ pub struct VocabularyExample {
     pub sentence_uuid: Option<Uuid>,
     pub created_at: DateTime<Utc>,
     pub global_sentence_id: Option<Uuid>,
+    /// Whether this is the primary/featured example for the word
+    #[serde(default)]
+    pub is_primary: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

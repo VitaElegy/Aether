@@ -15,6 +15,8 @@ export interface VocabularyExample {
     sentence_uuid?: string;
     created_at: string;
     global_sentence_id?: string;
+    /** Whether this is the primary/featured example */
+    is_primary: boolean;
 }
 
 export interface Vocabulary {
@@ -128,6 +130,23 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
         return res.data;
     }
 
+    // --- ENG-04: Example System 2.0 ---
+
+    async function setPrimaryExample(vocabId: string, exampleId: string) {
+        const res = await axios.post(`/api/vocabulary/${vocabId}/examples/${exampleId}/primary`);
+        return res.data;
+    }
+
+    async function deleteExample(vocabId: string, exampleId: string) {
+        const res = await axios.delete(`/api/vocabulary/${vocabId}/examples/${exampleId}`);
+        return res.data;
+    }
+
+    async function searchExamples(query: string) {
+        const res = await axios.post('/api/vocabulary/sentences/search', { query });
+        return res.data as { id: string; text: string; translation?: string }[];
+    }
+
     // Aesthetic Preferences
     const fontMode = ref<'serif' | 'sans'>('serif');
 
@@ -145,5 +164,9 @@ export const useVocabularyStore = defineStore('vocabulary', () => {
         batchArchive,
         batchRestore,
         mergeDuplicates,
+        // ENG-04 example operations
+        setPrimaryExample,
+        deleteExample,
+        searchExamples,
     };
 });
