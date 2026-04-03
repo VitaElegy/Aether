@@ -1,9 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue';
 import { useMemosStore } from '@/stores/memos';
+import { useAssetPicker } from '@/composables/useAssetPicker';
+import { getAssetDisplayName } from '@/api/assets';
 import { Icon } from 'tdesign-vue-next';
 
 const store = useMemosStore();
+const { openPicker } = useAssetPicker();
 const content = ref('');
 const quickTags = ref<string[]>([]);
 const showSlashMenu = ref(false);
@@ -24,6 +27,7 @@ const slashCommands = [
     { cmd: '/due', label: 'Set due date', icon: 'calendar', action: () => openDueDatePicker() },
     { cmd: '/channel', label: 'Set channel', icon: 'folder', action: () => showChannelPicker() },
     { cmd: '/remind', label: 'Set reminder', icon: 'time', action: () => openReminderPicker() },
+    { cmd: '/asset', label: 'Attach asset', icon: 'attach', action: () => attachAsset() },
 ];
 
 const quickStatus = ref<string | null>(null);
@@ -87,6 +91,25 @@ function autoResize() {
 
 function executeSlashCommand(cmd: typeof slashCommands[0]) {
     cmd.action();
+}
+
+async function attachAsset() {
+    const result = await openPicker({ mode: 'modal', multiple: true });
+    if (result.cancelled || result.assets.length === 0) return;
+
+    const references = result.assets
+        .map(asset => `[[asset:${asset.id}]]`)
+        .join(' ');
+
+    content.value = content.value
+        ? `${content.value} ${references}`
+        : references;
+
+    handleInput();
+    if (textareaRef.value) {
+        textareaRef.value.focus();
+        autoResize();
+    }
 }
 
 function expand() {
@@ -228,7 +251,11 @@ const activeBadges = computed(() => {
                         </div>
                     </div>
 
-                    <button class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors" title="Attach">
+                    <button
+                        @click="attachAsset"
+                        class="p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-200 rounded-lg transition-colors"
+                        title="Attach Asset"
+                    >
                         <Icon name="attach" size="20px" />
                     </button>
 

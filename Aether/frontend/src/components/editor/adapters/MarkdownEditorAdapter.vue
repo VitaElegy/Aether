@@ -9,7 +9,11 @@ import DragHandle from '../extensions/DragHandle.vue';
 import SlashCommand from '../extensions/slash-command';
 import SlashMenu from '../extensions/SlashMenu.vue';
 import { DropPreview } from '../extensions/DropPreview';
+import { useAssetPicker } from '@/composables/useAssetPicker';
+import { getAssetDisplayName } from '@/api/assets';
 import tippy from 'tippy.js';
+
+const { openPicker } = useAssetPicker();
 
 const props = defineProps<{
   initialContent?: string;
@@ -88,6 +92,28 @@ const editor = useEditor({
                     { title: 'Numbered List', description: 'Create a list with numbering.', iconClass: 'ri-list-ordered', command: ({ editor, range }: { editor: any, range: any }) => editor.chain().focus().deleteRange(range).toggleOrderedList().run() },
                     { title: 'Quote', description: 'Capture a quote.', iconClass: 'ri-double-quotes-l', command: ({ editor, range }: { editor: any, range: any }) => editor.chain().focus().deleteRange(range).toggleBlockquote().run() },
                     { title: 'Code Block', description: 'Capture a code snippet.', iconClass: 'ri-code-box-line', command: ({ editor, range }: { editor: any, range: any }) => editor.chain().focus().deleteRange(range).toggleCodeBlock().run() },
+                    { title: 'Asset', description: 'Insert an asset from your library.', iconClass: 'ri-attachment-2', command: ({ editor, range }: { editor: any, range: any }) => {
+                        editor.chain().focus().deleteRange(range).run();
+                        openPicker({ mode: 'modal', multiple: false }).then((result) => {
+                            if (!result.cancelled && result.assets.length > 0) {
+                                const asset = result.assets[0];
+                                const name = getAssetDisplayName(asset);
+                                const embed = `![${name}]([[asset:${asset.id}]])`;
+                                editor.chain().focus().insertContent(embed).run();
+                            }
+                        });
+                    }},
+                    { title: 'Image Asset', description: 'Insert an image from your library.', iconClass: 'ri-image-line', command: ({ editor, range }: { editor: any, range: any }) => {
+                        editor.chain().focus().deleteRange(range).run();
+                        openPicker({ mode: 'modal', multiple: false, acceptTypes: ['image_asset'] }).then((result) => {
+                            if (!result.cancelled && result.assets.length > 0) {
+                                const asset = result.assets[0];
+                                const name = getAssetDisplayName(asset);
+                                const embed = `![${name}]([[asset:${asset.id}]])`;
+                                editor.chain().focus().insertContent(embed).run();
+                            }
+                        });
+                    }},
                 ].filter(item => item.title.toLowerCase().startsWith(query.toLowerCase())).slice(0, 10);
             },
             render: () => {

@@ -49,6 +49,22 @@
                 @change="handleFileUpload"
               />
               <button
+                class="rounded-full border border-stone-300 px-4 py-2.5 text-sm font-medium text-stone-700 transition hover:border-stone-500 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:text-stone-200 dark:hover:border-stone-500 dark:hover:text-white"
+                :disabled="!assetsKbId"
+                title="Export all assets as a portable ZIP archive"
+                @click="showExportModal = true"
+              >
+                Export
+              </button>
+              <button
+                class="rounded-full border border-stone-300 px-4 py-2.5 text-sm font-medium text-stone-700 transition hover:border-stone-500 hover:text-stone-900 disabled:cursor-not-allowed disabled:opacity-60 dark:border-stone-700 dark:text-stone-200 dark:hover:border-stone-500 dark:hover:text-white"
+                :disabled="!assetsKbId"
+                title="Import assets from a portable ZIP archive"
+                @click="showImportModal = true"
+              >
+                Import
+              </button>
+              <button
                 class="rounded-full bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-stone-700 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-stone-100 dark:text-stone-900 dark:hover:bg-white"
                 :disabled="uploading"
                 @click="triggerUpload"
@@ -168,6 +184,7 @@
                     {{ getAssetTypeLabel(getAssetType(selectedAsset)) }} asset stored for cross-KB reuse.
                   </p>
                 </div>
+                <AssetPermissionBadge :assetId="selectedAsset.id" />
               </div>
 
               <div class="overflow-hidden rounded-[1.6rem] border border-stone-200 bg-stone-100 dark:border-stone-800 dark:bg-stone-950">
@@ -266,6 +283,17 @@
         </div>
       </div>
     </div>
+
+    <ExportModal
+      :isOpen="showExportModal"
+      :kbId="assetsKbId"
+      @close="showExportModal = false"
+    />
+    <ImportModal
+      :isOpen="showImportModal"
+      :kbId="assetsKbId"
+      @close="showImportModal = false; fetchAssets()"
+    />
   </AssetUploadQueue>
 </template>
 
@@ -286,8 +314,11 @@ import {
 } from '../../api/assets';
 import AssetFiltersBar from '../../components/assets/AssetFiltersBar.vue';
 import AssetTable from '../../components/assets/AssetTable.vue';
+import AssetPermissionBadge from '../../components/assets/AssetPermissionBadge.vue';
 import AssetUploadQueue from '../../components/assets/AssetUploadQueue.vue';
 import AssetUsagePanel from '../../components/assets/AssetUsagePanel.vue';
+import ExportModal from '../../components/portability/ExportModal.vue';
+import ImportModal from '../../components/portability/ImportModal.vue';
 
 type AssetFilter = 'all' | AssetType;
 type ViewMode = 'grid' | 'table';
@@ -316,6 +347,9 @@ const selectedAssetId = ref<string | null>(null);
 const actionMessage = ref('');
 const assetReferences = ref<AssetReferenceItem[]>([]);
 const loadingReferences = ref(false);
+const assetsKbId = ref<string>('');
+const showExportModal = ref(false);
+const showImportModal = ref(false);
 
 const sortedAssets = computed(() => {
   const items = [...assets.value];
@@ -380,6 +414,9 @@ async function fetchAssets() {
     });
     assets.value = response.items;
     stats.value = response.stats;
+    if (response.kb_id) {
+      assetsKbId.value = response.kb_id;
+    }
   } catch (error) {
     console.error('Failed to load assets', error);
     actionMessage.value = 'Failed to load assets.';
