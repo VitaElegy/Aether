@@ -19,6 +19,7 @@ pub struct CheckPermissionParams {
 // Open endpoint for checking (Internal use mainly)
 pub async fn check_permission_handler(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Query(params): Query<CheckPermissionParams>,
 ) -> impl IntoResponse {
     let service = &state.permission_service;
@@ -50,9 +51,8 @@ pub struct GrantRequest {
 
 pub async fn list_user_permissions_handler(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(user_id): Path<Uuid>,
-    // Auth guard needed? For now open to Authenticated users (via router layer usually)
-    // but here we just implement logic
 ) -> impl IntoResponse {
     match state
         .permission_service
@@ -70,6 +70,7 @@ pub async fn list_user_permissions_handler(
 
 pub async fn grant_permission_handler(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Json(payload): Json<GrantRequest>,
 ) -> impl IntoResponse {
     match state
@@ -92,6 +93,7 @@ pub async fn grant_permission_handler(
 
 pub async fn revoke_permission_handler(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Json(payload): Json<GrantRequest>,
 ) -> impl IntoResponse {
     match state
