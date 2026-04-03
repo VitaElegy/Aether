@@ -177,3 +177,70 @@ impl BlockSchema for CredentialStubSchema {
         format!("{} {}", service, key_id).trim().to_string()
     }
 }
+
+pub struct SnippetAssetSchema;
+
+impl BlockSchema for SnippetAssetSchema {
+    fn validate(&self, payload: &Value) -> Result<(), SchemaError> {
+        require_string_field(payload, "language", "snippet_asset")?;
+        require_string_field(payload, "code", "snippet_asset")?;
+        Ok(())
+    }
+
+    fn to_searchable_text(&self, payload: &Value) -> String {
+        let language = payload
+            .get("language")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let code = payload.get("code").and_then(|v| v.as_str()).unwrap_or("");
+        let title = payload
+            .get("display_name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let description = payload
+            .get("description")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        format!("{} {} {} {}", title, language, description, code)
+            .trim()
+            .to_string()
+    }
+}
+
+pub struct DomainAssetSchema;
+
+impl BlockSchema for DomainAssetSchema {
+    fn validate(&self, payload: &Value) -> Result<(), SchemaError> {
+        let domain = require_string_field(payload, "domain", "domain_asset")?;
+        // Basic domain validation: must contain at least one dot
+        if !domain.contains('.') {
+            return Err(SchemaError::ValidationFailed(format!(
+                "Invalid domain format: {}",
+                domain
+            )));
+        }
+        Ok(())
+    }
+
+    fn to_searchable_text(&self, payload: &Value) -> String {
+        let domain = payload
+            .get("domain")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        let tags = payload
+            .get("tags")
+            .and_then(|v| v.as_array())
+            .map(|arr| {
+                arr.iter()
+                    .filter_map(|v| v.as_str())
+                    .collect::<Vec<_>>()
+                    .join(" ")
+            })
+            .unwrap_or_default();
+        let notes = payload
+            .get("notes")
+            .and_then(|v| v.as_str())
+            .unwrap_or("");
+        format!("{} {} {}", domain, tags, notes).trim().to_string()
+    }
+}

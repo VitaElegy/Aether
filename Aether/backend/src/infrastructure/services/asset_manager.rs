@@ -10,7 +10,7 @@ use crate::domain::models::{
     Article, ContentBody, ContentItem, ContentStatus, KnowledgeBase, KnowledgeBaseId, Node,
     NodeType, PermissionMode, UserId, Visibility,
 };
-use crate::domain::permission_service::PermissionService;
+use crate::domain::permission_service::{PermissionExplanation, PermissionService};
 use crate::domain::ports::{
     ArticleRepository, KnowledgeBaseRepository, NodeRepository, RepositoryError,
 };
@@ -197,6 +197,8 @@ impl AssetManager {
             author_name: None,
             author_avatar: None,
             derived_data: None,
+            analysis_status: None,
+            analysis_diagnostics: None,
         };
 
         self.article_repo
@@ -228,20 +230,23 @@ impl AssetManager {
             _ => return Err("Asset is not an article".to_string()),
         };
 
-        // 2. Check Permissions
+        // 2. Check Permissions (now using explained version for richer errors)
         let is_author = asset_article.node.author_id == user_id;
 
         if !is_author {
             if let Some(ctx_id) = context_id {
-                // Check Read Access to Context Article
-                let can_read_context = self
+                // Check Read Access to Context Article via explained check
+                let explanation = self
                     .perm_service
-                    .check_permission(user_id, ctx_id, "read")
+                    .check_permission_explained(user_id, ctx_id, "read")
                     .await
                     .map_err(|e| e.to_string())?;
 
-                if !can_read_context {
-                    return Err("Access denied to context article".to_string());
+                if !explanation.allowed {
+                    return Err(format!(
+                        "Access denied to context article: {}",
+                        explanation.reason_text
+                    ));
                 }
 
                 // Verify Context actually references Asset
@@ -293,6 +298,153 @@ impl AssetManager {
         let full_path = self.storage_root.join(relative_path);
 
         Ok((full_path, mime_type))
+    }
+
+    /// Returns a [`PermissionExplanation`] describing why the current user
+    /// can or cannot access the given asset, optionally within a context.
+    pub async fn explain_asset_access(
+        &self,
+        asset_id: Uuid,
+        context_id: Option<Uuid>,
+        user_id: Uuid,
+    ) -> Result<PermissionExplanation, String> {
+        // 1. Fetch the Asset Article
+        let item = self
+            .article_repo
+            .find_by_id(&asset_id)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or("Asset not found")?;
+
+        let asset_article = match item {
+            ContentItem::Article(a) => a,
+            _ => return Err("Asset is not an article".to_string()),
+        };
+
+        // 2. Author check
+        let is_author = asset_article.node.author_id == user_id;
+        if is_author {
+            // Collect referenced_by list
+            let referenced_by = self
+                .collect_referencing_contexts(asset_id, user_id)
+                .await
+                .unwrap_or_default();
+
+            return Ok(PermissionExplanation {
+                allowed: true,
+                reason_code: "author_access".to_string(),
+                reason_text: "Access granted because you are the asset author".to_string(),
+                context_chain: vec![],
+                referenced_by,
+            });
+        }
+
+        // 3. Context-based check
+        if let Some(ctx_id) = context_id {
+            let mut explanation = self
+                .perm_service
+                .check_permission_explained(user_id, ctx_id, "read")
+                .await
+                .map_err(|e| e.to_string())?;
+
+            if explanation.allowed {
+                // Verify the context actually references this asset
+                let context_item = self
+                    .article_repo
+                    .find_by_id(&ctx_id)
+                    .await
+                    .map_err(|e| e.to_string())?
+                    .ok_or("Context article not found")?;
+
+                let references = match context_item {
+                    ContentItem::Article(a) => {
+                        let body_str = match a.body {
+                            ContentBody::Markdown(s) => s,
+                            ContentBody::CodeSnippet { code, .. } => code,
+                            ContentBody::Custom(v) => v.to_string(),
+                            _ => "".to_string(),
+                        };
+                        body_str.contains(&asset_id.to_string())
+                    }
+                    _ => false,
+                };
+
+                if references {
+                    // Override reason to indicate context_proxy
+                    explanation.reason_code = "context_proxy".to_string();
+                    explanation.reason_text = format!(
+                        "Access granted via context article {} which references this asset",
+                        ctx_id
+                    );
+                    explanation.referenced_by = vec![ctx_id.to_string()];
+                    return Ok(explanation);
+                } else {
+                    return Ok(PermissionExplanation {
+                        allowed: false,
+                        reason_code: "denied".to_string(),
+                        reason_text:
+                            "Context article does not reference this asset".to_string(),
+                        context_chain: explanation.context_chain,
+                        referenced_by: vec![],
+                    });
+                }
+            } else {
+                return Ok(explanation);
+            }
+        }
+
+        // 4. No context, not author → denied
+        Ok(PermissionExplanation {
+            allowed: false,
+            reason_code: "denied".to_string(),
+            reason_text: "Not the asset author and no context provided".to_string(),
+            context_chain: vec![],
+            referenced_by: vec![],
+        })
+    }
+
+    /// Collects IDs of articles authored by `user_id` that reference `asset_id`.
+    async fn collect_referencing_contexts(
+        &self,
+        asset_id: Uuid,
+        user_id: Uuid,
+    ) -> Result<Vec<String>, String> {
+        let items = ArticleRepository::list(
+            &*self.article_repo,
+            Some(UserId(user_id)),
+            Some(UserId(user_id)),
+            None,
+            None,
+            None,
+            500,
+            0,
+        )
+        .await
+        .map_err(|e| e.to_string())?;
+
+        let asset_str = asset_id.to_string();
+        let mut refs = Vec::new();
+
+        for item in items {
+            let article = match item {
+                ContentItem::Article(a) => a,
+                _ => continue,
+            };
+            if article.node.id == asset_id || article.category.as_deref() == Some("Asset") {
+                continue;
+            }
+            let body_str = match &article.body {
+                ContentBody::Markdown(s) => s.clone(),
+                ContentBody::CodeSnippet { code, .. } => code.clone(),
+                ContentBody::Custom(v) => v.to_string(),
+                _ => continue,
+            };
+            if body_str.contains(&asset_str) {
+                refs.push(article.node.id.to_string());
+            }
+        }
+
+        Ok(refs)
     }
 
     /// Public method: Ensure "My Assets" KB exists for a user.
