@@ -103,8 +103,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
-import { portabilityApi, type ExportSummary, type ProgressEvent } from '../../api/portability';
+import { ref, watch, onMounted, onUnmounted } from 'vue';
+import { portabilityApi, type ExportSummary, type TaskProgress } from '../../api/portability';
 
 const props = defineProps<{
   isOpen: boolean;
@@ -115,12 +115,13 @@ const emit = defineEmits(['close']);
 
 const step = ref<'analyzing' | 'preview' | 'exporting' | 'completed' | 'error'>('analyzing');
 const summary = ref<ExportSummary | null>(null);
-const progress = ref<ProgressEvent | null>(null);
+const progress = ref<TaskProgress | null>(null);
 const errorMessage = ref('');
 const downloadUrl = ref('');
 const currentTaskId = ref('');
 const statusMessage = ref('Analyzing Knowledge Base...');
 const isLongWait = ref(false);
+let currentEventSource: EventSource | null = null;
 
 watch(() => props.isOpen, async (newVal) => {
   if (newVal) {
@@ -130,10 +131,18 @@ watch(() => props.isOpen, async (newVal) => {
 });
 
 onMounted(() => {
-  if (props.isOpen) {
-    console.log('[ExportModal] Mounted open, starting analysis...');
+  // Only analyze if already open AND summary hasn't loaded yet
+  if (props.isOpen && !summary.value) {
     reset();
     analyze();
+  }
+});
+
+onUnmounted(() => {
+  // Clean up SSE connection to prevent memory leaks
+  if (currentEventSource) {
+    currentEventSource.close();
+    currentEventSource = null;
   }
 });
 
@@ -186,13 +195,14 @@ const analyze = async () => {
 const startExport = async () => {
   try {
     step.value = 'exporting';
-    const taskId = await portabilityApi.startExport(props.kbId);
+    const result = await portabilityApi.startExport(props.kbId);
+    const taskId = result.task_id;
     currentTaskId.value = taskId;
     
     // Connect SSE
-    portabilityApi.connectProgress(
+    currentEventSource = portabilityApi.connectProgress(
       taskId,
-      (event) => {
+      (event: TaskProgress) => {
         progress.value = event;
         if (event.stage === 'Completed') {
           step.value = 'completed';
@@ -202,12 +212,10 @@ const startExport = async () => {
           errorMessage.value = event.error;
         }
       },
-      (err) => {
+      (err: Event) => {
         // Only error if not completed
         if (step.value !== 'completed') {
            console.error("SSE Error", err);
-           // Don't fail immediately on SSE glitch, usually it reconnects or just stops updates
-           // But if connection refused, we might want to show error
         }
       }
     );

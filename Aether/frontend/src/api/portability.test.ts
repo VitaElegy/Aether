@@ -43,7 +43,7 @@ describe('portabilityApi', () => {
         Authorization: 'Bearer portability-token',
       }),
     }));
-    expect(axiosMock.post).toHaveBeenCalledWith('/api/portability/kb-1/export/start', undefined, expect.objectContaining({
+    expect(axiosMock.post).toHaveBeenCalledWith('/api/portability/kb-1/export/start', {}, expect.objectContaining({
       headers: expect.objectContaining({
         Authorization: 'Bearer portability-token',
       }),

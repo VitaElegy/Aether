@@ -63,6 +63,7 @@ export interface AssetCatalogResponse {
     items: AssetNode[];
     stats: AssetStats;
     filtered_count: number;
+    kb_id: string;
 }
 
 export interface AssetReferenceItem {
@@ -191,7 +192,7 @@ export const assetsApi = {
     async delete(id: string): Promise<void> {
         await axios.delete(`/api/assets/${id}`, {
             headers: {
-                Authorization: `Bearer ${localStorage.getItem('token')}`,
+                Authorization: `Bearer ${localStorage.getItem('aether_token')}`,
             },
         });
     },
@@ -203,7 +204,7 @@ export const assetsApi = {
         const response = await axios.post('/api/assets', formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
-                Authorization: `Bearer ${localStorage.getItem('token')}`,
+                Authorization: `Bearer ${localStorage.getItem('aether_token')}`,
             },
         });
         return response.data;
@@ -217,3 +218,16 @@ export const assetsApi = {
         return url;
     },
 };
+
+// ── Asset Picker Types ──────────────────────────────────────────────
+
+export interface AssetPickerOptions {
+    mode?: 'modal' | 'split';
+    multiple?: boolean;
+    acceptTypes?: AssetType[];
+}
+
+export interface AssetPickerResult {
+    assets: AssetNode[];
+    cancelled: boolean;
+}

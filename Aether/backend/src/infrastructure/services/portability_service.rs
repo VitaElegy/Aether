@@ -2,10 +2,17 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, RwLock};
 
-use crate::domain::portability::models::{ExportSummary, ProgressEvent};
+use crate::domain::portability::models::{
+    CompletedTaskEntry, ExportSummary, ImportPreview, ImportConflict as DomainImportConflict,
+    ImportSummary, ProgressEvent, SuggestedAction,
+};
 use crate::domain::portability::ports::PortabilityProvider;
+use chrono::Utc;
 use tokio::sync::mpsc::{self, Receiver};
 use uuid::Uuid;
+
+/// Default download token expiry duration (24 hours)
+const DOWNLOAD_TOKEN_EXPIRY_HOURS: i64 = 24;
 
 pub struct PortabilityService {
     providers: HashMap<String, Arc<dyn PortabilityProvider>>,
@@ -14,8 +21,10 @@ pub struct PortabilityService {
     // In production, this might need Redis or DB to survive restarts,
     // but for "Download" tasks, memory is usually fine.
     active_tasks: Arc<RwLock<HashMap<Uuid, Receiver<ProgressEvent>>>>,
-    // Track finished export files
-    completed_tasks: Arc<RwLock<HashMap<Uuid, PathBuf>>>,
+    // PLAT-04: Track finished export files with token/expiry
+    completed_tasks: Arc<RwLock<HashMap<Uuid, CompletedTaskEntry>>>,
+    // PLAT-04: Track uploaded import files pending analysis
+    pending_imports: Arc<RwLock<HashMap<Uuid, PathBuf>>>,
 }
 
 #[cfg(test)]
@@ -192,6 +201,7 @@ impl PortabilityService {
             aliases: HashMap::new(),
             active_tasks: Arc::new(RwLock::new(HashMap::new())),
             completed_tasks: Arc::new(RwLock::new(HashMap::new())),
+            pending_imports: Arc::new(RwLock::new(HashMap::new())),
         }
     }
 
@@ -269,7 +279,15 @@ impl PortabilityService {
                         task_id,
                         path
                     );
-                    completed_map.write().unwrap().insert(task_id, path);
+                    // PLAT-04: Store with download token and expiry
+                    let now = Utc::now();
+                    let entry = CompletedTaskEntry {
+                        file_path: path,
+                        download_token: Uuid::new_v4().to_string(),
+                        created_at: now,
+                        expires_at: now + chrono::Duration::hours(DOWNLOAD_TOKEN_EXPIRY_HOURS),
+                    };
+                    completed_map.write().unwrap().insert(task_id, entry);
 
                     // Dispatch Completed only AFTER the path is safely tucked into the completed map.
                     let _ = tx
@@ -305,10 +323,135 @@ impl PortabilityService {
     }
 
     pub fn get_task_result(&self, task_id: Uuid) -> Option<PathBuf> {
-        self.completed_tasks.read().unwrap().get(&task_id).cloned()
+        let tasks = self.completed_tasks.read().unwrap();
+        let entry = tasks.get(&task_id)?;
+        // PLAT-04: Check expiry
+        if Utc::now() > entry.expires_at {
+            return None;
+        }
+        Some(entry.file_path.clone())
     }
 
-    pub async fn start_import(
+    /// PLAT-04: Get the download token for a completed task
+    pub fn get_download_token(&self, task_id: Uuid) -> Option<String> {
+        let tasks = self.completed_tasks.read().unwrap();
+        let entry = tasks.get(&task_id)?;
+        if Utc::now() > entry.expires_at {
+            return None;
+        }
+        Some(entry.download_token.clone())
+    }
+
+    /// PLAT-04: Validate a download token against a task
+    pub fn validate_download_token(&self, task_id: Uuid, token: &str) -> Result<PathBuf, String> {
+        let tasks = self.completed_tasks.read().unwrap();
+        let entry = tasks.get(&task_id).ok_or("Task not found".to_string())?;
+        if Utc::now() > entry.expires_at {
+            return Err("Download link has expired".to_string());
+        }
+        if entry.download_token != token {
+            return Err("Invalid download token".to_string());
+        }
+        Ok(entry.file_path.clone())
+    }
+
+    /// PLAT-04: Analyze an import file using the appropriate provider
+    pub async fn analyze_import(
+        &self,
+        kb_type: &str,
+        file_path: PathBuf,
+    ) -> Result<ImportPreview, String> {
+        let provider = self.get_provider(kb_type)?;
+        let summary = provider.analyze_import(file_path.clone()).await?;
+
+        // Store the file path for later import start
+        let analyze_id = Uuid::new_v4();
+        self.pending_imports.write().unwrap().insert(analyze_id, file_path);
+
+        // Build ImportPreview from the provider's ImportSummary
+        let conflicts: Vec<DomainImportConflict> = summary
+            .conflicts
+            .iter()
+            .enumerate()
+            .map(|(i, desc)| DomainImportConflict {
+                item_id: format!("conflict_{}", i),
+                item_name: desc.clone(),
+                conflict_type: "duplicate".to_string(),
+                existing_value: None,
+                incoming_value: None,
+            })
+            .collect();
+
+        let suggested_actions: Vec<SuggestedAction> = conflicts
+            .iter()
+            .map(|c| SuggestedAction {
+                conflict_id: c.item_id.clone(),
+                action: "skip".to_string(),
+                reason: "Default: skip duplicates".to_string(),
+            })
+            .collect();
+
+        Ok(ImportPreview {
+            summary,
+            conflicts,
+            suggested_actions,
+        })
+    }
+
+    /// PLAT-04: Start import using the appropriate provider (not backup_service)
+    pub async fn start_import_with_provider(
+        &self,
+        kb_type: &str,
+        kb_id: Uuid,
+        file_path: PathBuf,
+    ) -> Result<Uuid, String> {
+        let provider = self.get_provider(kb_type)?;
+        let task_id = Uuid::new_v4();
+        let (tx, rx) = mpsc::channel(100);
+
+        self.active_tasks.write().unwrap().insert(task_id, rx);
+
+        tokio::spawn(async move {
+            match provider
+                .import(kb_id, file_path, task_id, tx.clone())
+                .await
+            {
+                Ok(()) => {
+                    tracing::info!(
+                        "Import task {} completed successfully for KB {}",
+                        task_id,
+                        kb_id
+                    );
+                    let _ = tx
+                        .send(ProgressEvent {
+                            task_id,
+                            stage: "Completed".to_string(),
+                            percent: 100,
+                            message: "Import completed successfully.".to_string(),
+                            error: None,
+                        })
+                        .await;
+                }
+                Err(e) => {
+                    tracing::error!("Import task {} failed: {}", task_id, e);
+                    let _ = tx
+                        .send(ProgressEvent {
+                            task_id,
+                            stage: "Error".to_string(),
+                            percent: 100,
+                            message: "Import failed".to_string(),
+                            error: Some(e),
+                        })
+                        .await;
+                }
+            }
+        });
+
+        Ok(task_id)
+    }
+
+    /// Legacy: start_import using backup_service (kept for backward compatibility)
+    pub async fn start_import_legacy(
         &self,
         backup_service: Arc<crate::infrastructure::services::backup_service::BackupService>,
         file_path: PathBuf,

@@ -38,6 +38,39 @@ pub struct ProgressEvent {
     pub error: Option<String>,
 }
 
+/// PLAT-04: Import preview with conflict resolution suggestions
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImportPreview {
+    pub summary: ImportSummary,
+    pub conflicts: Vec<ImportConflict>,
+    pub suggested_actions: Vec<SuggestedAction>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct ImportConflict {
+    pub item_id: String,
+    pub item_name: String,
+    pub conflict_type: String, // "duplicate", "version_mismatch", "schema_change"
+    pub existing_value: Option<String>,
+    pub incoming_value: Option<String>,
+}
+
+#[derive(Debug, Serialize, Deserialize, Clone)]
+pub struct SuggestedAction {
+    pub conflict_id: String,
+    pub action: String, // "skip", "overwrite", "merge", "rename"
+    pub reason: String,
+}
+
+/// PLAT-04: Completed task entry with download token and expiry
+#[derive(Debug, Clone)]
+pub struct CompletedTaskEntry {
+    pub file_path: std::path::PathBuf,
+    pub download_token: String,
+    pub created_at: chrono::DateTime<chrono::Utc>,
+    pub expires_at: chrono::DateTime<chrono::Utc>,
+}
+
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum PortabilityTaskType {

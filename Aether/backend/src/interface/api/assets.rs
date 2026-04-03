@@ -46,6 +46,7 @@ pub struct AssetListResponse {
     pub items: Vec<ContentItem>,
     pub stats: AssetStats,
     pub filtered_count: u64,
+    pub kb_id: Uuid,
 }
 
 #[derive(serde::Serialize)]
@@ -64,6 +65,7 @@ pub fn router() -> Router<AppState> {
     Router::new()
         .route("/", get(list_assets).post(upload_asset))
         .route("/:id/references", get(list_asset_references))
+        .route("/:id/permissions", get(explain_asset_permissions))
         .route("/:id", get(get_asset).delete(delete_asset))
 }
 
@@ -175,6 +177,7 @@ async fn list_assets(
         items: paged_items,
         stats,
         filtered_count,
+        kb_id,
     }))
 }
 
@@ -292,6 +295,21 @@ async fn list_asset_references(
 
     references.sort_by(|left, right| right.updated_at.cmp(&left.updated_at));
     Ok(Json(references))
+}
+
+async fn explain_asset_permissions(
+    State(state): State<AppState>,
+    Path(asset_id): Path<Uuid>,
+    Query(query): Query<AssetQuery>,
+    user: AuthenticatedUser,
+) -> Result<Json<crate::domain::permission_service::PermissionExplanation>, (StatusCode, String)> {
+    let explanation = state
+        .asset_manager
+        .explain_asset_access(asset_id, query.context, user.id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+
+    Ok(Json(explanation))
 }
 
 async fn get_asset(
@@ -579,6 +597,8 @@ mod tests {
             author_name: None,
             author_avatar: None,
             derived_data: None,
+            analysis_status: None,
+            analysis_diagnostics: None,
         }
     }
 
