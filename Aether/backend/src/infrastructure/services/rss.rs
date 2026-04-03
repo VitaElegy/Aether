@@ -81,6 +81,9 @@ impl RssService {
                 is_read: false,
                 is_saved: false,
                 fetched_at: Utc::now(),
+                state: "new".to_string(),
+                priority: None,
+                note: None,
             });
         }
 

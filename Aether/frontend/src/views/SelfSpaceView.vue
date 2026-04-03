@@ -15,6 +15,8 @@ import { useSelfSpaceOrchestrator } from '../composables/useSelfSpaceOrchestrato
 import { useAppStateStore } from '../stores/read_app_state';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { osKey } from '../composables/useOS';
+import { useHeaderActions } from '../composables/useHeaderActions';
+import type { HeaderAction } from '../types/header-actions';
 
 const router = useRouter();
 const navStore = useNavigationStore();
@@ -101,15 +103,31 @@ const currentModuleLabel = () => orchestrator.currentDockItem.value?.dock.label 
 const currentHeaderIcon = () => orchestrator.currentDockItem.value?.dock.icon;
 const currentKbId = () => orchestrator.currentDockItem.value?.id;
 
-// Header Actions Resolution
+// Header Actions Resolution (PLAT-03: Unified Header Action Protocol)
+const headerActions = useHeaderActions();
+
+// Computed: Get active module's header actions from the protocol registry
+const activeHeaderActions = computed((): HeaderAction[] => {
+    const item = orchestrator.currentDockItem.value;
+    if (!item || item.id === 'library') return [];
+
+    // PLAT-03: First check the unified header actions registry
+    const registeredActions = headerActions.getActions(item.id);
+    if (registeredActions.length > 0) return registeredActions;
+
+    // Also check by renderer_id for plugin-registered actions
+    const rendererActions = headerActions.getActions(item._renderer_id);
+    if (rendererActions.length > 0) return rendererActions;
+
+    return [];
+});
+
+// Legacy: Keep component-based header actions for backward compatibility
 const CurrentHeaderActions = () => {
     const item = orchestrator.currentDockItem.value;
     if (!item) return null;
-
-    // Library has no special header
     if (item.id === 'library') return null;
 
-    // Try to resolve plugin header
     const resolved = pluginStore.resolvePlugin(item._renderer_id);
     if (resolved?.header?.actions) return resolved.header.actions;
 
@@ -191,7 +209,52 @@ const activeKb = computed(() => {
 
                 <!-- Default Right Content -->
                 <div v-show="!navStore.hasCustomRight" class="flex items-center gap-2">
-                    <!-- Plugin Default Actions -->
+                    <!-- PLAT-03: Unified Header Actions from Protocol Registry -->
+                    <template v-if="activeHeaderActions.length > 0">
+                        <button
+                            v-for="action in activeHeaderActions"
+                            :key="action.id"
+                            @click="action.handler"
+                            :disabled="action.disabled"
+                            :title="action.tooltip || action.label"
+                            class="relative text-ink/40 hover:text-ink transition-colors px-2 py-1 disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <i :class="action.icon" class="text-lg"></i>
+                            <!-- Badge: Progress -->
+                            <span 
+                                v-if="action.badge?.type === 'progress'" 
+                                class="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-accent text-[8px] text-white flex items-center justify-center"
+                                :class="{ 'animate-pulse': action.badge.pulse }"
+                            >
+                                {{ Math.round(action.badge.progress || 0) }}
+                            </span>
+                            <!-- Badge: Count -->
+                            <span 
+                                v-else-if="action.badge?.type === 'count'" 
+                                class="absolute -top-1 -right-1 min-w-[16px] h-4 rounded-full text-[10px] text-white flex items-center justify-center px-1"
+                                :class="action.badge.color || 'bg-red-500'"
+                            >
+                                {{ action.badge.value }}
+                            </span>
+                            <!-- Badge: Context -->
+                            <span 
+                                v-else-if="action.badge?.type === 'context'" 
+                                class="absolute -top-1 -right-1 px-1 h-4 rounded text-[9px] text-white flex items-center justify-center"
+                                :class="action.badge.color || 'bg-accent'"
+                            >
+                                {{ action.badge.value }}
+                            </span>
+                            <!-- Badge: Dot -->
+                            <span 
+                                v-else-if="action.badge?.type === 'dot'" 
+                                class="absolute top-0 right-0 w-2 h-2 rounded-full"
+                                :class="[action.badge.color || 'bg-red-500', { 'animate-pulse': action.badge.pulse }]"
+                            ></span>
+                        </button>
+                        <div class="h-4 w-[1px] bg-ink/10 mx-1"></div>
+                    </template>
+
+                    <!-- Plugin Default Actions (Legacy Component-based) -->
                     <component :is="CurrentHeaderActions()" v-if="CurrentHeaderActions()" />
 
                      <!-- Default Global Actions -->

@@ -214,7 +214,7 @@ async fn download_backup(
     Path(filename): Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     // Security: Prevent path traversal
-    if filename.contains("..") || filename.contains("/") || !filename.ends_with(".akb") {
+    if filename.contains("..") || filename.contains("/") || filename.contains("\\") || !filename.ends_with(".akb") {
         return Err((StatusCode::BAD_REQUEST, "Invalid filename".to_string()));
     }
 

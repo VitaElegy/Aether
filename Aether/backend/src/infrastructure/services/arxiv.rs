@@ -92,6 +92,9 @@ impl ArxivService {
                 is_saved: false,
                 fetched_at: Utc::now(),
                 publication: None, // Assuming journal_ref is dropped in feed_rs Atom parse
+                state: "new".to_string(),
+                priority: None,
+                note: None,
             });
         }
 

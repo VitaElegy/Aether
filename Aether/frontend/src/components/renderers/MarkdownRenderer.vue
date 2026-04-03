@@ -3,6 +3,7 @@ import { computed } from 'vue';
 import { marked, type Tokens } from 'marked';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
+import { sanitizeHtml } from '@/utils/sanitize';
 
 interface Props {
     content: string;
@@ -180,7 +181,7 @@ marked.use({ extensions: [mathBlockExtension, mathInlineExtension, semanticBlock
 const renderedHtml = computed(() => {
     if (!props.content) return '';
     // marked handles the rendering pipeline with extensions
-    return marked(props.content);
+    return sanitizeHtml(marked(props.content) as string);
 });
 </script>
 

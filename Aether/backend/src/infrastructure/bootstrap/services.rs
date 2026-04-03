@@ -18,8 +18,10 @@ use crate::infrastructure::services::arxiv::ArxivService;
 use crate::infrastructure::services::asset_manager::AssetManager;
 use crate::infrastructure::services::backup_service::BackupService;
 use crate::infrastructure::services::export_service::DataExportService;
+use crate::infrastructure::services::portability::assets::AssetsPortabilityProvider;
 use crate::infrastructure::services::portability::default::DefaultPortabilityProvider;
 use crate::infrastructure::services::portability::english::EnglishPortabilityProvider;
+use crate::infrastructure::services::portability::vrkb::VrkbPortabilityProvider;
 use crate::infrastructure::services::portability_service::PortabilityService;
 use crate::infrastructure::services::rss::RssService;
 use crate::infrastructure::storage::service::AssetStorageService;
@@ -34,7 +36,7 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
     // Services
     let auth_service = Arc::new(Arg2JwtAuthService::new(
         repo.clone() as Arc<dyn UserRepository>,
-        env::var("JWT_SECRET").unwrap_or_else(|_| "secret".to_string()),
+        env::var("JWT_SECRET").expect("JWT_SECRET environment variable must be set"),
     ));
 
     let export_service = Arc::new(DataExportService::new(
@@ -88,17 +90,31 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
         backup_service.clone(),
     )));
 
+    // Register Assets Provider
+    portability_service.register_provider(Arc::new(AssetsPortabilityProvider::new(
+        repo.clone() as Arc<dyn ArticleRepository>,
+        repo.clone() as Arc<dyn crate::domain::ports::KnowledgeBaseRepository>,
+        repo.clone() as Arc<dyn NodeRepository>,
+        ".".to_string(),
+    )));
+    for alias in ["assets", "assets_v1"] {
+        portability_service.register_alias(alias, "assets_v1");
+    }
+
+    // Register VRKB Provider (VRKB-10)
+    portability_service.register_provider(Arc::new(VrkbPortabilityProvider::new(
+        repo.clone() as Arc<dyn VrkbRepository>,
+    )));
+    for alias in ["vrkb_std", "vulnerability_research"] {
+        portability_service.register_alias(alias, "vrkb");
+    }
+
     // Map current non-specialized KB renderers to the default provider until dedicated providers exist.
     for alias in [
-        "assets",
-        "assets_v1",
         "memo",
         "memo_std",
         "memo_v1",
         "prkb",
-        "vrkb",
-        "vrkb_std",
-        "vulnerability_research",
         "math",
         "math_std",
         "math_v1",
@@ -150,8 +166,16 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
         "credential_stub",
         crate::domain::kb::schemas::assets::CredentialStubSchema,
     );
+    schema_registry.register(
+        "snippet_asset",
+        crate::domain::kb::schemas::assets::SnippetAssetSchema,
+    );
+    schema_registry.register(
+        "domain_asset",
+        crate::domain::kb::schemas::assets::DomainAssetSchema,
+    );
 
-    tracing::info!("KB Schema Registry initialized (types: markdown, math_block, paper, assets)");
+    tracing::info!("KB Schema Registry initialized (types: markdown, math_block, paper, assets, snippet_asset, domain_asset)");
 
     let system_settings_repository = Arc::new(SystemSettingsRepository::new(Arc::new(db.clone())));
 

@@ -71,6 +71,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { sanitizeHtml } from '@/utils/sanitize';
 import SlideBase from '../SlideBase.vue'
 
 interface FeatureDetail {
@@ -135,7 +136,7 @@ const showDetail = (key: string) => {
 }
 
 const highlight = (text: string) => {
-    return text // v-html will handle the <b> tags
+    return sanitizeHtml(text) // v-html will handle the <b> tags
 }
 </script>
 

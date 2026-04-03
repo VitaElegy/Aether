@@ -693,6 +693,8 @@ impl BackupService {
                         author_name: None,
                         author_avatar: None,
                         derived_data: None,
+                        analysis_status: None,
+                        analysis_diagnostics: None,
                     };
                     self.article_repo
                         .save(

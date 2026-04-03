@@ -8,6 +8,7 @@ pub mod kb;
 pub mod math;
 pub mod memos;
 pub mod models;
+pub mod observability;
 pub mod permission_service;
 pub mod portability;
 pub mod ports;

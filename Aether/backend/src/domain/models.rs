@@ -510,11 +510,27 @@ pub struct VrkbFinding {
     pub id: Uuid,
     pub section_id: Uuid,
     pub title: String,
+    /// 7-state lifecycle: triage → confirmed → exploiting → fixing → verifying → closed / risk_accepted
     pub status: String,
     pub severity: String,
     pub content: Option<serde_json::Value>,
     pub is_triage: bool,
     pub author_id: Option<Uuid>,
+    // --- VRKB-02 Extended Fields ---
+    /// Confidence level: certain / firm / tentative
+    pub confidence: Option<String>,
+    /// Assigned owner (user_id)
+    pub owner_id: Option<Uuid>,
+    /// Remediation deadline
+    pub due_date: Option<DateTime<Utc>>,
+    /// JSON array of affected asset references
+    pub affected_assets: Option<serde_json::Value>,
+    /// Reproduction steps (rich text / markdown)
+    pub repro_steps: Option<String>,
+    /// Remediation guidance
+    pub remediation: Option<String>,
+    /// Verification note (filled when verifying fix)
+    pub verification_note: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -567,6 +583,13 @@ pub struct VrkbStats {
     pub metrics: VrkbMetrics,
     pub modules: Vec<VrkbModuleStat>,
     pub heatmap: Vec<VrkbHeatmapItem>,
+    // VRKB-01: Enhanced project control center fields
+    pub scope_summary: VrkbScopeSummary,
+    pub status_summary: std::collections::HashMap<String, i64>,
+    pub severity_distribution: std::collections::HashMap<String, i64>,
+    pub checklist_completion: VrkbChecklistCompletion,
+    pub linked_assets_count: i64,
+    pub timeline_summary: Vec<VrkbTimelineEntry>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -575,6 +598,33 @@ pub struct VrkbMetrics {
     pub critical: i64,
     pub triage: i64,
     pub fixed: i64,
+}
+
+/// VRKB-01: Scope summary — sections, findings, docs, members at a glance
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbScopeSummary {
+    pub total_sections: i64,
+    pub total_findings: i64,
+    pub total_docs: i64,
+    pub total_members: i64,
+    pub total_assets: i64,
+}
+
+/// VRKB-01: Checklist completion tracking
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbChecklistCompletion {
+    pub total_items: i64,
+    pub completed_items: i64,
+    pub completion_percent: f64,
+}
+
+/// VRKB-01: Timeline entry for recent project activity
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbTimelineEntry {
+    pub timestamp: DateTime<Utc>,
+    pub event_type: String, // "finding_created", "finding_closed", "status_change", etc.
+    pub description: String,
+    pub entity_id: Option<Uuid>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -593,6 +643,77 @@ pub struct VrkbHeatmapItem {
     pub r#type: String, // "folder" or "file"
     pub level: i32,
     pub vulns: i64,
+}
+
+// --- VRKB-05: Evidence Blocks ---
+
+/// Evidence type enum for type-safe evidence classification
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum VrkbEvidenceType {
+    Screenshot,
+    RequestResponse,
+    LogExtract,
+    PocFile,
+    ExternalReference,
+}
+
+impl std::fmt::Display for VrkbEvidenceType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            VrkbEvidenceType::Screenshot => write!(f, "screenshot"),
+            VrkbEvidenceType::RequestResponse => write!(f, "request_response"),
+            VrkbEvidenceType::LogExtract => write!(f, "log_extract"),
+            VrkbEvidenceType::PocFile => write!(f, "poc_file"),
+            VrkbEvidenceType::ExternalReference => write!(f, "external_reference"),
+        }
+    }
+}
+
+impl std::str::FromStr for VrkbEvidenceType {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "screenshot" => Ok(VrkbEvidenceType::Screenshot),
+            "request_response" => Ok(VrkbEvidenceType::RequestResponse),
+            "log_extract" => Ok(VrkbEvidenceType::LogExtract),
+            "poc_file" => Ok(VrkbEvidenceType::PocFile),
+            "external_reference" => Ok(VrkbEvidenceType::ExternalReference),
+            _ => Err(format!("Unknown evidence type: {}", s)),
+        }
+    }
+}
+
+/// VRKB-05: Evidence block that can be linked to findings, docs, or assets
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbEvidence {
+    pub id: Uuid,
+    pub project_id: Uuid,
+    pub evidence_type: String,
+    pub title: String,
+    pub content: Option<serde_json::Value>,
+    pub asset_id: Option<Uuid>,
+    pub url: Option<String>,
+    /// Polymorphic link: "finding", "doc", "asset"
+    pub linked_entity_type: Option<String>,
+    pub linked_entity_id: Option<Uuid>,
+    pub author_id: Option<Uuid>,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+// --- VRKB-04: Checklist System ---
+
+/// VRKB-04: Checklist item within a section
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct VrkbChecklistItem {
+    pub id: Uuid,
+    pub section_id: Uuid,
+    pub title: String,
+    pub description: Option<String>,
+    pub is_completed: bool,
+    pub sort_order: i32,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

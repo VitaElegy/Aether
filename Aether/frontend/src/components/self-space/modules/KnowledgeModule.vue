@@ -630,7 +630,7 @@ onDeactivated(() => {
 });
 
 onUnmounted(() => {
-    // No specific cleanup needed
+    document.removeEventListener('click', closeContextMenu);
 });
 
 </script>

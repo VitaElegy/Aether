@@ -66,4 +66,29 @@ impl AssetStorageService {
 
         Ok(asset)
     }
+
+    /// Delete an asset by ID: removes the file from disk (if no other references use the same hash)
+    /// and removes the DB record.
+    pub async fn delete_asset(&self, asset_id: Uuid) -> Result<(), String> {
+        // 1. Fetch asset record
+        let asset = self
+            .repo
+            .get_asset(asset_id)
+            .await
+            .map_err(|e| e.to_string())?
+            .ok_or_else(|| "Asset not found".to_string())?;
+
+        // 2. Delete DB record
+        self.repo
+            .delete_asset(asset_id)
+            .await
+            .map_err(|e| e.to_string())?;
+
+        // 3. Check if any other assets share the same hash; if not, delete the file
+        if let Ok(None) = self.repo.get_asset_by_hash(&asset.hash).await {
+            let _ = tokio::fs::remove_file(&asset.storage_path).await;
+        }
+
+        Ok(())
+    }
 }

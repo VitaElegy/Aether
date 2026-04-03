@@ -260,6 +260,7 @@ pub struct UpdateUserRequest {
 
 pub async fn get_user_handler(
     State(state): State<crate::interface::state::AppState>,
+    _auth: AuthenticatedUser,
     axum::extract::Path(id): axum::extract::Path<Uuid>,
 ) -> impl IntoResponse {
     let user_id = crate::domain::models::UserId(id);

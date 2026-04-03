@@ -63,6 +63,7 @@ import { contentApi } from '@/api/content';
 import { MessagePlugin } from 'tdesign-vue-next';
 import { ArrowLeftIcon, HistoryIcon, ComponentCheckboxIcon, FileIcon } from 'tdesign-icons-vue-next';
 import MarkdownIt from 'markdown-it';
+import { sanitizeHtml } from '@/utils/sanitize';
 import DiffViewer from '@/components/DiffViewer.vue';
 import TopNavBar from '@/components/TopNavBar.vue';
 
@@ -95,9 +96,9 @@ const formatSemVer = (v: number) => `0.0.${v}`;
 
 const renderMarkdown = (body: any) => {
     if (!body) return '';
-    if (typeof body === 'string') return md.render(body);
+    if (typeof body === 'string') return sanitizeHtml(md.render(body));
     if (body.type === 'Markdown' && typeof body.data === 'string') {
-        return md.render(body.data);
+        return sanitizeHtml(md.render(body.data));
     }
     return JSON.stringify(body);
 };

@@ -251,8 +251,13 @@ async fn seed_prkb_feeds(db: &DatabaseConnection) {
                 name: Set(name.to_string()),
                 url: Set(url.to_string()),
                 feed_type: Set(ftype.to_string()),
+                enabled: Set(true),
                 last_fetched_at: Set(None),
                 created_at: Set(chrono::Utc::now().into()),
+                health_status: Set("unknown".to_string()),
+                total_fetched: Set(0),
+                parse_errors: Set(0),
+                last_error: Set(None),
             };
             if let Err(e) = active.insert(db).await {
                 tracing::error!("Failed to seed feed {}: {}", name, e);

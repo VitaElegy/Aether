@@ -55,7 +55,7 @@
                     <p class="main-desc">{{ selectedAlgo.description }}</p>
 
                     <div v-if="selectedAlgo.visual" class="visual-box" :class="selectedAlgo.visualClass">
-                        <div v-html="selectedAlgo.visual"></div>
+                        <div v-html="sanitizeHtml(selectedAlgo.visual)"></div>
                     </div>
 
                     <div class="details-list">
@@ -79,6 +79,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { sanitizeHtml } from '@/utils/sanitize';
 import SlideBase from '../SlideBase.vue'
 
 interface AlgoDetail {

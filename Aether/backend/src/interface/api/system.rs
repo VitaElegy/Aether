@@ -1,4 +1,5 @@
 use crate::infrastructure::persistence::repositories::system_settings_repository::SystemSettingsRepository;
+use crate::interface::api::auth::AuthenticatedUser;
 use crate::interface::state::AppState;
 use axum::extract::{Json as AxumJson, State};
 use axum::{http::StatusCode, response::IntoResponse, routing::get, Json};
@@ -23,6 +24,7 @@ pub struct UpdateSettingDto {
 
 pub async fn get_settings_handler(
     State(repo): State<Arc<SystemSettingsRepository>>,
+    _auth: AuthenticatedUser,
 ) -> impl IntoResponse {
     let max_upload = repo.get_int("max_upload_size_mb", 5).await;
     let settings = serde_json::json!({
@@ -33,6 +35,7 @@ pub async fn get_settings_handler(
 
 pub async fn update_setting_handler(
     State(repo): State<Arc<SystemSettingsRepository>>,
+    _auth: AuthenticatedUser,
     AxumJson(payload): AxumJson<serde_json::Map<String, Value>>,
 ) -> impl IntoResponse {
     for (key, value) in payload {
@@ -52,7 +55,7 @@ pub async fn update_setting_handler(
         .into_response()
 }
 
-pub async fn get_git_log_handler() -> impl IntoResponse {
+pub async fn get_git_log_handler(_auth: AuthenticatedUser) -> impl IntoResponse {
     let output = Command::new("git")
         .args(&[
             "log",

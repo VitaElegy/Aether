@@ -1,12 +1,44 @@
-use sea_orm::{ConnectionTrait, Database, DatabaseConnection};
+use sea_orm::{ConnectOptions, ConnectionTrait, Database, DatabaseConnection};
 use std::env;
+use std::time::Duration;
 
 pub async fn init_pool() -> DatabaseConnection {
     let db_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let db = Database::connect(&db_url)
+
+    let max_connections: u32 = env::var("DB_MAX_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10);
+    let min_connections: u32 = env::var("DB_MIN_CONNECTIONS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(2);
+    let connect_timeout_secs: u64 = env::var("DB_CONNECT_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(8);
+    let idle_timeout_secs: u64 = env::var("DB_IDLE_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(300);
+
+    let mut opts = ConnectOptions::new(&db_url);
+    opts.max_connections(max_connections)
+        .min_connections(min_connections)
+        .connect_timeout(Duration::from_secs(connect_timeout_secs))
+        .idle_timeout(Duration::from_secs(idle_timeout_secs))
+        .sqlx_logging(false);
+
+    let db = Database::connect(opts)
         .await
         .expect("Failed to connect to DB");
-    tracing::info!("Database Connection Established");
+    tracing::info!(
+        "Database Connection Pool Established (max={}, min={}, connect_timeout={}s, idle_timeout={}s)",
+        max_connections,
+        min_connections,
+        connect_timeout_secs,
+        idle_timeout_secs,
+    );
     db
 }
 

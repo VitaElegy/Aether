@@ -406,6 +406,34 @@ pub trait VrkbRepository: Send + Sync {
     ) -> Result<Vec<crate::domain::models::VrkbFinding>, RepositoryError>;
     async fn update_finding_status(&self, id: &Uuid, status: String)
         -> Result<(), RepositoryError>;
+    async fn update_finding(
+        &self,
+        id: &Uuid,
+        title: Option<String>,
+        severity: Option<String>,
+        status: Option<String>,
+        content: Option<Option<serde_json::Value>>,
+        is_triage: Option<bool>,
+        // VRKB-02 extended fields
+        confidence: Option<Option<String>>,
+        owner_id: Option<Option<Uuid>>,
+        due_date: Option<Option<chrono::DateTime<chrono::Utc>>>,
+        affected_assets: Option<Option<serde_json::Value>>,
+        repro_steps: Option<Option<String>>,
+        remediation: Option<Option<String>>,
+        verification_note: Option<Option<String>>,
+    ) -> Result<(), RepositoryError>;
+    async fn delete_finding(&self, id: &Uuid) -> Result<(), RepositoryError>;
+
+    // Project CRUD (update/delete)
+    async fn update_project(
+        &self,
+        id: &Uuid,
+        name: Option<String>,
+        repository_url: Option<Option<String>>,
+        settings: Option<Option<serde_json::Value>>,
+    ) -> Result<(), RepositoryError>;
+    async fn delete_project(&self, id: &Uuid) -> Result<(), RepositoryError>;
 
     // Asset
     async fn create_asset(
@@ -421,6 +449,11 @@ pub trait VrkbRepository: Send + Sync {
         project_id: Uuid,
         asset_id: Uuid,
         virtual_path: String,
+    ) -> Result<(), RepositoryError>;
+    async fn unlink_asset_from_project(
+        &self,
+        project_id: Uuid,
+        asset_id: Uuid,
     ) -> Result<(), RepositoryError>;
     async fn list_project_assets(
         &self,
@@ -486,6 +519,93 @@ pub trait VrkbRepository: Send + Sync {
         &self,
         project_id: &Uuid,
     ) -> Result<crate::domain::models::VrkbStats, RepositoryError>;
+
+    // --- VRKB-02: Finding Status Validation ---
+    /// Validate a status transition and update if valid
+    async fn transition_finding_status(
+        &self,
+        id: &Uuid,
+        new_status: String,
+    ) -> Result<(), RepositoryError>;
+
+    // --- VRKB-03: Triage Queue Queries ---
+    /// List findings in triage that haven't been reviewed
+    async fn list_triage_unreviewed(
+        &self,
+        project_id: &Uuid,
+    ) -> Result<Vec<crate::domain::models::VrkbFinding>, RepositoryError>;
+
+    /// List findings suspected as duplicates (same title/severity patterns)
+    async fn list_triage_duplicate_suspects(
+        &self,
+        project_id: &Uuid,
+    ) -> Result<Vec<crate::domain::models::VrkbFinding>, RepositoryError>;
+
+    /// List stale findings (no update in X days, still open)
+    async fn list_triage_stale(
+        &self,
+        project_id: &Uuid,
+        stale_days: i64,
+    ) -> Result<Vec<crate::domain::models::VrkbFinding>, RepositoryError>;
+
+    /// List findings missing evidence
+    async fn list_triage_missing_evidence(
+        &self,
+        project_id: &Uuid,
+    ) -> Result<Vec<crate::domain::models::VrkbFinding>, RepositoryError>;
+
+    /// Merge duplicate: mark one finding as closed (duplicate) and link to canonical
+    async fn merge_finding_duplicate(
+        &self,
+        duplicate_id: &Uuid,
+        canonical_id: &Uuid,
+    ) -> Result<(), RepositoryError>;
+
+    // --- VRKB-04: Checklist System ---
+    async fn create_checklist_item(
+        &self,
+        item: crate::domain::models::VrkbChecklistItem,
+    ) -> Result<Uuid, RepositoryError>;
+
+    async fn list_checklist_items(
+        &self,
+        section_id: &Uuid,
+    ) -> Result<Vec<crate::domain::models::VrkbChecklistItem>, RepositoryError>;
+
+    async fn update_checklist_item(
+        &self,
+        id: &Uuid,
+        title: Option<String>,
+        description: Option<Option<String>>,
+        is_completed: Option<bool>,
+        sort_order: Option<i32>,
+    ) -> Result<(), RepositoryError>;
+
+    async fn delete_checklist_item(&self, id: &Uuid) -> Result<(), RepositoryError>;
+
+    // --- VRKB-05: Evidence Blocks ---
+    async fn create_evidence(
+        &self,
+        evidence: crate::domain::models::VrkbEvidence,
+    ) -> Result<Uuid, RepositoryError>;
+
+    async fn get_evidence(
+        &self,
+        id: &Uuid,
+    ) -> Result<Option<crate::domain::models::VrkbEvidence>, RepositoryError>;
+
+    async fn list_evidence_by_entity(
+        &self,
+        entity_type: &str,
+        entity_id: &Uuid,
+    ) -> Result<Vec<crate::domain::models::VrkbEvidence>, RepositoryError>;
+
+    async fn list_evidence_by_project(
+        &self,
+        project_id: &Uuid,
+    ) -> Result<Vec<crate::domain::models::VrkbEvidence>, RepositoryError>;
+
+    async fn delete_evidence(&self, id: &Uuid) -> Result<(), RepositoryError>;
 }
 
 #[async_trait]
