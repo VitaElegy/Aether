@@ -321,10 +321,11 @@ impl MemoRepository for PostgresRepository {
                     .map(|le| le.to_string().contains(&target_str))
                     .unwrap_or(false);
                 // Also check content for @mentions
+                let content_string = detail.content.to_string();
                 let content_str = detail
                     .content
                     .as_str()
-                    .unwrap_or(&detail.content.to_string());
+                    .unwrap_or(&content_string);
                 let has_mention = content_str.contains(&target_str);
 
                 if has_link || has_mention {

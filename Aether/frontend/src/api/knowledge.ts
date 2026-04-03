@@ -46,7 +46,7 @@ export interface Collaborator {
 // Helper to get headers
 const getAuthHeaders = () => ({
     headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
     }
 });
 
@@ -83,7 +83,7 @@ export const knowledgeApi = {
     async listCollaborators(id: string): Promise<Collaborator[]> {
         const response = await axios.get<Collaborator[]>(`${API_BASE}/knowledge-bases/${id}/collaborators`, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
             }
         });
         return response.data;
@@ -92,7 +92,7 @@ export const knowledgeApi = {
     async addCollaborator(id: string, userId: string, role: string): Promise<void> {
         await axios.post(`${API_BASE}/knowledge-bases/${id}/collaborators`, { user_id: userId, role }, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
             }
         });
     },
@@ -100,7 +100,7 @@ export const knowledgeApi = {
     async removeCollaborator(id: string, userId: string): Promise<void> {
         await axios.delete(`${API_BASE}/knowledge-bases/${id}/collaborators/${userId}`, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
             }
         });
     }

@@ -118,7 +118,7 @@ export const backupApi = {
     list: async (): Promise<string[]> => {
         const res = await axios.get('/api/backups', {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
             }
         });
         return res.data;
@@ -127,7 +127,7 @@ export const backupApi = {
     create: async (kbId: string): Promise<{ filename: string }> => {
         const res = await axios.post('/api/backups', { kb_id: kbId }, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
             }
         });
         return res.data;
@@ -142,7 +142,7 @@ export const backupApi = {
         formData.append('file', file);
         const res = await axios.post('/api/backups/restore', formData, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
             }
         });
         return res.data;
@@ -153,7 +153,7 @@ export const backupApi = {
         formData.append('file', file);
         const res = await axios.post('/api/backups/preview', formData, {
             headers: {
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
             }
         });
         return res.data;

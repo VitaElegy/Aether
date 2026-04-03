@@ -542,6 +542,7 @@ async fn fetch_examples_for_vocab(
                 sentence_uuid: ex.sentence_uuid,
                 created_at: ex.created_at.with_timezone(&Utc),
                 global_sentence_id,
+                is_primary: false,
             }
         })
         .collect())
@@ -569,6 +570,7 @@ fn map_vocab(
             created_at: n.created_at.with_timezone(&Utc),
             updated_at: n.updated_at.with_timezone(&Utc),
         },
+        lemma: None,
         word: d.word,
         definition: d.definition,
         translation: d.translation,
@@ -581,5 +583,10 @@ fn map_vocab(
         examples,
         query_count: d.query_count,
         is_important: d.is_important,
+        level: Default::default(),
+        tags: Vec::new(),
+        mastery: Default::default(),
+        source_kb_id: n.knowledge_base_id,
+        is_archived: false,
     }
 }

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, onBeforeUnmount, watch } from 'vue';
 import * as d3 from 'd3';
 
 
@@ -196,6 +196,10 @@ const draw = () => {
 onMounted(() => {
     draw();
     window.addEventListener('resize', draw);
+});
+
+onBeforeUnmount(() => {
+    window.removeEventListener('resize', draw);
 });
 
 watch(() => props.treeData, () => {

@@ -9,6 +9,7 @@ use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 use crate::infrastructure::persistence::entities::semantic_node;
+use crate::interface::api::auth::AuthenticatedUser;
 use crate::interface::state::AppState;
 
 #[derive(Debug, Deserialize)]
@@ -48,6 +49,7 @@ pub fn router() -> Router<AppState> {
 
 async fn get_context(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Query(params): Query<ContextParams>,
 ) -> Result<Json<Vec<HelperNode>>, StatusCode> {
     let nodes = semantic_node::Entity::find()
@@ -71,7 +73,7 @@ async fn get_context(
     Ok(Json(helper_nodes))
 }
 
-async fn get_global(State(state): State<AppState>) -> Result<Json<Vec<HelperNode>>, StatusCode> {
+async fn get_global(State(state): State<AppState>, _auth: AuthenticatedUser) -> Result<Json<Vec<HelperNode>>, StatusCode> {
     let nodes = semantic_node::Entity::find()
         .all(&state.repo.db)
         .await
@@ -94,6 +96,7 @@ async fn get_global(State(state): State<AppState>) -> Result<Json<Vec<HelperNode
 
 async fn get_kb_graph(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     axum::extract::Path(kb_id): axum::extract::Path<Uuid>,
 ) -> Result<Json<Vec<crate::domain::models::GraphNode>>, StatusCode> {
     let nodes = state
@@ -109,6 +112,7 @@ async fn get_kb_graph(
 
 async fn create_node(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Json(payload): Json<CreateNodeRequest>,
 ) -> Result<Json<Uuid>, StatusCode> {
     let id = state
@@ -129,6 +133,7 @@ async fn create_node(
 
 async fn delete_node(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     axum::extract::Path(id): axum::extract::Path<Uuid>,
 ) -> Result<StatusCode, StatusCode> {
     state.graph_service.delete_node(id).await.map_err(|e| {

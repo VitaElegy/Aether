@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue';
 import { marked } from 'marked';
+import { sanitizeHtml } from '@/utils/sanitize';
 
 const props = defineProps<{
     block: {
@@ -12,7 +13,7 @@ const props = defineProps<{
 }>();
 
 const renderedContent = computed(() => {
-    return marked.parse(props.block.payload.content || '');
+    return sanitizeHtml(marked.parse(props.block.payload.content || '') as string);
 });
 </script>
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, onMounted, onBeforeUnmount } from 'vue';
+import { sanitizeHtml } from '@/utils/sanitize';
 import MathFunctionPlot from './MathFunctionPlot.vue';
 
 interface Props {
@@ -135,7 +136,7 @@ onBeforeUnmount(() => {
 
                     <!-- Description Tab -->
                     <div v-else-if="activeTab === 'description'" class="prose prose-sm prose-scholar">
-                        <div v-html="currentDesc"></div>
+                        <div v-html="sanitizeHtml(currentDesc)"></div>
                     </div>
 
                 </div>

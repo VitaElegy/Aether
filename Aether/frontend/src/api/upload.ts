@@ -10,7 +10,7 @@ export const uploadApi = {
         const response = await axios.post<{ url: string }>(`${API_BASE}/upload`, formData, {
             headers: {
                 'Content-Type': 'multipart/form-data',
-                'Authorization': `Bearer ${localStorage.getItem('token')}`
+                'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
             }
         });
         return response.data.url;

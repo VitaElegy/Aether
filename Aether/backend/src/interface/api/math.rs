@@ -9,6 +9,7 @@ use uuid::Uuid;
 
 use crate::domain::math::models::*;
 use crate::domain::math::portability;
+use crate::interface::api::auth::AuthenticatedUser;
 use crate::interface::state::AppState;
 
 // ── Request / Response DTOs ─────────────────────────────────────────────
@@ -118,6 +119,7 @@ pub fn router() -> Router<AppState> {
 
 async fn get_graph(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
 ) -> Json<MathGraph> {
     let graph = state.math_service.get_graph(kb_id);
@@ -126,6 +128,7 @@ async fn get_graph(
 
 async fn get_overview(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
 ) -> Json<GraphOverview> {
     let graph = state.math_service.get_graph(kb_id);
@@ -162,6 +165,7 @@ async fn get_overview(
 
 async fn add_node(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
     Json(req): Json<AddNodeRequest>,
 ) -> Result<Json<MathNode>, StatusCode> {
@@ -178,6 +182,7 @@ async fn add_node(
 
 async fn get_node(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path((kb_id, node_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<MathNode>, StatusCode> {
     let graph = state.math_service.get_graph(kb_id);
@@ -191,6 +196,7 @@ async fn get_node(
 
 async fn update_node(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path((kb_id, node_id)): Path<(Uuid, Uuid)>,
     Json(req): Json<UpdateNodeRequest>,
 ) -> Result<Json<MathNode>, StatusCode> {
@@ -211,6 +217,7 @@ async fn update_node(
 
 async fn remove_node(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path((kb_id, node_id)): Path<(Uuid, Uuid)>,
 ) -> StatusCode {
     if state.math_service.remove_node(kb_id, node_id) {
@@ -222,6 +229,7 @@ async fn remove_node(
 
 async fn add_relation(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
     Json(req): Json<AddRelationRequest>,
 ) -> Result<Json<MathRelation>, StatusCode> {
@@ -240,6 +248,7 @@ async fn add_relation(
 
 async fn remove_relation(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path((kb_id, relation_id)): Path<(Uuid, Uuid)>,
 ) -> StatusCode {
     if state.math_service.remove_relation(kb_id, relation_id) {
@@ -251,6 +260,7 @@ async fn remove_relation(
 
 async fn inspect_node(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path((kb_id, node_id)): Path<(Uuid, Uuid)>,
 ) -> Result<Json<NodeInspection>, StatusCode> {
     state
@@ -262,6 +272,7 @@ async fn inspect_node(
 
 async fn analyze_dependencies(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
 ) -> Json<DependencyAnalysis> {
     Json(state.math_service.analyze_dependencies(kb_id))
@@ -269,6 +280,7 @@ async fn analyze_dependencies(
 
 async fn workspace_command(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
     Json(req): Json<WorkspaceCommandRequest>,
 ) -> Json<WorkspaceResult> {
@@ -277,6 +289,7 @@ async fn workspace_command(
 
 async fn validate_references(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
 ) -> Json<ReferenceValidation> {
     Json(state.math_service.validate_references(kb_id))
@@ -284,6 +297,7 @@ async fn validate_references(
 
 async fn export_graph(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
     Json(req): Json<ExportRequest>,
 ) -> Json<MathExportResult> {
@@ -293,6 +307,7 @@ async fn export_graph(
 
 async fn import_graph(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(kb_id): Path<Uuid>,
     Json(req): Json<ImportRequest>,
 ) -> Result<Json<MathImportResult>, StatusCode> {

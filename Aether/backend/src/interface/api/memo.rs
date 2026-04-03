@@ -188,6 +188,7 @@ pub async fn create_memo_handler(
 
 pub async fn get_memo_handler(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     match state.repo.find_by_id(&id).await {
@@ -635,6 +636,7 @@ pub async fn split_memo_handler(
 
 pub async fn get_backlinks_handler(
     State(state): State<AppState>,
+    _auth: AuthenticatedUser,
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     match state.repo.find_backlinks(&id).await {
@@ -800,13 +802,13 @@ pub async fn export_memos_handler(
     } else if let (Some(from), Some(to)) = (payload.date_from, payload.date_to) {
         state
             .repo
-            .find_by_date_range(aid, from, to)
+            .find_by_date_range(aid.clone(), from, to)
             .await
             .unwrap_or_default()
     } else {
         state
             .repo
-            .list(Some(aid), Some(aid))
+            .list(Some(aid.clone()), Some(aid))
             .await
             .unwrap_or_default()
     };

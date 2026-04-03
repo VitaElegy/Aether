@@ -798,5 +798,7 @@ fn map_article(
             .map(|u| u.display_name.clone().unwrap_or(u.username.clone())),
         author_avatar: match_user.as_ref().and_then(|u| u.avatar_url.clone()),
         derived_data: d.derived_data,
+        analysis_status: None,
+        analysis_diagnostics: None,
     }
 }

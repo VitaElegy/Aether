@@ -148,7 +148,7 @@ pub struct ImportBibtexRequest {
 
 // ===== HANDLER HELPERS =====
 
-fn err_response(e: impl std::fmt::Display) -> impl IntoResponse {
+fn err_response(e: impl std::fmt::Display) -> axum::http::Response<axum::body::Body> {
     (
         StatusCode::INTERNAL_SERVER_ERROR,
         Json(serde_json::json!({"error": e.to_string()})),
@@ -156,7 +156,7 @@ fn err_response(e: impl std::fmt::Display) -> impl IntoResponse {
         .into_response()
 }
 
-fn ok_json<T: Serialize>(data: T) -> impl IntoResponse {
+fn ok_json<T: Serialize>(data: T) -> axum::http::Response<axum::body::Body> {
     (StatusCode::OK, Json(data)).into_response()
 }
 

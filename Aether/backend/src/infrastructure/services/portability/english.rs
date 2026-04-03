@@ -580,7 +580,9 @@ impl PortabilityProvider for EnglishPortabilityProvider {
         let mut conflicts = Vec::new();
 
         // Check for vocabulary.json or vocabulary.csv
-        if let Ok(mut entry) = archive.by_name("vocabulary.json") {
+        let has_json = archive.by_name("vocabulary.json").is_ok();
+        if has_json {
+            let mut entry = archive.by_name("vocabulary.json").map_err(|e| e.to_string())?;
             let mut buf = String::new();
             std::io::Read::read_to_string(&mut entry, &mut buf).map_err(|e| e.to_string())?;
             if let Ok(entries) = serde_json::from_str::<Vec<VocabJsonEntry>>(&buf) {

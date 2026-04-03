@@ -557,7 +557,7 @@ async fn reanalyze_article(
     Path(id): Path<Uuid>,
 ) -> impl IntoResponse {
     // Fetch the article
-    let article = match state.article_repo.find_by_id(&id).await {
+    let article = match crate::domain::ports::ArticleRepository::find_by_id(&*state.repo, &id).await {
         Ok(Some(crate::domain::models::ContentItem::Article(a))) => a,
         Ok(_) => {
             return (

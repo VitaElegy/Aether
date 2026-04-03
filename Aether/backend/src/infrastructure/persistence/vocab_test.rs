@@ -99,6 +99,7 @@ mod tests {
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             },
+            lemma: None,
             word: "Word A".to_string(),
             definition: "Def A".to_string(),
             translation: None,
@@ -118,9 +119,15 @@ mod tests {
                 sentence_uuid: None,
                 created_at: Utc::now(),
                 global_sentence_id: None,
+                is_primary: false,
             }],
             query_count: 0,
             is_important: false,
+            level: Default::default(),
+            tags: Vec::new(),
+            mastery: Default::default(),
+            source_kb_id: None,
+            is_archived: false,
         };
 
         repo.save(vocab_a).await.expect("Failed to save Vocab A");
@@ -148,6 +155,7 @@ mod tests {
                 created_at: Utc::now(),
                 updated_at: Utc::now(),
             },
+            lemma: None,
             word: "Word B".to_string(),
             definition: "Def B".to_string(),
             translation: None,
@@ -167,9 +175,15 @@ mod tests {
                 sentence_uuid: None,
                 created_at: Utc::now(),
                 global_sentence_id: None,
+                is_primary: false,
             }],
             query_count: 0,
             is_important: false,
+            level: Default::default(),
+            tags: Vec::new(),
+            mastery: Default::default(),
+            source_kb_id: None,
+            is_archived: false,
         };
 
         repo.save(vocab_b).await.expect("Failed to save Vocab B");

@@ -232,6 +232,8 @@ pub async fn create_content_handler(
             author_name: None,
             author_avatar: None,
             derived_data: derived_data_value,
+            analysis_status: None,
+            analysis_diagnostics: None,
         };
 
         match ArticleRepository::save(&*state.repo, article, UserId(user.id), payload._reason).await
@@ -404,6 +406,8 @@ pub async fn update_content_handler(
                 author_name: None,
                 author_avatar: None,
                 derived_data: derived_data_value,
+                analysis_status: existing.analysis_status.clone(),
+                analysis_diagnostics: existing.analysis_diagnostics.clone(),
             };
 
             if let Ok(Some(conflict)) = state.repo.find_by_title(&payload.title).await {
