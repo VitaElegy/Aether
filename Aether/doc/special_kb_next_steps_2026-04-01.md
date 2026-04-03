@@ -1,14 +1,14 @@
 # Aether 特殊知识库 — 下一步计划
 
-> 日期: 2026-04-01
+> 日期: 2026-04-03 (updated from 04-01)
 > 基于: `special_kb_detailed_execution_plan_2026-03-19.md`
-> 当前 HEAD: `52f7750` (master)
+> 上次更新: ASSET-05/06/07 全部完成 + ImportModal 完整实现
 
 ## 1. 总体进度
 
 ```
 Wave 0  Platform Closure              ████████████████████░  95%   ← PLAT-02/03/04/06 有残留
-Wave 1  Assets Base Layer              ████████████░░░░░░░░  57%   ← ASSET-05/06/07 待做
+Wave 1  Assets Base Layer              ███████████████████░  95%   ✅ ASSET-05/06/07 已完成
 Wave 2  English / Vocabulary           ████████████████████  100%  ✅
 Wave 3  Memos                          ████████████████████  100%  ✅
 Wave 4  PRKB                           ████████████████████  100%  ✅
@@ -21,9 +21,9 @@ Wave 9  Release & Stability            ░░░░░░░░░░░░░�
 
 **已完成模块成熟度更新**（基于原始审计 → 实施后估算）:
 
-| 模块 | 审计时 (03-19) | 实施后 (04-01) | 目标 |
+| 模块 | 审计时 (03-19) | 实施后 (04-03) | 目标 |
 |------|---------------|---------------|------|
-| Assets | 3.5/10 | 5.5/10 | 8/10 |
+| Assets | 3.5/10 | 7.5/10 | 8/10 |
 | English | 6-7/10 | 8.5/10 | 9/10 |
 | Memos | 5.5/10 | 8/10 | 9/10 |
 | PRKB | 4.5/10 | 8/10 | 9/10 |
@@ -32,17 +32,23 @@ Wave 9  Release & Stability            ░░░░░░░░░░░░░�
 
 ## 2. 下一批次执行计划
 
-### 批次 A — Assets 补完 (ASSET-05~07)
+### 批次 A — Assets 补完 (ASSET-05~07) ✅ 已完成
 
 优先级: **P0** — 其他模块（尤其 VRKB）依赖 Picker Mode
 
-| 工作包 | 内容 | 预计规模 |
-|--------|------|---------|
-| ASSET-05 | Picker Mode — modal/split-view picker, search, recent, upload from picker | ~400 LOC |
-| ASSET-06 | Permission Explanation — allowed + reason_code + context_chain | ~300 LOC |
-| ASSET-07 | Assets Portability — metadata + binary + usage edges round-trip | ~500 LOC |
+| 工作包 | 内容 | 状态 |
+|--------|------|------|
+| ASSET-05 | Picker Mode — editor 斜杠命令 + ComposeBar 附件按钮 + `/asset` 指令 | ✅ 已完成 |
+| ASSET-06 | Permission Explanation — AssetPermissionBadge 集成到 MyAssets 详情侧栏 | ✅ 已完成 |
+| ASSET-07 | Assets Portability — Export/Import 按钮 + usage_edges 跨 KB 引用搜索 + ImportModal 完整实现 | ✅ 已完成 |
 
-**接入点**: Markdown editor, Memos compose, VRKB evidence, PRKB note/PDF
+**已完成的具体改动** (04-03):
+- `MarkdownEditorAdapter.vue`: 新增 "Asset" 和 "Image Asset" 斜杠命令，通过 `useAssetPicker` 插入 `![name]([[asset:UUID]])`
+- `ComposeBar.vue`: 新增 `attachAsset()` + `/asset` 斜杠命令 + Attach 按钮绑定
+- `MyAssets.vue`: 集成 `AssetPermissionBadge` + Export/Import 按钮 + `kb_id` 传递
+- `portability/assets.rs`: `usage_edges` 从空 stub 升级为全文搜索 `[[asset:UUID]]` 引用
+- `api/assets.rs`: `AssetListResponse` 新增 `kb_id` 字段
+- `ImportModal.vue`: 从占位符升级为完整 6 步流程（选择文件→分析→预览冲突→导入→完成/错误）
 
 ### 批次 B — VRKB 协作平台化 (Wave 5, VRKB-01~10)
 
@@ -87,15 +93,15 @@ Wave 9  Release & Stability            ░░░░░░░░░░░░░�
 ## 3. 建议执行顺序
 
 ```
-Phase 1 (即时):
-├── ASSET-05 Picker Mode         ← 为 VRKB-06 解除依赖
-├── ASSET-06 Permission Explain
-└── ASSET-07 Assets Portability
+Phase 1 (已完成 ✅):
+├── ASSET-05 Picker Mode         ✅ editor + ComposeBar 集成
+├── ASSET-06 Permission Explain  ✅ MyAssets 侧栏集成
+└── ASSET-07 Assets Portability  ✅ Export/Import + usage_edges + ImportModal
 
-Phase 2 (紧接):
-└── VRKB-01 ~ VRKB-10           ← 最后一个核心模块
+Phase 2 (当前 ← ):
+└── VRKB-01 ~ VRKB-10           ← 最后一个核心模块, ASSET-05 依赖已解除
     ├── 可考虑并发: VRKB-01~04 (项目/finding/triage/checklist)
-    └── 串行: VRKB-05~10 (依赖 assets integration)
+    └── 串行: VRKB-05~10 (依赖 assets integration — 已就绪)
 
 Phase 3 (稳定化):
 ├── PLAT-02/03/04/06 补完
@@ -119,15 +125,15 @@ Phase 3 (稳定化):
 
 上一轮 4 Agent 并发的经验证明 worktree 隔离模式可行:
 - 模块间文件重叠极少（仅 `models.rs` 有 1 处 auto-merge）
-- 建议下一轮: **ASSET-05~07 串行执行（影响面广）+ VRKB 独立 worktree**
-- VRKB-06 (Assets Integration) 需要等 ASSET-05 (Picker Mode) 完成
+- 建议下一轮: **VRKB-01~04 可并发, VRKB-05~10 串行**
+- VRKB-06 (Assets Integration) 依赖的 ASSET-05 (Picker Mode) 已完成 ✅
 
 ## 6. 发布完成判定 (来自原始计划)
 
 只有同时满足以下条件，才可以宣称特殊知识库体系进入成熟阶段:
 
 1. ✅ 六个特殊 KB 都拥有正式对象模型 — **5/6 完成，VRKB 待做**
-2. ☐ 六个特殊 KB 都拥有专项 portability provider — **4/6 完成**
+2. ☐ 六个特殊 KB 都拥有专项 portability provider — **5/6 完成 (Assets 已完成 ✅)**
 3. ☐ 六个特殊 KB 都拥有至少 1 条 E2E 主工作流 — **0/6 (无 Playwright)**
 4. ☐ 统一 Shell、权限、审计、长任务和错误处理已形成共享底座 — **部分**
 5. ✅ `npm run build` + `npm run test:unit` 持续稳定通过
