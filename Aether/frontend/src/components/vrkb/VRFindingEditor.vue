@@ -27,7 +27,7 @@
           <div class="flex-1 overflow-y-auto px-8 py-4 space-y-8 custom-scrollbar">
             
             <!-- Controls Row -->
-            <div class="flex gap-8 border-b border-ash/30 pb-6">
+            <div class="grid grid-cols-4 gap-6 border-b border-ash/30 pb-6">
                <div class="space-y-1">
                   <label class="text-[9px] font-black uppercase tracking-widest text-ink/40 block">Severity</label>
                   <div class="flex items-center gap-2">
@@ -45,27 +45,83 @@
                   <label class="text-[9px] font-black uppercase tracking-widest text-ink/40 block">Status</label>
                   <div class="flex items-center gap-2">
                      <select v-model="localFinding.status" class="bg-transparent text-sm font-medium text-ink outline-none cursor-pointer hover:text-accent transition-colors">
-                        <option value="Pending">Pending</option>
-                        <option value="Triage">Triage</option>
-                        <option value="Fixing">Fixing</option>
-                        <option value="Verified">Verified</option>
+                        <option value="triage">Triage</option>
+                        <option value="confirmed">Confirmed</option>
+                        <option value="exploiting">Exploiting</option>
+                        <option value="fixing">Fixing</option>
+                        <option value="verifying">Verifying</option>
+                        <option value="closed">Closed</option>
+                        <option value="risk_accepted">Risk Accepted</option>
                      </select>
                      <i class="ri-arrow-down-s-line text-ink/40 text-xs"></i>
                   </div>
                </div>
+
+               <div class="space-y-1">
+                  <label class="text-[9px] font-black uppercase tracking-widest text-ink/40 block">Confidence</label>
+                  <div class="flex items-center gap-2">
+                     <select v-model="localFinding.confidence" class="bg-transparent text-sm font-medium text-ink outline-none cursor-pointer hover:text-accent transition-colors">
+                        <option :value="undefined">—</option>
+                        <option value="certain">Certain</option>
+                        <option value="firm">Firm</option>
+                        <option value="tentative">Tentative</option>
+                     </select>
+                     <i class="ri-arrow-down-s-line text-ink/40 text-xs"></i>
+                  </div>
+               </div>
+
+               <div class="space-y-1">
+                  <label class="text-[9px] font-black uppercase tracking-widest text-ink/40 block">Due Date</label>
+                  <input 
+                    type="date" 
+                    :value="localFinding.due_date ? localFinding.due_date.substring(0, 10) : ''"
+                    @input="localFinding.due_date = ($event.target as HTMLInputElement)?.value ? new Date(($event.target as HTMLInputElement).value).toISOString() : undefined"
+                    class="bg-transparent text-sm font-medium text-ink outline-none cursor-pointer hover:text-accent transition-colors"
+                  />
+               </div>
             </div>
 
-            <!-- Editor Area -->
+            <!-- Repro Steps -->
+            <div class="space-y-3">
+               <label class="text-[9px] font-black uppercase tracking-widest text-ink/40 block">Reproduction Steps</label>
+               <textarea 
+                 v-model="localFinding.repro_steps" 
+                 class="w-full min-h-[120px] bg-bg-surface rounded-lg p-4 outline-none text-ink text-sm leading-relaxed font-mono resize-none border border-transparent focus:border-accent/20 transition-all placeholder-ink/20"
+                 placeholder="Step-by-step instructions to reproduce this vulnerability..."
+               ></textarea>
+            </div>
+
+            <!-- Remediation -->
+            <div class="space-y-3">
+               <label class="text-[9px] font-black uppercase tracking-widest text-ink/40 block">Remediation Guidance</label>
+               <textarea 
+                 v-model="localFinding.remediation" 
+                 class="w-full min-h-[100px] bg-bg-surface rounded-lg p-4 outline-none text-ink text-sm leading-relaxed resize-none border border-transparent focus:border-accent/20 transition-all placeholder-ink/20"
+                 placeholder="Recommended fix, mitigation, or remediation steps..."
+               ></textarea>
+            </div>
+
+            <!-- Verification Note -->
+            <div class="space-y-3">
+               <label class="text-[9px] font-black uppercase tracking-widest text-ink/40 block">Verification Note</label>
+               <textarea 
+                 v-model="localFinding.verification_note" 
+                 class="w-full min-h-[80px] bg-bg-surface rounded-lg p-4 outline-none text-ink text-sm leading-relaxed resize-none border border-transparent focus:border-accent/20 transition-all placeholder-ink/20"
+                 placeholder="Notes from fix verification (filled when verifying)..."
+               ></textarea>
+            </div>
+
+            <!-- Editor Area (Audit Blueprint) -->
             <div class="space-y-3">
                <label class="text-[9px] font-black uppercase tracking-widest text-ink/40 flex justify-between">
                  <span>Audit Blueprint</span>
                  <span class="text-accent cursor-pointer hover:underline">Insert Template</span>
                </label>
-               <div class="relative group min-h-[300px]">
+               <div class="relative group min-h-[200px]">
                  <textarea 
                    v-model="textContent" 
-                   class="w-full h-full min-h-[300px] bg-bg-surface rounded-lg p-6 outline-none text-ink text-base leading-relaxed font-serif resize-none border border-transparent focus:border-accent/20 transition-all placeholder-ink/20"
-                   placeholder="Describe the vulnerability, reproduction steps, and evidence..."
+                   class="w-full h-full min-h-[200px] bg-bg-surface rounded-lg p-6 outline-none text-ink text-base leading-relaxed font-serif resize-none border border-transparent focus:border-accent/20 transition-all placeholder-ink/20"
+                   placeholder="Describe the vulnerability, evidence, and additional context..."
                  ></textarea>
                </div>
             </div>

@@ -1,5 +1,6 @@
 use crate::domain::models::VrkbSpec;
 use crate::domain::ports::VrkbRepository;
+use crate::interface::api::auth::AuthenticatedUser;
 use crate::interface::state::AppState;
 use axum::http::StatusCode;
 use axum::{
@@ -27,6 +28,7 @@ struct SaveSpecRequest {
 
 async fn get_specs(
     State(state): State<AppState>,
+    _user: AuthenticatedUser,
     Path(project_id): Path<Uuid>,
 ) -> Result<Json<Vec<VrkbSpec>>, (StatusCode, String)> {
     let specs = state
@@ -39,6 +41,7 @@ async fn get_specs(
 
 async fn save_spec(
     State(state): State<AppState>,
+    _user: AuthenticatedUser,
     Path(project_id): Path<Uuid>,
     Json(payload): Json<SaveSpecRequest>,
 ) -> Result<Json<Uuid>, (StatusCode, String)> {

@@ -30,12 +30,12 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import MarkdownIt from 'markdown-it';
+import { marked } from 'marked';
+import { sanitizeHtml } from '@/utils/sanitize';
 import { vrkbApi } from '@/api/vrkb';
 import { useVrkbStore } from '@/stores/vrkb';
 
 const store = useVrkbStore();
-const md = new MarkdownIt();
 const editing = ref(false);
 const content = ref('');
 
@@ -71,6 +71,6 @@ const toggleEdit = () => {
 };
 
 const renderMarkdown = (text: string) => {
-    return md.render(text || "# No specs defined yet.");
+    return sanitizeHtml(marked(text || "# No specs defined yet.") as string);
 };
 </script>

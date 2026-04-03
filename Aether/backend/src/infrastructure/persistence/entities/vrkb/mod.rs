@@ -1,5 +1,7 @@
 pub mod asset;
+pub mod checklist_item;
 pub mod doc;
+pub mod evidence;
 pub mod finding;
 pub mod member;
 pub mod project;

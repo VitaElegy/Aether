@@ -2,32 +2,18 @@ use sea_orm::entity::prelude::*;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, PartialEq, DeriveEntityModel, Serialize, Deserialize)]
-#[sea_orm(table_name = "vrkb_findings")]
+#[sea_orm(table_name = "vrkb_checklist_items")]
 pub struct Model {
     #[sea_orm(primary_key, auto_increment = false)]
     pub id: Uuid,
     pub section_id: Uuid,
     pub title: String,
-    pub status: String,
-    pub severity: String,
-    #[sea_orm(column_type = "Json")]
-    pub content: Option<serde_json::Value>,
-    pub is_triage: bool,
+    #[sea_orm(column_type = "Text")]
+    pub description: Option<String>,
+    pub is_completed: bool,
+    pub sort_order: i32,
     pub created_at: DateTimeWithTimeZone,
     pub updated_at: DateTimeWithTimeZone,
-    pub author_id: Option<Uuid>,
-    // --- VRKB-02 Extended Fields ---
-    pub confidence: Option<String>,
-    pub owner_id: Option<Uuid>,
-    pub due_date: Option<DateTimeWithTimeZone>,
-    #[sea_orm(column_type = "Json")]
-    pub affected_assets: Option<serde_json::Value>,
-    #[sea_orm(column_type = "Text")]
-    pub repro_steps: Option<String>,
-    #[sea_orm(column_type = "Text")]
-    pub remediation: Option<String>,
-    #[sea_orm(column_type = "Text")]
-    pub verification_note: Option<String>,
 }
 
 #[derive(Copy, Clone, Debug, EnumIter, DeriveRelation)]

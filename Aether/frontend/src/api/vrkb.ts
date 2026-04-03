@@ -23,11 +23,20 @@ export interface VrkbFinding {
     id: string;
     section_id: string;
     title: string;
-    status: string; // Pending, Triage, Fixing, Verified
+    /** 7-state lifecycle: triage → confirmed → exploiting → fixing → verifying → closed / risk_accepted */
+    status: string;
     severity: string; // Low, Medium, High, Critical
     content?: any;
     is_triage: boolean;
     author_id?: string;
+    // VRKB-02 extended fields
+    confidence?: string; // certain / firm / tentative
+    owner_id?: string;
+    due_date?: string; // ISO8601
+    affected_assets?: any; // JSON array of asset refs
+    repro_steps?: string;
+    remediation?: string;
+    verification_note?: string;
     created_at: string;
     updated_at: string;
 }
@@ -44,7 +53,7 @@ export interface VrkbAsset {
 // Helper to get headers
 const getAuthHeaders = () => ({
     headers: {
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
+        'Authorization': `Bearer ${localStorage.getItem('aether_token')}`
     }
 });
 
@@ -76,7 +85,8 @@ export const vrkbApi = {
         return response.data;
     },
     createSection: async (data: Partial<VrkbSection>) => {
-        const response = await axios.post<VrkbSection>('/api/vrkb/sections', data, getAuthHeaders());
+        if (!data.project_id) throw new Error("project_id is required for createSection");
+        const response = await axios.post<VrkbSection>(`/api/vrkb/projects/${data.project_id}/sections`, data, getAuthHeaders());
         return response.data;
     },
 
@@ -98,6 +108,11 @@ export const vrkbApi = {
         await axios.delete(`/api/vrkb/findings/${id}`, getAuthHeaders());
     },
 
+    // Finding Status (dedicated PATCH endpoint)
+    updateFindingStatus: async (id: string, status: string) => {
+        await axios.patch(`/api/vrkb/findings/${id}/status`, { status }, getAuthHeaders());
+    },
+
     // Assets
     uploadAsset: async (file: File) => {
         const formData = new FormData();
@@ -110,10 +125,9 @@ export const vrkbApi = {
         });
         return response.data;
     },
-    // List Assets
     listAssets: async (projectId: string) => {
         const response = await axios.get(`/api/vrkb/projects/${projectId}/assets`, getAuthHeaders());
-        return response.data; // Expected: VrkbAsset[]
+        return response.data;
     },
     deleteAsset: async (id: string) => {
         await axios.delete(`/api/vrkb/assets/${id}`, getAuthHeaders());
@@ -122,13 +136,13 @@ export const vrkbApi = {
     // Stats (Overview)
     getProjectStats: async (projectId: string) => {
         const response = await axios.get(`/api/vrkb/projects/${projectId}/stats`, getAuthHeaders());
-        return response.data; // Expected: VrkbStats
+        return response.data;
     },
 
     // Team
     getTeam: async (projectId: string) => {
         const response = await axios.get(`/api/vrkb/projects/${projectId}/members`, getAuthHeaders());
-        return response.data; // Expected: VrkbMember[]
+        return response.data;
     },
     addMember: async (projectId: string, userId: string, role: string) => {
         await axios.post(`/api/vrkb/projects/${projectId}/members`, { user_id: userId, role }, getAuthHeaders());
@@ -147,7 +161,7 @@ export const vrkbApi = {
     // Docs
     listDocs: async (projectId: string) => {
         const response = await axios.get(`/api/vrkb/projects/${projectId}/docs`, getAuthHeaders());
-        return response.data; // Expected: VrkbDoc[]
+        return response.data;
     },
     createDoc: async (projectId: string, title: string, parentId?: string | null) => {
         const response = await axios.post(`/api/vrkb/projects/${projectId}/docs`, { title, parent_id: parentId }, getAuthHeaders());
@@ -171,47 +185,20 @@ export const vrkbApi = {
     // Specs
     getSpecs: async (projectId: string) => {
         const response = await axios.get(`/api/vrkb/projects/${projectId}/specs`, getAuthHeaders());
-        // For simplicity, returning the first spec's content or empty string if none.
-        // Or return the array and let UI handle it.
-        // Based on previous UI, it expected a string. 
-        // Let's assume we want the list in real implementation or just the first 'README' spec.
         if (response.data && response.data.length > 0) {
             return response.data[0].content || "";
         }
         return "";
     },
     saveSpecs: async (projectId: string, title: string, content: string) => {
-        // Simplified upsert logic for single spec
-        // We need an ID for upsert, let frontend generator or backend handle.
-        // The backend handler expects `id` in payload.
-        // Detailed implementation would require listing first.
-
-        // For now, let's assume we create a deterministic UUID or just list and update first.
-        // Checking getSpecs above returns content.
-
-        // Real implementation:
-        // 1. List specs.
-        // 2. If exists, update.
-        // 3. If not, create.
-
-        // As a quick fix, we'll try to just hit PUT.
-        // But PUT needs ID.
-        // Let's change the pattern: getSpecs returns list.
-        // UI needs to be updated or we adapt here.
-        // Let's adapt:
         const list = await axios.get(`/api/vrkb/projects/${projectId}/specs`, getAuthHeaders());
-        let specId = "00000000-0000-0000-0000-000000000000"; // Dummy or new
+        let specId = "00000000-0000-0000-0000-000000000000";
         let version = 1;
 
         if (list.data && list.data.length > 0) {
             specId = list.data[0].id;
             version = list.data[0].version + 1;
         } else {
-            // Generate new ID if creating
-            // specId = self.crypto.randomUUID(); // Browser API
-            // Or rely on backend to accept new ID. 
-            // Ideally project has 1 main spec.
-            // We'll generate a random UUID if not found.
             specId = crypto.randomUUID();
         }
 
@@ -223,5 +210,128 @@ export const vrkbApi = {
         };
 
         await axios.put(`/api/vrkb/projects/${projectId}/specs`, data, getAuthHeaders());
-    }
+    },
+
+    // Trash Management
+    listTrash: async (projectId: string) => {
+        const response = await axios.get(`/api/vrkb/projects/${projectId}/trash`, getAuthHeaders());
+        return response.data;
+    },
+    restoreDoc: async (docId: string) => {
+        await axios.post(`/api/vrkb/docs/${docId}/restore`, {}, getAuthHeaders());
+    },
+    permanentDeleteDoc: async (docId: string) => {
+        await axios.delete(`/api/vrkb/docs/${docId}/permanent`, getAuthHeaders());
+    },
+
+    // --- VRKB-06: Asset Link/Unlink ---
+    linkAsset: async (data: { asset_id: string; target_type: string; target_id: string; virtual_path?: string }) => {
+        const response = await axios.post('/api/vrkb/assets/link', data, getAuthHeaders());
+        return response.data;
+    },
+    unlinkAsset: async (data: { asset_id: string; target_type: string; target_id: string }) => {
+        const response = await axios.post('/api/vrkb/assets/unlink', data, getAuthHeaders());
+        return response.data;
+    },
+    getAssetUsage: async (assetId: string) => {
+        const response = await axios.get(`/api/vrkb/assets/${assetId}/usage`, getAuthHeaders());
+        return response.data;
+    },
+
+    // --- VRKB-07: Doc Repo Enhancements ---
+    moveDocTo: async (docId: string, parentId: string | null) => {
+        const response = await axios.post(`/api/vrkb/docs/${docId}/move`, { parent_id: parentId }, getAuthHeaders());
+        return response.data;
+    },
+    listDocTemplates: async () => {
+        const response = await axios.get('/api/vrkb/docs/templates', getAuthHeaders());
+        return response.data;
+    },
+    createDocFromTemplate: async (projectId: string, templateId: string, title: string) => {
+        const response = await axios.post(`/api/vrkb/projects/${projectId}/docs/from-template`, { template_id: templateId, title }, getAuthHeaders());
+        return response.data;
+    },
+    generateReport: async (projectId: string, options?: { include_findings?: boolean; include_appendix?: boolean }) => {
+        const response = await axios.post(`/api/vrkb/projects/${projectId}/report`, options || {}, getAuthHeaders());
+        return response.data;
+    },
+
+    // --- VRKB-08: Members & Roles ---
+    getMemberPermissions: async (projectId: string, userId: string) => {
+        const response = await axios.get(`/api/vrkb/projects/${projectId}/members/${userId}/permissions`, getAuthHeaders());
+        return response.data;
+    },
+    getPermissionMatrix: async (projectId: string) => {
+        const response = await axios.get(`/api/vrkb/projects/${projectId}/permissions`, getAuthHeaders());
+        return response.data;
+    },
+
+    // --- VRKB-09: Audit Log ---
+    listAuditLogs: async (projectId: string, params?: { limit?: number; offset?: number; event_type?: string }) => {
+        const query = new URLSearchParams();
+        if (params?.limit) query.set('limit', params.limit.toString());
+        if (params?.offset) query.set('offset', params.offset.toString());
+        if (params?.event_type) query.set('event_type', params.event_type);
+        const response = await axios.get(`/api/vrkb/projects/${projectId}/audit?${query.toString()}`, getAuthHeaders());
+        return response.data;
+    },
+
+    // --- VRKB-10: Portability ---
+    // NOTE: VRKB project export/import uses the portability API (/api/portability/:kb_id/export/start, etc.)
+    // These are handled by the portability store and API, not direct VRKB endpoints.
+
+    // --- VRKB-03: Triage Queue ---
+    getTriageQueue: async (projectId: string, filter: string = 'unreviewed') => {
+        const response = await axios.get(`/api/vrkb/projects/${projectId}/triage?filter=${filter}`, getAuthHeaders());
+        return response.data;
+    },
+    getTriageStats: async (projectId: string) => {
+        const response = await axios.get(`/api/vrkb/projects/${projectId}/triage/stats`, getAuthHeaders());
+        return response.data;
+    },
+
+    // --- VRKB-04: Checklist System ---
+    getChecklist: async (sectionId: string) => {
+        const response = await axios.get(`/api/vrkb/sections/${sectionId}/checklist`, getAuthHeaders());
+        return response.data;
+    },
+    createChecklistItem: async (sectionId: string, data: { title: string; is_blocker?: boolean; description?: string }) => {
+        const response = await axios.post(`/api/vrkb/sections/${sectionId}/checklist`, data, getAuthHeaders());
+        return response.data;
+    },
+    updateChecklistItem: async (sectionId: string, itemId: string, data: any) => {
+        const response = await axios.put(`/api/vrkb/sections/${sectionId}/checklist/${itemId}`, data, getAuthHeaders());
+        return response.data;
+    },
+    getChecklistSummary: async (sectionId: string) => {
+        const response = await axios.get(`/api/vrkb/sections/${sectionId}/checklist/summary`, getAuthHeaders());
+        return response.data;
+    },
+
+    // --- VRKB-05: Evidence Blocks ---
+    getEvidence: async (projectId: string, attachedToType?: string, attachedToId?: string) => {
+        let url = `/api/vrkb/projects/${projectId}/evidence`;
+        const params: string[] = [];
+        if (attachedToType) params.push(`attached_to_type=${attachedToType}`);
+        if (attachedToId) params.push(`attached_to_id=${attachedToId}`);
+        if (params.length > 0) url += '?' + params.join('&');
+        const response = await axios.get(url, getAuthHeaders());
+        return response.data;
+    },
+    createEvidence: async (projectId: string, data: any) => {
+        const response = await axios.post(`/api/vrkb/projects/${projectId}/evidence`, data, getAuthHeaders());
+        return response.data;
+    },
+    deleteEvidence: async (projectId: string, evidenceId: string) => {
+        await axios.delete(`/api/vrkb/projects/${projectId}/evidence/${evidenceId}`, getAuthHeaders());
+    },
+
+    // --- VRKB-09: Notifications ---
+    getNotifications: async (projectId: string) => {
+        const response = await axios.get(`/api/vrkb/projects/${projectId}/notifications`, getAuthHeaders());
+        return response.data;
+    },
+    markNotificationRead: async (notificationId: string) => {
+        await axios.post(`/api/vrkb/notifications/${notificationId}/read`, {}, getAuthHeaders());
+    },
 };

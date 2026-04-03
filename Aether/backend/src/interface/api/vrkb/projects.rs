@@ -22,6 +22,13 @@ pub struct CreateProjectRequest {
 }
 
 #[derive(Deserialize)]
+pub struct UpdateProjectRequest {
+    name: Option<String>,
+    repository_url: Option<String>,
+    settings: Option<serde_json::Value>,
+}
+
+#[derive(Deserialize)]
 pub struct CreateSectionRequest {
     title: String,
     checklist: Option<serde_json::Value>,
@@ -76,6 +83,45 @@ async fn get_project(
     }
 }
 
+async fn update_project(
+    State(state): State<AppState>,
+    _user: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+    Json(payload): Json<UpdateProjectRequest>,
+) -> Result<Json<VrkbProject>, StatusCode> {
+    let repo = state.repo.clone() as Arc<dyn VrkbRepository>;
+    match repo
+        .update_project(
+            &id,
+            payload.name,
+            payload.repository_url.map(Some),
+            payload.settings.map(Some),
+        )
+        .await
+    {
+        Ok(_) => {
+            // Return the updated project
+            match repo.get_project(&id).await {
+                Ok(Some(project)) => Ok(Json(project)),
+                _ => Err(StatusCode::INTERNAL_SERVER_ERROR),
+            }
+        }
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
+async fn delete_project(
+    State(state): State<AppState>,
+    _user: AuthenticatedUser,
+    Path(id): Path<Uuid>,
+) -> Result<StatusCode, StatusCode> {
+    let repo = state.repo.clone() as Arc<dyn VrkbRepository>;
+    match repo.delete_project(&id).await {
+        Ok(_) => Ok(StatusCode::NO_CONTENT),
+        Err(_) => Err(StatusCode::INTERNAL_SERVER_ERROR),
+    }
+}
+
 async fn list_sections(
     State(state): State<AppState>,
     _user: AuthenticatedUser,
@@ -117,7 +163,12 @@ pub fn router() -> Router<AppState> {
             "/api/vrkb/projects",
             get(list_projects).post(create_project),
         )
-        .route("/api/vrkb/projects/:id", get(get_project))
+        .route(
+            "/api/vrkb/projects/:id",
+            get(get_project)
+                .put(update_project)
+                .delete(delete_project),
+        )
         .route(
             "/api/vrkb/projects/:id/sections",
             get(list_sections).post(create_section),

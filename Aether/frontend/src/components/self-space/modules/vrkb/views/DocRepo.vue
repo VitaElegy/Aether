@@ -304,12 +304,7 @@ const loadDocs = async () => {
     if (!store.currentProject) return;
     try {
         if (isTrashMode.value) {
-            // Need API endpoint for trash, or we can use dedicated trash fetcher if implemented in API client
-            // Assuming vrkbApi.listTrash exists, otherwise fallback to custom fetch
-             const res = await fetch(`/api/vrkb/projects/${store.currentProject.id}/trash`);
-             if (res.ok) {
-                 docs.value = await res.json();
-             }
+            docs.value = await vrkbApi.listTrash(store.currentProject.id);
         } else {
             docs.value = await vrkbApi.listDocs(store.currentProject.id);
         }
@@ -380,7 +375,7 @@ const deleteDoc = async (id: string) => {
 const restoreDoc = async (doc: any) => {
     if (!confirm(`Restore "${doc.title}"?`)) return;
     try {
-        await fetch(`/api/vrkb/docs/${doc.id}/restore`, { method: 'POST' });
+        await vrkbApi.restoreDoc(doc.id);
         if (selectedDoc.value?.id === doc.id) selectedDoc.value = null;
         await loadDocs();
     } catch (e) {
@@ -391,7 +386,7 @@ const restoreDoc = async (doc: any) => {
 const permanentDeleteDoc = async (doc: any) => {
     if (!confirm(`Permanently delete "${doc.title}"? This cannot be undone.`)) return;
     try {
-        await fetch(`/api/vrkb/docs/${doc.id}/permanent`, { method: 'DELETE' });
+        await vrkbApi.permanentDeleteDoc(doc.id);
         if (selectedDoc.value?.id === doc.id) selectedDoc.value = null;
         await loadDocs();
     } catch (e) {
