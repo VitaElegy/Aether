@@ -34,11 +34,11 @@
 
 ---
 
-## 🟡 Special KB Maturity (Phase 1.5) — IN PROGRESS (80%)
+## 🟡 Special KB Maturity (Phase 1.5) — IN PROGRESS (85%)
 
 > Detailed plan: `special_kb_detailed_execution_plan_2026-03-19.md`
 > Current status: `special_kb_next_steps_2026-04-01.md`
-> Last updated: 2026-04-07
+> Last updated: 2026-04-07 (evening)
 
 ### Platform Closure (Wave 0) — 95%
 
@@ -90,20 +90,21 @@
 - [x] **PRKB-07**: Signals (freshness, tier, recurrence)
 - [x] **PRKB-08**: PRKB Portability (BibTeX, JSON, Markdown)
 
-### VRKB (Wave 5) — 25% ← IN PROGRESS
+### VRKB (Wave 5) — 60% ← IN PROGRESS
 
+- [x] **VRKB-01**: Project Control Center — OverviewDashboard with stats API wired
 - [x] **VRKB-02 (Backend)**: Finding Lifecycle 7-state model + severity/confidence/owner fields
+- [x] **VRKB-02 (Frontend)**: VulnerabilityKanban 7-col + owner/due_date display + Info severity
 - [x] **VRKB-03 (Backend+API)**: Triage Queue — 4-category queue + accept/reject/merge/request-evidence
-- [ ] **VRKB-01**: Project Control Center
-- [ ] **VRKB-02 (Frontend)**: Finding Lifecycle UI (Kanban 7-col, editor state transitions)
-- [ ] **VRKB-03 (Frontend)**: Triage Queue UI (4-tab + action buttons)
-- [ ] **VRKB-04**: Checklist System
-- [ ] **VRKB-05**: Evidence Blocks
-- [ ] **VRKB-06**: Assets Integration
-- [ ] **VRKB-07**: Doc Repo
-- [ ] **VRKB-08**: Members & Roles
-- [ ] **VRKB-09**: Audit & Notifications
-- [ ] **VRKB-10**: VRKB Portability
+- [x] **VRKB-03 (Frontend)**: TriageQueue 4-tab + store actions (accept/reject/merge/requestEvidence)
+- [x] **VRKB-04**: ChecklistPanel — toggle + blocker + progress bar (already wired)
+- [x] **VRKB-05**: EvidencePanel — 5 evidence types + create/delete UI (already wired)
+- [x] **VRKB-06**: AssetBrowser — upload/link/unlink/usage (already wired)
+- [x] **VRKB-09 (partial)**: AuditLog tab added to navigation
+- [ ] **VRKB-07**: Doc Repo — nested documents, templates
+- [ ] **VRKB-08**: Members & Roles — 4-role permission matrix UI
+- [ ] **VRKB-09 (full)**: Audit & Notifications — event list, webhook config
+- [ ] **VRKB-10**: VRKB Portability — export/import UI
 
 ### Math (Wave 6) — 100%
 
@@ -114,7 +115,7 @@
 - [x] **MATH-05**: Formula & References (validation, labels)
 - [x] **MATH-06**: Math Portability (JSON/Markdown/LaTeX)
 
-### Closure (Wave 7-9) — 10%
+### Closure (Wave 7-9) — 15%
 
 - [x] **Wave 7 (partial)**: Memos + PRKB portability providers added (6/6 KBs now have dedicated providers)
 - [ ] **Wave 7**: Round-trip tests for all 6 KBs
