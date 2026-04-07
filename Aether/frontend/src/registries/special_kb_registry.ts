@@ -70,7 +70,7 @@ const SPECIAL_KB_REGISTRY: SpecialKbRegistryEntry[] = [
     {
         canonicalRendererId: 'memo',
         pluginId: 'memo',
-        portabilityProviderId: 'default',
+        portabilityProviderId: 'memo',
         singleton: true,
         legacyRendererIds: ['memo_std', 'memo_v1'],
         capabilities: { ...NO_CAPABILITIES, export: true, import: true, search: true },
@@ -132,7 +132,7 @@ const SPECIAL_KB_REGISTRY: SpecialKbRegistryEntry[] = [
     {
         canonicalRendererId: 'prkb',
         pluginId: 'prkb',
-        portabilityProviderId: 'default',
+        portabilityProviderId: 'prkb',
         singleton: true,
         capabilities: { ...NO_CAPABILITIES, export: true, import: true, search: true, longTasks: true },
     },

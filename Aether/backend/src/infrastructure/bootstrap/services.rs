@@ -10,6 +10,7 @@ use crate::domain::ports::{
     ArticleRepository, CommentRepository, GraphRepository, KnowledgeBaseRepository, MemoRepository,
     NodeRepository, UserRepository, VrkbRepository,
 };
+use crate::domain::prkb::ports::PrkbRepository;
 use crate::infrastructure::auth::jwt_service::Arg2JwtAuthService;
 use crate::infrastructure::dictionary::loader::DictionaryLoader;
 use crate::infrastructure::persistence::postgres::PostgresRepository;
@@ -21,6 +22,8 @@ use crate::infrastructure::services::export_service::DataExportService;
 use crate::infrastructure::services::portability::assets::AssetsPortabilityProvider;
 use crate::infrastructure::services::portability::default::DefaultPortabilityProvider;
 use crate::infrastructure::services::portability::english::EnglishPortabilityProvider;
+use crate::infrastructure::services::portability::memos::MemosPortabilityProvider;
+use crate::infrastructure::services::portability::prkb::PrkbPortabilityProvider;
 use crate::infrastructure::services::portability::vrkb::VrkbPortabilityProvider;
 use crate::infrastructure::services::portability_service::PortabilityService;
 use crate::infrastructure::services::rss::RssService;
@@ -109,12 +112,21 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
         portability_service.register_alias(alias, "vrkb");
     }
 
+    // Register Memos Provider
+    portability_service.register_provider(Arc::new(MemosPortabilityProvider::new(
+        repo.clone() as Arc<dyn MemoRepository>,
+    )));
+    for alias in ["memo_std", "memo_v1"] {
+        portability_service.register_alias(alias, "memo");
+    }
+
+    // Register PRKB Provider
+    portability_service.register_provider(Arc::new(PrkbPortabilityProvider::new(
+        repo.clone() as Arc<dyn PrkbRepository>,
+    )));
+
     // Map current non-specialized KB renderers to the default provider until dedicated providers exist.
     for alias in [
-        "memo",
-        "memo_std",
-        "memo_v1",
-        "prkb",
         "math",
         "math_std",
         "math_v1",
