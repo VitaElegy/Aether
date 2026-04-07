@@ -34,11 +34,11 @@
 
 ---
 
-## 🟡 Special KB Maturity (Phase 1.5) — IN PROGRESS (75%)
+## 🟡 Special KB Maturity (Phase 1.5) — IN PROGRESS (80%)
 
 > Detailed plan: `special_kb_detailed_execution_plan_2026-03-19.md`
 > Current status: `special_kb_next_steps_2026-04-01.md`
-> Last updated: 2026-04-01
+> Last updated: 2026-04-07
 
 ### Platform Closure (Wave 0) — 95%
 
@@ -90,11 +90,13 @@
 - [x] **PRKB-07**: Signals (freshness, tier, recurrence)
 - [x] **PRKB-08**: PRKB Portability (BibTeX, JSON, Markdown)
 
-### VRKB (Wave 5) — 0% ← NEXT PRIORITY
+### VRKB (Wave 5) — 25% ← IN PROGRESS
 
+- [x] **VRKB-02 (Backend)**: Finding Lifecycle 7-state model + severity/confidence/owner fields
+- [x] **VRKB-03 (Backend+API)**: Triage Queue — 4-category queue + accept/reject/merge/request-evidence
 - [ ] **VRKB-01**: Project Control Center
-- [ ] **VRKB-02**: Finding Lifecycle (7-state)
-- [ ] **VRKB-03**: Triage Queue
+- [ ] **VRKB-02 (Frontend)**: Finding Lifecycle UI (Kanban 7-col, editor state transitions)
+- [ ] **VRKB-03 (Frontend)**: Triage Queue UI (4-tab + action buttons)
 - [ ] **VRKB-04**: Checklist System
 - [ ] **VRKB-05**: Evidence Blocks
 - [ ] **VRKB-06**: Assets Integration
@@ -112,9 +114,10 @@
 - [x] **MATH-05**: Formula & References (validation, labels)
 - [x] **MATH-06**: Math Portability (JSON/Markdown/LaTeX)
 
-### Closure (Wave 7-9) — 0%
+### Closure (Wave 7-9) — 10%
 
-- [ ] **Wave 7**: Portability 2.0 — round-trip tests for all 6 KBs
+- [x] **Wave 7 (partial)**: Memos + PRKB portability providers added (6/6 KBs now have dedicated providers)
+- [ ] **Wave 7**: Round-trip tests for all 6 KBs
 - [ ] **Wave 8**: Observability / Security / Performance
 - [ ] **Wave 9**: Release & Stability (docs, migration, regression suite)
 
