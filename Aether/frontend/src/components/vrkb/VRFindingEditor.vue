@@ -36,6 +36,7 @@
                         <option value="Medium">Medium</option>
                         <option value="High">High</option>
                         <option value="Critical">Critical</option>
+                        <option value="Info">Info</option>
                      </select>
                      <i class="ri-arrow-down-s-line text-ink/40 text-xs"></i>
                   </div>

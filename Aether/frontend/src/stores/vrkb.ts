@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { vrkbApi, type VrkbProject, type VrkbFinding } from '@/api/vrkb';
 import { portabilityApi } from '@/api/portability';
 
@@ -16,6 +16,32 @@ export const useVrkbStore = defineStore('vrkb', () => {
 
     // VRKB-09: Audit state
     const auditLogs = ref<any[]>([]);
+
+    // VRKB-01: Project stats
+    const projectStats = ref<any>(null);
+
+    // VRKB-03: Triage Queue
+    const triageQueue = ref<{ unreviewed: any[]; duplicates: any[]; stale: any[]; missingEvidence: any[] }>({
+        unreviewed: [], duplicates: [], stale: [], missingEvidence: [],
+    });
+    const triageLoading = ref(false);
+
+    // VRKB-05: Evidence
+    const evidence = ref<any[]>([]);
+    const projectAssets = ref<any[]>([]);
+
+    // VRKB-02: Findings by status (computed)
+    const findingsByStatus = computed(() => {
+        const grouped: Record<string, VrkbFinding[]> = {
+            triage: [], confirmed: [], exploiting: [], fixing: [],
+            verifying: [], closed: [], risk_accepted: [],
+        };
+        for (const f of findings.value) {
+            if (grouped[f.status]) grouped[f.status].push(f);
+            else grouped[f.status] = [f];
+        }
+        return grouped;
+    });
 
     // Actions
     const fetchProjects = async () => {
@@ -205,6 +231,67 @@ export const useVrkbStore = defineStore('vrkb', () => {
         }
     };
 
+    // VRKB-01: Load project stats
+    const loadProjectStats = async (projectId: string) => {
+        try {
+            projectStats.value = await vrkbApi.getProjectStats(projectId);
+        } catch (e) {
+            console.error('Failed to load project stats', e);
+        }
+    };
+
+    // VRKB-03: Triage Queue actions
+    const loadTriageQueue = async (projectId: string) => {
+        triageLoading.value = true;
+        try {
+            const [unreviewed, duplicates, stale, missingEvidence] = await Promise.all([
+                vrkbApi.getTriageQueue(projectId, 'unreviewed'),
+                vrkbApi.getTriageQueue(projectId, 'duplicates'),
+                vrkbApi.getTriageQueue(projectId, 'stale'),
+                vrkbApi.getTriageQueue(projectId, 'missing_evidence'),
+            ]);
+            triageQueue.value = {
+                unreviewed: unreviewed || [],
+                duplicates: duplicates || [],
+                stale: stale || [],
+                missingEvidence: missingEvidence || [],
+            };
+        } catch (e) {
+            console.error('Failed to load triage queue', e);
+        } finally {
+            triageLoading.value = false;
+        }
+    };
+
+    const triageAccept = async (projectId: string, findingId: string) => {
+        await vrkbApi.acceptFinding(projectId, findingId);
+        await loadTriageQueue(projectId);
+    };
+    const triageReject = async (projectId: string, findingId: string) => {
+        await vrkbApi.rejectFinding(projectId, findingId);
+        await loadTriageQueue(projectId);
+    };
+    const triageMerge = async (projectId: string, findingId: string, canonicalId: string) => {
+        await vrkbApi.mergeFinding(projectId, findingId, canonicalId);
+        await loadTriageQueue(projectId);
+    };
+    const triageRequestEvidence = async (projectId: string, findingId: string) => {
+        await vrkbApi.requestEvidence(projectId, findingId);
+        await loadTriageQueue(projectId);
+    };
+
+    // VRKB-05: Evidence actions
+    const loadEvidence = async (projectId: string, entityType: string, entityId: string) => {
+        try {
+            evidence.value = await vrkbApi.getEvidence(projectId, entityType, entityId);
+        } catch (e) { console.error('Failed to load evidence', e); }
+    };
+    const loadProjectAssets = async (projectId: string) => {
+        try {
+            projectAssets.value = await vrkbApi.listAssets(projectId);
+        } catch (e) { console.error('Failed to load project assets', e); }
+    };
+
     return {
         projects,
         currentProject,
@@ -227,7 +314,25 @@ export const useVrkbStore = defineStore('vrkb', () => {
         hasPermission,
         fetchAuditLogs,
         exportProject,
-        importProject
+        importProject,
+        // VRKB-01
+        projectStats,
+        loadProjectStats,
+        // VRKB-02
+        findingsByStatus,
+        // VRKB-03
+        triageQueue,
+        triageLoading,
+        loadTriageQueue,
+        triageAccept,
+        triageReject,
+        triageMerge,
+        triageRequestEvidence,
+        // VRKB-05/06
+        evidence,
+        projectAssets,
+        loadEvidence,
+        loadProjectAssets
     };
 });
 
