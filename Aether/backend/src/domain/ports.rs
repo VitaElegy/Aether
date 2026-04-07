@@ -440,6 +440,10 @@ pub trait VrkbRepository: Send + Sync {
         &self,
         asset: crate::domain::models::VrkbAsset,
     ) -> Result<Uuid, RepositoryError>;
+    async fn get_asset(
+        &self,
+        id: &Uuid,
+    ) -> Result<Option<crate::domain::models::VrkbAsset>, RepositoryError>;
     async fn get_asset_by_hash(
         &self,
         hash: &str,

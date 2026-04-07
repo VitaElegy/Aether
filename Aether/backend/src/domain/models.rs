@@ -505,6 +505,166 @@ pub struct VrkbSection {
     pub updated_at: DateTime<Utc>,
 }
 
+/// VRKB-02: 7-state Finding lifecycle enum
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FindingStatus {
+    Triage,
+    Confirmed,
+    Exploiting,
+    Fixing,
+    Verifying,
+    Closed,
+    RiskAccepted,
+}
+
+impl FindingStatus {
+    /// Returns true if a transition from self → target is valid per the state machine.
+    pub fn can_transition_to(&self, target: &FindingStatus) -> bool {
+        matches!(
+            (self, target),
+            // From Triage
+            (FindingStatus::Triage, FindingStatus::Confirmed)
+                | (FindingStatus::Triage, FindingStatus::Closed)
+                | (FindingStatus::Triage, FindingStatus::RiskAccepted)
+            // From Confirmed
+                | (FindingStatus::Confirmed, FindingStatus::Exploiting)
+                | (FindingStatus::Confirmed, FindingStatus::Fixing)
+                | (FindingStatus::Confirmed, FindingStatus::Closed)
+                | (FindingStatus::Confirmed, FindingStatus::RiskAccepted)
+            // From Exploiting
+                | (FindingStatus::Exploiting, FindingStatus::Fixing)
+                | (FindingStatus::Exploiting, FindingStatus::Confirmed)
+                | (FindingStatus::Exploiting, FindingStatus::Closed)
+            // From Fixing
+                | (FindingStatus::Fixing, FindingStatus::Verifying)
+                | (FindingStatus::Fixing, FindingStatus::Confirmed)
+            // From Verifying
+                | (FindingStatus::Verifying, FindingStatus::Closed)
+                | (FindingStatus::Verifying, FindingStatus::Fixing)
+                | (FindingStatus::Verifying, FindingStatus::RiskAccepted)
+            // From Closed (reopen)
+                | (FindingStatus::Closed, FindingStatus::Triage)
+            // From RiskAccepted (reopen)
+                | (FindingStatus::RiskAccepted, FindingStatus::Triage)
+        )
+    }
+
+    /// Returns the list of statuses reachable from the current status.
+    pub fn allowed_transitions(&self) -> Vec<FindingStatus> {
+        match self {
+            FindingStatus::Triage => vec![FindingStatus::Confirmed, FindingStatus::Closed, FindingStatus::RiskAccepted],
+            FindingStatus::Confirmed => vec![FindingStatus::Exploiting, FindingStatus::Fixing, FindingStatus::Closed, FindingStatus::RiskAccepted],
+            FindingStatus::Exploiting => vec![FindingStatus::Fixing, FindingStatus::Confirmed, FindingStatus::Closed],
+            FindingStatus::Fixing => vec![FindingStatus::Verifying, FindingStatus::Confirmed],
+            FindingStatus::Verifying => vec![FindingStatus::Closed, FindingStatus::Fixing, FindingStatus::RiskAccepted],
+            FindingStatus::Closed => vec![FindingStatus::Triage],
+            FindingStatus::RiskAccepted => vec![FindingStatus::Triage],
+        }
+    }
+}
+
+impl std::fmt::Display for FindingStatus {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FindingStatus::Triage => write!(f, "triage"),
+            FindingStatus::Confirmed => write!(f, "confirmed"),
+            FindingStatus::Exploiting => write!(f, "exploiting"),
+            FindingStatus::Fixing => write!(f, "fixing"),
+            FindingStatus::Verifying => write!(f, "verifying"),
+            FindingStatus::Closed => write!(f, "closed"),
+            FindingStatus::RiskAccepted => write!(f, "risk_accepted"),
+        }
+    }
+}
+
+impl std::str::FromStr for FindingStatus {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "triage" => Ok(FindingStatus::Triage),
+            "confirmed" => Ok(FindingStatus::Confirmed),
+            "exploiting" => Ok(FindingStatus::Exploiting),
+            "fixing" => Ok(FindingStatus::Fixing),
+            "verifying" => Ok(FindingStatus::Verifying),
+            "closed" => Ok(FindingStatus::Closed),
+            "risk_accepted" => Ok(FindingStatus::RiskAccepted),
+            _ => Err(format!("Unknown finding status: {}", s)),
+        }
+    }
+}
+
+impl Default for FindingStatus {
+    fn default() -> Self {
+        FindingStatus::Triage
+    }
+}
+
+/// VRKB-02: Finding severity levels
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FindingSeverity {
+    Critical,
+    High,
+    Medium,
+    Low,
+    Info,
+}
+
+impl std::fmt::Display for FindingSeverity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FindingSeverity::Critical => write!(f, "critical"),
+            FindingSeverity::High => write!(f, "high"),
+            FindingSeverity::Medium => write!(f, "medium"),
+            FindingSeverity::Low => write!(f, "low"),
+            FindingSeverity::Info => write!(f, "info"),
+        }
+    }
+}
+
+impl std::str::FromStr for FindingSeverity {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "critical" => Ok(FindingSeverity::Critical),
+            "high" => Ok(FindingSeverity::High),
+            "medium" => Ok(FindingSeverity::Medium),
+            "low" => Ok(FindingSeverity::Low),
+            "info" => Ok(FindingSeverity::Info),
+            _ => Err(format!("Unknown severity: {}", s)),
+        }
+    }
+}
+
+/// VRKB-02: Confidence levels for findings
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub enum FindingConfidence {
+    Certain,
+    Firm,
+    Tentative,
+}
+
+impl std::fmt::Display for FindingConfidence {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FindingConfidence::Certain => write!(f, "certain"),
+            FindingConfidence::Firm => write!(f, "firm"),
+            FindingConfidence::Tentative => write!(f, "tentative"),
+        }
+    }
+}
+
+impl std::str::FromStr for FindingConfidence {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s.to_lowercase().as_str() {
+            "certain" => Ok(FindingConfidence::Certain),
+            "firm" => Ok(FindingConfidence::Firm),
+            "tentative" => Ok(FindingConfidence::Tentative),
+            _ => Err(format!("Unknown confidence: {}", s)),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VrkbFinding {
     pub id: Uuid,

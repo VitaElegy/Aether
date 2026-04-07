@@ -289,6 +289,22 @@ export const vrkbApi = {
         const response = await axios.get(`/api/vrkb/projects/${projectId}/triage/stats`, getAuthHeaders());
         return response.data;
     },
+    acceptFinding: async (projectId: string, findingId: string) => {
+        const response = await axios.post(`/api/vrkb/projects/${projectId}/triage/${findingId}/accept`, {}, getAuthHeaders());
+        return response.data;
+    },
+    rejectFinding: async (projectId: string, findingId: string) => {
+        const response = await axios.post(`/api/vrkb/projects/${projectId}/triage/${findingId}/reject`, {}, getAuthHeaders());
+        return response.data;
+    },
+    mergeFinding: async (projectId: string, findingId: string, canonicalId: string) => {
+        const response = await axios.post(`/api/vrkb/projects/${projectId}/triage/${findingId}/merge`, { canonical_id: canonicalId }, getAuthHeaders());
+        return response.data;
+    },
+    requestEvidence: async (projectId: string, findingId: string) => {
+        const response = await axios.post(`/api/vrkb/projects/${projectId}/triage/${findingId}/request-evidence`, {}, getAuthHeaders());
+        return response.data;
+    },
 
     // --- VRKB-04: Checklist System ---
     getChecklist: async (sectionId: string) => {

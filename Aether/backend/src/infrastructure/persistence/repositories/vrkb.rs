@@ -422,6 +422,22 @@ impl VrkbRepository for PostgresRepository {
         Ok(asset_data.id)
     }
 
+    async fn get_asset(&self, id: &Uuid) -> Result<Option<VrkbAsset>, RepositoryError> {
+        let model = asset::Entity::find_by_id(*id)
+            .one(&self.db)
+            .await
+            .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
+
+        Ok(model.map(|m| VrkbAsset {
+            id: m.id,
+            hash: m.hash,
+            storage_path: m.storage_path,
+            mime_type: m.mime_type,
+            size_bytes: m.size_bytes,
+            created_at: m.created_at.with_timezone(&Utc),
+        }))
+    }
+
     async fn get_asset_by_hash(&self, hash: &str) -> Result<Option<VrkbAsset>, RepositoryError> {
         let model = asset::Entity::find()
             .filter(asset::Column::Hash.eq(hash))

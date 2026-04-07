@@ -73,14 +73,14 @@ impl AssetStorageService {
         // 1. Fetch asset record
         let asset = self
             .repo
-            .get_asset(asset_id)
+            .get_asset(&asset_id)
             .await
             .map_err(|e| e.to_string())?
             .ok_or_else(|| "Asset not found".to_string())?;
 
         // 2. Delete DB record
         self.repo
-            .delete_asset(asset_id)
+            .delete_asset(&asset_id)
             .await
             .map_err(|e| e.to_string())?;
 

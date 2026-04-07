@@ -238,7 +238,7 @@ async fn delete_finding(
 
 // Valid states for the 7-state lifecycle
 const VALID_STATUSES: &[&str] = &["triage", "confirmed", "exploiting", "fixing", "verifying", "closed", "risk_accepted"];
-const VALID_SEVERITIES: &[&str] = &["low", "medium", "high", "critical"];
+const VALID_SEVERITIES: &[&str] = &["low", "medium", "high", "critical", "info"];
 const VALID_CONFIDENCES: &[&str] = &["certain", "firm", "tentative"];
 
 async fn update_finding_status(
