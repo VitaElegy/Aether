@@ -143,6 +143,7 @@ pub struct Collection {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct CollectionItem {
     pub collection_id: Uuid,
     pub paper_id: Uuid,
@@ -152,6 +153,7 @@ pub struct CollectionItem {
 
 // --- PRKB-08: Portability ---
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ImportResult {
     pub imported: usize,
     pub duplicates: usize,
@@ -160,6 +162,7 @@ pub struct ImportResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct ExportOptions {
     pub format: String, // "bibtex", "json", "markdown", "collection_bundle"
     pub collection_id: Option<Uuid>,

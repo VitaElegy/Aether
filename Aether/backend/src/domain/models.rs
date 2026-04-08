@@ -14,6 +14,7 @@ pub enum NodeType {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(untagged)]
+#[allow(clippy::large_enum_variant)]
 pub enum ContentItem {
     Article(Article),
     Node(Node),
@@ -51,8 +52,10 @@ pub struct Node {
 /// Article analysis status for the English workspace state machine.
 /// Transitions: Pending → Analyzing → Analyzed | Failed → Archived
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 pub enum AnalysisStatus {
     /// Article is in inbox, not yet analyzed
+    #[default]
     Pending,
     /// Analysis is in progress (NLP pipeline running)
     Analyzing,
@@ -81,11 +84,6 @@ impl AnalysisStatus {
     }
 }
 
-impl Default for AnalysisStatus {
-    fn default() -> Self {
-        AnalysisStatus::Pending
-    }
-}
 
 impl std::fmt::Display for AnalysisStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -144,6 +142,7 @@ pub struct Article {
 
 /// CEFR-aligned proficiency level for vocabulary items
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 pub enum VocabularyLevel {
     A1,
     A2,
@@ -151,14 +150,10 @@ pub enum VocabularyLevel {
     B2,
     C1,
     C2,
+    #[default]
     Unknown,
 }
 
-impl Default for VocabularyLevel {
-    fn default() -> Self {
-        VocabularyLevel::Unknown
-    }
-}
 
 impl std::fmt::Display for VocabularyLevel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -176,8 +171,10 @@ impl std::fmt::Display for VocabularyLevel {
 
 /// Mastery status tracking for spaced repetition
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Default)]
 pub enum MasteryStatus {
     /// First seen, never reviewed
+    #[default]
     New,
     /// Seen a few times, still learning
     Learning,
@@ -187,11 +184,6 @@ pub enum MasteryStatus {
     Mastered,
 }
 
-impl Default for MasteryStatus {
-    fn default() -> Self {
-        MasteryStatus::New
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct VocabularyExample {
@@ -265,6 +257,7 @@ pub struct LinkedEntity {
 
 // --- Memo Reference (MEMO-05: mention / backlink) ---
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct MemoReference {
     pub source_id: Uuid,
     pub target_id: Uuid,
@@ -507,7 +500,10 @@ pub struct VrkbSection {
 
 /// VRKB-02: 7-state Finding lifecycle enum
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
+#[derive(Default)]
 pub enum FindingStatus {
+    #[default]
     Triage,
     Confirmed,
     Exploiting,
@@ -517,6 +513,7 @@ pub enum FindingStatus {
     RiskAccepted,
 }
 
+#[allow(dead_code)]
 impl FindingStatus {
     /// Returns true if a transition from self → target is valid per the state machine.
     pub fn can_transition_to(&self, target: &FindingStatus) -> bool {
@@ -593,14 +590,10 @@ impl std::str::FromStr for FindingStatus {
     }
 }
 
-impl Default for FindingStatus {
-    fn default() -> Self {
-        FindingStatus::Triage
-    }
-}
 
 /// VRKB-02: Finding severity levels
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum FindingSeverity {
     Critical,
     High,
@@ -637,6 +630,7 @@ impl std::str::FromStr for FindingSeverity {
 
 /// VRKB-02: Confidence levels for findings
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum FindingConfidence {
     Certain,
     Firm,
@@ -809,6 +803,7 @@ pub struct VrkbHeatmapItem {
 
 /// Evidence type enum for type-safe evidence classification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[allow(dead_code)]
 pub enum VrkbEvidenceType {
     Screenshot,
     RequestResponse,

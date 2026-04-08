@@ -6,7 +6,6 @@ use axum::{
 use serde_json::Value;
 
 use crate::{
-    domain::dtos::user::UserSettingsDto,
     infrastructure::persistence::repositories::settings::SettingsRepository,
     interface::{api::auth::AuthenticatedUser, state::AppState},
 };

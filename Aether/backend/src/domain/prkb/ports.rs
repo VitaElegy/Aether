@@ -1,5 +1,5 @@
 use crate::domain::ports::RepositoryError;
-use crate::domain::prkb::models::{Collection, CollectionItem, Feed, InboxItem, Paper, Venue};
+use crate::domain::prkb::models::{Collection, Feed, InboxItem, Paper, Venue};
 use async_trait::async_trait;
 use uuid::Uuid;
 

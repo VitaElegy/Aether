@@ -227,6 +227,7 @@ where
     }
 
     // Keep the original check_relation for backward compat in internal callers
+    #[allow(dead_code)]
     #[async_recursion]
     async fn check_relation(
         &self,

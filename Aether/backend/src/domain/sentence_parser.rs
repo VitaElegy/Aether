@@ -226,6 +226,7 @@ impl SentenceParser {
     }
 
     /// Get unresolved sentences that need manual rebinding
+    #[allow(dead_code)]
     pub fn get_unresolved(map: &SentenceMap) -> Vec<&SentenceData> {
         map.map
             .values()

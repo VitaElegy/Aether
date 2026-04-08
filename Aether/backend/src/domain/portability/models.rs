@@ -64,6 +64,7 @@ pub struct SuggestedAction {
 
 /// PLAT-04: Completed task entry with download token and expiry
 #[derive(Debug, Clone)]
+#[allow(dead_code)]
 pub struct CompletedTaskEntry {
     pub file_path: std::path::PathBuf,
     pub download_token: String,

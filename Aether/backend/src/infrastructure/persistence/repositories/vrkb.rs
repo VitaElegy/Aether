@@ -844,7 +844,7 @@ impl VrkbRepository for PostgresRepository {
             VrkbScopeSummary, VrkbTimelineEntry,
         };
         use crate::infrastructure::persistence::entities::vrkb::{
-            checklist_item, doc, evidence, finding, member, project_asset,
+            checklist_item, doc, finding, member, project_asset,
         };
 
         // 1. Fetch all findings (joined with sections to filter by project)

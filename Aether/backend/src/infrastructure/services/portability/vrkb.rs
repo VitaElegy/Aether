@@ -4,7 +4,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
-use crate::domain::models::{VrkbDoc, VrkbFinding, VrkbMember, VrkbProject};
+use crate::domain::models::{VrkbDoc, VrkbFinding, VrkbProject};
 use crate::domain::portability::models::{
     ExportSection, ExportSummary, ImportSection, ImportSummary, ProgressEvent,
 };

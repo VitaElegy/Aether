@@ -3,6 +3,7 @@ use serde_json::Value; // JSON types
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
+#[allow(dead_code)]
 pub struct UserSettingsDto {
     pub user_id: Uuid,
     pub module_key: String,

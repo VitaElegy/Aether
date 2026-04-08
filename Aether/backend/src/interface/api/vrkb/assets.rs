@@ -163,7 +163,7 @@ async fn unlink_asset(
 // --- VRKB-06: Reverse lookup asset usage ---
 
 async fn get_asset_usage(
-    State(state): State<AppState>,
+    State(_state): State<AppState>,
     _user: AuthenticatedUser,
     Path(asset_id): Path<Uuid>,
 ) -> Result<Json<Vec<AssetUsage>>, (StatusCode, String)> {

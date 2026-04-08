@@ -81,6 +81,7 @@ pub struct BulkDeleteRequest {
 }
 
 #[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct MergeMemoRequest {
     pub source_ids: Vec<Uuid>,   // Memos to merge
     pub target_id: Option<Uuid>, // Merge into existing; if None, create new
@@ -116,6 +117,7 @@ pub struct ExportRequest {
 }
 
 #[derive(serde::Deserialize, Debug)]
+#[allow(dead_code)]
 pub struct ImportRequest {
     pub memos: Vec<ImportMemoItem>,
     pub merge_tags: Option<bool>,
@@ -1026,7 +1028,7 @@ pub async fn update_workflow_handler(
 // ──────────────────────────────────────────────
 
 pub fn router() -> axum::Router<AppState> {
-    use axum::routing::{delete, get, post, put};
+    use axum::routing::{delete, get, post};
     axum::Router::new()
         .route(
             "/api/memos",

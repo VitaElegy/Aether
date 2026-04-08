@@ -517,8 +517,8 @@ fn content_item_updated_at(item: &ContentItem) -> chrono::DateTime<chrono::Utc> 
     }
 }
 
-fn extract_asset_reference_context<'a>(
-    article: &'a Article,
+fn extract_asset_reference_context(
+    article: &Article,
     asset_marker: &str,
     embed_marker: &str,
 ) -> Option<(&'static str, String)> {

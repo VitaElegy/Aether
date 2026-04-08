@@ -6,7 +6,7 @@ use crate::interface::api::{
 use crate::interface::state::AppState;
 use axum::http::{HeaderValue, Method};
 use axum::Router;
-use tower_http::cors::{Any, CorsLayer};
+use tower_http::cors::CorsLayer;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;

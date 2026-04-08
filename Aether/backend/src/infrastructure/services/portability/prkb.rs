@@ -74,7 +74,7 @@ impl PortabilityProvider for PrkbPortabilityProvider {
 
     async fn export(
         &self,
-        _kb_id: Uuid,
+        kb_id: Uuid,
         _user_id: Uuid,
         task_id: Uuid,
         progress: Sender<ProgressEvent>,
@@ -151,7 +151,7 @@ impl PortabilityProvider for PrkbPortabilityProvider {
         let _ = progress
             .send(ProgressEvent {
                 task_id,
-                stage: "Complete".to_string(),
+                stage: "Finalizing".to_string(),
                 percent: 99,
                 message: "Export ready".to_string(),
                 error: None,
@@ -212,7 +212,7 @@ impl PortabilityProvider for PrkbPortabilityProvider {
         let _ = progress
             .send(ProgressEvent {
                 task_id,
-                stage: "Complete".to_string(),
+                stage: "Finalizing".to_string(),
                 percent: 99,
                 message: "Import complete".to_string(),
                 error: None,

@@ -183,6 +183,7 @@ async fn analyze_import(
 
 /// PLAT-04: Start import request body
 #[derive(Debug, Deserialize)]
+#[allow(dead_code)]
 struct StartImportRequest {
     file_path: Option<String>,
     merge_strategy: Option<String>,

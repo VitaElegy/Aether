@@ -20,6 +20,7 @@ pub enum EnglishCapability {
 
 /// Describes a tab mode contract for the English shell.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 pub struct EnglishTabMode {
     pub id: &'static str,
     pub label: &'static str,
@@ -29,6 +30,7 @@ pub struct EnglishTabMode {
 
 /// Shell launch rules: how to open the English module from different contexts.
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
+#[allow(dead_code)]
 pub struct EnglishShellLaunchRule {
     pub source: &'static str,
     pub target_tab: &'static str,
@@ -36,6 +38,7 @@ pub struct EnglishShellLaunchRule {
 }
 
 /// The canonical capability map for the English module.
+#[allow(dead_code)]
 pub fn english_capability_map() -> Vec<EnglishTabMode> {
     vec![
         EnglishTabMode {
@@ -66,6 +69,7 @@ pub fn english_capability_map() -> Vec<EnglishTabMode> {
 }
 
 /// Shell launch rules define how external contexts open the English module.
+#[allow(dead_code)]
 pub fn english_shell_launch_rules() -> Vec<EnglishShellLaunchRule> {
     vec![
         EnglishShellLaunchRule {
@@ -92,6 +96,7 @@ pub fn english_shell_launch_rules() -> Vec<EnglishShellLaunchRule> {
 }
 
 /// Returns true if the given renderer_id resolves to any English identity.
+#[allow(dead_code)]
 pub fn is_english_renderer(renderer_id: Option<&str>) -> bool {
     normalize_renderer_id(renderer_id).as_deref() == Some(ENGLISH_RENDERER_ID)
 }

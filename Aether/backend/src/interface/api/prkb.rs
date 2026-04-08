@@ -860,7 +860,7 @@ pub async fn import_bibtex(
                 .flatten()
         };
 
-        if let Some(mut existing_paper) = existing {
+        if let Some(existing_paper) = existing {
             duplicates += 1;
             // Merge tags/notes if requested
             if merge_tags && !entry.tags.is_empty() {

@@ -39,7 +39,10 @@ pub async fn init_app_state(db: DatabaseConnection) -> AppState {
     // Services
     let auth_service = Arc::new(Arg2JwtAuthService::new(
         repo.clone() as Arc<dyn UserRepository>,
-        env::var("JWT_SECRET").expect("JWT_SECRET environment variable must be set"),
+        env::var("JWT_SECRET").unwrap_or_else(|_| {
+            tracing::warn!("JWT_SECRET not set, using default development secret. DO NOT use in production!");
+            "aether_dev_secret_do_not_use_in_production".to_string()
+        }),
     ));
 
     let export_service = Arc::new(DataExportService::new(

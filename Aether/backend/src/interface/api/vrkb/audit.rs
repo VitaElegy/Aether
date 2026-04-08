@@ -2,7 +2,7 @@ use crate::interface::api::auth::AuthenticatedUser;
 use crate::interface::state::AppState;
 use axum::http::StatusCode;
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query},
     routing::{get, post},
     Json, Router,
 };

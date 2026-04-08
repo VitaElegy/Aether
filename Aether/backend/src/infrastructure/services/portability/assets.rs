@@ -68,7 +68,7 @@ struct PermissionHint {
 
 pub struct AssetsPortabilityProvider {
     article_repo: Arc<dyn ArticleRepository>,
-    kb_repo: Arc<dyn KnowledgeBaseRepository>,
+    _kb_repo: Arc<dyn KnowledgeBaseRepository>,
     _node_repo: Arc<dyn NodeRepository>,
     storage_root: PathBuf,
 }
@@ -82,7 +82,7 @@ impl AssetsPortabilityProvider {
     ) -> Self {
         Self {
             article_repo,
-            kb_repo,
+            _kb_repo: kb_repo,
             _node_repo: node_repo,
             storage_root: PathBuf::from(storage_root),
         }

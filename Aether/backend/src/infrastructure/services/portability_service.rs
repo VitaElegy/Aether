@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 
 use crate::domain::portability::models::{
     CompletedTaskEntry, ExportSummary, ImportPreview, ImportConflict as DomainImportConflict,
-    ImportSummary, ProgressEvent, SuggestedAction,
+    ProgressEvent, SuggestedAction,
 };
 use crate::domain::portability::ports::PortabilityProvider;
 use chrono::Utc;
