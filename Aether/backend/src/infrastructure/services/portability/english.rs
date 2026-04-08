@@ -7,7 +7,7 @@ use std::sync::Arc;
 use tokio::sync::mpsc::Sender;
 use uuid::Uuid;
 
-use crate::domain::models::{ContentBody, ContentItem, UserId, Vocabulary, VocabularyExample};
+use crate::domain::models::{ContentBody, ContentItem, UserId, Vocabulary};
 use crate::domain::portability::models::{
     ExportSection, ExportSummary, ImportSection, ImportSummary, ProgressEvent,
 };
@@ -388,7 +388,7 @@ impl PortabilityProvider for EnglishPortabilityProvider {
         zip.start_file("vocabulary.csv", options)
             .map_err(|e| e.to_string())?;
         let mut wtr = Writer::from_writer(Vec::new());
-        wtr.write_record(&[
+        wtr.write_record([
             "word",
             "lemma",
             "definition",
@@ -407,7 +407,7 @@ impl PortabilityProvider for EnglishPortabilityProvider {
 
         for (i, v) in vocab_list.iter().enumerate() {
             let row = Self::vocab_to_csv_row(v);
-            wtr.write_record(&[
+            wtr.write_record([
                 &row.word,
                 &row.lemma,
                 &row.definition,
@@ -513,7 +513,7 @@ impl PortabilityProvider for EnglishPortabilityProvider {
                     article.node.created_at.to_rfc3339(),
                     body
                 );
-                zip.start_file(&format!("content/{}.md", safe_title), options)
+                zip.start_file(format!("content/{}.md", safe_title), options)
                     .map_err(|e| e.to_string())?;
                 zip.write_all(content.as_bytes())
                     .map_err(|e| e.to_string())?;
@@ -523,7 +523,7 @@ impl PortabilityProvider for EnglishPortabilityProvider {
                     let analysis_json =
                         serde_json::to_string_pretty(derived).map_err(|e| e.to_string())?;
                     zip.start_file(
-                        &format!("analysis/{}_analysis.json", safe_title),
+                        format!("analysis/{}_analysis.json", safe_title),
                         options,
                     )
                     .map_err(|e| e.to_string())?;
@@ -633,7 +633,7 @@ impl PortabilityProvider for EnglishPortabilityProvider {
 
     async fn import(
         &self,
-        kb_id: Uuid,
+        _kb_id: Uuid,
         file_path: PathBuf,
         task_id: Uuid,
         progress: Sender<ProgressEvent>,

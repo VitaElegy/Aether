@@ -73,6 +73,7 @@ impl MathService {
         node
     }
 
+    #[allow(clippy::too_many_arguments)]
     pub fn update_node(
         &self,
         kb_id: Uuid,

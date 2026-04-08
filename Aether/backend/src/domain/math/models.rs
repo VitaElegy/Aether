@@ -98,17 +98,14 @@ impl MathRelationType {
 /// Status of a proof node.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum ProofStatus {
     Complete,
+    #[default]
     Incomplete,
     Sketch,
 }
 
-impl Default for ProofStatus {
-    fn default() -> Self {
-        Self::Incomplete
-    }
-}
 
 /// A formal math node (theorem, lemma, definition, etc.)
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -241,8 +238,11 @@ pub struct WorkspaceResult {
 /// The three workspace modes for a math knowledge base.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[allow(dead_code)]
+#[derive(Default)]
 pub enum MathWorkspaceMode {
     /// Writing mode: create and edit mathematical content
+    #[default]
     Manuscript,
     /// Reading/archive mode: browse and search existing content
     Archive,
@@ -250,11 +250,6 @@ pub enum MathWorkspaceMode {
     Workspace,
 }
 
-impl Default for MathWorkspaceMode {
-    fn default() -> Self {
-        Self::Manuscript
-    }
-}
 
 // ── MATH-05: Reference Validation ───────────────────────────────────────
 
@@ -306,20 +301,17 @@ pub enum MathExportFormat {
 /// Import conflict handling strategy.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
+#[derive(Default)]
 pub enum LabelCollisionStrategy {
     /// Skip nodes with colliding labels
     Skip,
     /// Rename incoming labels with a suffix
+    #[default]
     Rename,
     /// Overwrite existing nodes
     Overwrite,
 }
 
-impl Default for LabelCollisionStrategy {
-    fn default() -> Self {
-        Self::Rename
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MathExportResult {
@@ -330,6 +322,7 @@ pub struct MathExportResult {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct MathImportRequest {
     pub content: String,
     pub collision_strategy: LabelCollisionStrategy,

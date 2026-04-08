@@ -71,7 +71,7 @@ impl KnowledgeBaseRepository for PostgresRepository {
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        Ok(result.map(|m| map_to_domain(m)))
+        Ok(result.map(map_to_domain))
     }
 
     async fn find_by_title(
@@ -86,7 +86,7 @@ impl KnowledgeBaseRepository for PostgresRepository {
             .await
             .map_err(|e| RepositoryError::ConnectionError(e.to_string()))?;
 
-        Ok(result.map(|m| map_to_domain(m)))
+        Ok(result.map(map_to_domain))
     }
 
     async fn list(

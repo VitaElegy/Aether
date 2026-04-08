@@ -164,9 +164,7 @@ pub fn export_latex_package(graph: &MathGraph) -> MathExportResult {
     tex.push_str("\\newtheorem{remark}[theorem]{Remark}\n\n");
 
     tex.push_str("\\begin{document}\n\n");
-    tex.push_str(&format!(
-        "\\title{{Mathematical Knowledge Base}}\n\\date{{\\today}}\n\\maketitle\n\n"
-    ));
+    tex.push_str("\\title{Mathematical Knowledge Base}\n\\date{\\today}\n\\maketitle\n\n");
 
     let type_env_map: HashMap<MathNodeType, &str> = [
         (MathNodeType::Theorem, "theorem"),

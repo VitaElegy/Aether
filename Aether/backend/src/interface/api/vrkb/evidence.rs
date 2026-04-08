@@ -6,7 +6,7 @@ use crate::interface::state::AppState;
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    routing::{get, post, delete as axum_delete},
+    routing::get,
     Json, Router,
 };
 use chrono::{DateTime, Utc};
@@ -15,6 +15,7 @@ use uuid::Uuid;
 
 /// Evidence type classification
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[allow(dead_code)]
 pub enum EvidenceType {
     Screenshot,
     RequestResponse,
@@ -88,8 +89,8 @@ async fn list_evidence(
     let items = store.get(&project_id).cloned().unwrap_or_default();
 
     let filtered: Vec<Evidence> = items.into_iter().filter(|e| {
-        let type_match = query.attached_to_type.as_ref().map_or(true, |t| &e.attached_to_type == t);
-        let id_match = query.attached_to_id.map_or(true, |id| e.attached_to_id == id);
+        let type_match = query.attached_to_type.as_ref().is_none_or(|t| &e.attached_to_type == t);
+        let id_match = query.attached_to_id.is_none_or(|id| e.attached_to_id == id);
         type_match && id_match
     }).collect();
 
@@ -119,7 +120,7 @@ async fn create_evidence(
     };
 
     let mut store = evidence_store().write().unwrap();
-    store.entry(project_id).or_insert_with(Vec::new).push(evidence.clone());
+    store.entry(project_id).or_default().push(evidence.clone());
     Ok(Json(evidence))
 }
 

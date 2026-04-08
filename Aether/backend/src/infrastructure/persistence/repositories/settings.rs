@@ -1,4 +1,3 @@
-use crate::domain::dtos::user::UserSettingsDto;
 use crate::infrastructure::persistence::entities::user_module_settings;
 use crate::infrastructure::persistence::entities::user_module_settings::Entity as UserModuleSettings;
 use sea_orm::*;
@@ -48,7 +47,6 @@ impl SettingsRepository {
                     module_key: Set(module_key.to_string()),
                     settings: Set(settings.clone()),
                     updated_at: Set(chrono::Utc::now()),
-                    ..Default::default()
                 };
                 let inserted = active.insert(db).await?;
                 Ok(inserted.settings)

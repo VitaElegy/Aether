@@ -28,7 +28,7 @@ impl CommentRepository for PostgresRepository {
 
     async fn get_comments(&self, target_id: &Uuid) -> Result<Vec<Comment>, RepositoryError> {
         let comments = comment::Entity::find()
-            .filter(comment::Column::TargetId.eq(target_id.clone()))
+            .filter(comment::Column::TargetId.eq(*target_id))
             .find_also_related(user::Entity)
             .all(&self.db)
             .await

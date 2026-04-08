@@ -1,6 +1,6 @@
-/**
+/*!
  * PLAT-06: Observability Foundation
- * 
+ *
  * Domain types for audit events, task telemetry, and error boundary events.
  * Provides structured observability for all Special KBs.
  */

@@ -55,10 +55,9 @@ pub async fn run_migrations(db: &DatabaseConnection) {
         .expect("Failed to read migrations directory")
         .filter_map(|entry| entry.ok())
         .map(|entry| entry.path())
-        .filter(|path| path.extension().map_or(false, |ext| ext == "sql"))
+        .filter(|path| path.extension().is_some_and(|ext| ext == "sql"))
         .collect();
 
-    // Sort to ensure order (e.g., 000_..., 001_...)
     paths.sort();
 
     for path in paths {
@@ -67,12 +66,23 @@ pub async fn run_migrations(db: &DatabaseConnection) {
 
         match std::fs::read_to_string(&path) {
             Ok(sql) => {
-                // Execute the raw SQL.
-                // Note: execute_unprepared handles multiple statements for SQLite/Postgres in SQLx usually.
-                if let Err(e) = db.execute_unprepared(&sql).await {
-                    tracing::error!("Migration failed for {}: {}", filename, e);
-                    // We continue, as some statements might be "IF NOT EXISTS" or fail harmlessly
-                    // (like specific ALTERs in dev). In production, this should likely panic or be transactional.
+                // Execute each statement independently for resilience.
+                let statements: Vec<&str> = sql
+                    .split(';')
+                    .map(|s| s.trim())
+                    .filter(|s| !s.is_empty() && !s.starts_with("--"))
+                    .collect();
+
+                let mut errors = 0u32;
+                for stmt in &statements {
+                    let exec_sql = format!("{};", stmt);
+                    if let Err(e) = db.execute_unprepared(&exec_sql).await {
+                        tracing::warn!("  [skip] {}: {}", filename, e);
+                        errors += 1;
+                    }
+                }
+                if errors > 0 {
+                    tracing::warn!("  {} had {} non-fatal statement error(s)", filename, errors);
                 }
             }
             Err(e) => tracing::error!("Failed to read file {}: {}", filename, e),

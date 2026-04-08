@@ -121,8 +121,8 @@ impl PrkbRepository for PostgresRepository {
             url: Set(feed.url),
             feed_type: Set(feed.feed_type),
             enabled: Set(feed.enabled),
-            last_fetched_at: Set(feed.last_fetched_at.map(|t| t.into())),
-            created_at: Set(feed.created_at.into()),
+            last_fetched_at: Set(feed.last_fetched_at),
+            created_at: Set(feed.created_at),
             health_status: Set("unknown".to_string()),
             total_fetched: Set(0),
             parse_errors: Set(0),
@@ -167,7 +167,7 @@ impl PrkbRepository for PostgresRepository {
     ) -> Result<(), RepositoryError> {
         let model = prkb_feeds::ActiveModel {
             id: Set(id),
-            last_fetched_at: Set(Some(time.into())),
+            last_fetched_at: Set(Some(time)),
             ..Default::default()
         };
         prkb_feeds::Entity::update(model)
@@ -249,10 +249,10 @@ impl PrkbRepository for PostgresRepository {
                 abstract_text: Set(item.abstract_text),
                 url: Set(item.url),
                 pdf_url: Set(item.pdf_url),
-                publish_date: Set(item.publish_date.into()),
+                publish_date: Set(item.publish_date),
                 is_read: Set(item.is_read),
                 is_saved: Set(item.is_saved),
-                fetched_at: Set(item.fetched_at.into()),
+                fetched_at: Set(item.fetched_at),
                 publication: Set(item.publication),
                 state: Set(item.state),
                 priority: Set(item.priority),
@@ -454,7 +454,7 @@ impl PrkbRepository for PostgresRepository {
                 id: Set(venue.id),
                 name: Set(venue.name),
                 tier: Set(venue.tier),
-                created_at: Set(Utc::now().into()),
+                created_at: Set(Utc::now()),
             };
             let _ = prkb_venues::Entity::insert(v_model)
                 .on_conflict(
@@ -476,9 +476,9 @@ impl PrkbRepository for PostgresRepository {
             url: Set(paper.url),
             pdf_url: Set(paper.pdf_url),
             pdf_local_path: Set(paper.pdf_local_path),
-            publish_date: Set(paper.publish_date.into()),
+            publish_date: Set(paper.publish_date),
             source: Set(paper.source),
-            saved_at: Set(paper.saved_at.into()),
+            saved_at: Set(paper.saved_at),
             is_read: Set(paper.is_read),
             state: Set(paper.state),
             tags: Set(serde_json::to_value(paper.tags).unwrap_or(serde_json::json!([]))),
@@ -515,7 +515,7 @@ impl PrkbRepository for PostgresRepository {
                 canonical_name: Set(author.canonical_name),
                 profile_url: Set(author.profile_url),
                 aliases: Set(serde_json::json!([])),
-                created_at: Set(Utc::now().into()),
+                created_at: Set(Utc::now()),
             };
             let _ = prkb_authors::Entity::insert(a_model)
                 .on_conflict(
@@ -550,7 +550,7 @@ impl PrkbRepository for PostgresRepository {
                 citation_count: Set(signals.citation_count),
                 github_stars: Set(signals.github_stars),
                 sota_rank: Set(signals.sota_rank),
-                last_updated: Set(signals.last_updated.into()),
+                last_updated: Set(signals.last_updated),
                 feed_freshness: Set(signals.feed_freshness),
                 venue_tier: Set(signals.venue_tier),
                 author_recurrence: Set(signals.author_recurrence),
@@ -898,8 +898,8 @@ impl PrkbRepository for PostgresRepository {
             name: Set(collection.name),
             collection_type: Set(collection.collection_type),
             description: Set(collection.description),
-            created_at: Set(collection.created_at.into()),
-            updated_at: Set(collection.updated_at.into()),
+            created_at: Set(collection.created_at),
+            updated_at: Set(collection.updated_at),
         };
         prkb_collections::Entity::insert(model)
             .exec(&self.db)
@@ -971,7 +971,7 @@ impl PrkbRepository for PostgresRepository {
             id: Set(id),
             name: Set(name),
             description: Set(description),
-            updated_at: Set(Utc::now().into()),
+            updated_at: Set(Utc::now()),
             ..Default::default()
         };
         prkb_collections::Entity::update(model)
@@ -1003,7 +1003,7 @@ impl PrkbRepository for PostgresRepository {
         let model = prkb_collection_items::ActiveModel {
             collection_id: Set(collection_id),
             paper_id: Set(paper_id),
-            added_at: Set(Utc::now().into()),
+            added_at: Set(Utc::now()),
             sort_order: Set(count as i32),
         };
         let _ = prkb_collection_items::Entity::insert(model)
@@ -1058,7 +1058,7 @@ impl PrkbRepository for PostgresRepository {
             citation_count: Set(signals.citation_count),
             github_stars: Set(signals.github_stars),
             sota_rank: Set(signals.sota_rank),
-            last_updated: Set(Utc::now().into()),
+            last_updated: Set(Utc::now()),
             feed_freshness: Set(signals.feed_freshness),
             venue_tier: Set(signals.venue_tier),
             author_recurrence: Set(signals.author_recurrence),

@@ -56,7 +56,7 @@ impl ArxivService {
             let publish_date = entry
                 .published
                 .or(entry.updated)
-                .unwrap_or_else(|| Utc::now());
+                .unwrap_or_else(Utc::now);
 
             let title = entry
                 .title

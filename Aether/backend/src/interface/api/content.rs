@@ -543,7 +543,7 @@ pub async fn list_content_handler(
                                     a.node.title = d_title.clone();
                                     // a.title = d_title.clone(); // Article struct relies on Node title, but let's check definition.
                                     // If 'title' on Article struct doesn't exist, we skip.
-                                    a.node.updated_at = (*d_updated).into();
+                                    a.node.updated_at = *d_updated;
 
                                     // Overlay Body for Excerpt generation
                                     let draft_body_str = d_body.to_string();

@@ -50,7 +50,7 @@ async fn main() {
 
     let listener = TcpListener::bind(&addr)
         .await
-        .expect(&format!("Failed to bind port {}", port));
+        .unwrap_or_else(|_| panic!("Failed to bind port {}", port));
     tracing::info!("Aether Core online at {} (Refactored)", addr);
     axum::serve(listener, app).await.unwrap();
 }

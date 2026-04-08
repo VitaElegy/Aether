@@ -18,6 +18,7 @@ pub struct GitCommit {
 }
 
 #[derive(Serialize, Deserialize)]
+#[allow(dead_code)]
 pub struct UpdateSettingDto {
     pub value: Value,
 }
@@ -57,7 +58,7 @@ pub async fn update_setting_handler(
 
 pub async fn get_git_log_handler(_auth: AuthenticatedUser) -> impl IntoResponse {
     let output = Command::new("git")
-        .args(&[
+        .args([
             "log",
             "--pretty=format:%H|%h|%an|%ad|%s",
             "-n",

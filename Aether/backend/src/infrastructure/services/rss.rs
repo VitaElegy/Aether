@@ -65,7 +65,7 @@ impl RssService {
             let publish_date = entry
                 .published
                 .or(entry.updated)
-                .unwrap_or_else(|| Utc::now());
+                .unwrap_or_else(Utc::now);
 
             items.push(InboxItem {
                 publication: None,

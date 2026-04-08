@@ -102,6 +102,7 @@ pub trait ArticleRepository: Send + Sync {
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<ContentItem>, RepositoryError>;
     async fn find_by_title(&self, title: &str) -> Result<Option<Article>, RepositoryError>;
     async fn find_by_slug(&self, slug: &str) -> Result<Option<Article>, RepositoryError>;
+    #[allow(clippy::too_many_arguments)]
     async fn list(
         &self,
         viewer_id: Option<UserId>,
@@ -154,6 +155,7 @@ pub trait ArticleRepository: Send + Sync {
 }
 
 #[async_trait]
+#[allow(clippy::too_many_arguments)]
 pub trait VocabularyRepository: Send + Sync {
     async fn save(&self, vocab: Vocabulary) -> Result<Uuid, RepositoryError>;
     async fn find_by_word(
@@ -162,6 +164,7 @@ pub trait VocabularyRepository: Send + Sync {
         word: &str,
     ) -> Result<Option<Vocabulary>, RepositoryError>;
     async fn find_by_id(&self, id: &Uuid) -> Result<Option<Vocabulary>, RepositoryError>;
+    #[allow(clippy::too_many_arguments)]
     async fn list(
         &self,
         user_id: &UserId,
@@ -406,6 +409,7 @@ pub trait VrkbRepository: Send + Sync {
     ) -> Result<Vec<crate::domain::models::VrkbFinding>, RepositoryError>;
     async fn update_finding_status(&self, id: &Uuid, status: String)
         -> Result<(), RepositoryError>;
+    #[allow(clippy::too_many_arguments)]
     async fn update_finding(
         &self,
         id: &Uuid,

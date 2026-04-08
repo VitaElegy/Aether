@@ -6,7 +6,7 @@ use crate::interface::state::AppState;
 use axum::{
     extract::{Path, State},
     http::StatusCode,
-    routing::{get, post, put},
+    routing::{get, put},
     Json, Router,
 };
 use chrono::{DateTime, Utc};
@@ -96,7 +96,7 @@ async fn create_checklist_item(
         updated_at: now,
     };
     let mut store = checklist_store().write().unwrap();
-    store.entry(section_id).or_insert_with(Vec::new).push(item.clone());
+    store.entry(section_id).or_default().push(item.clone());
     Ok(Json(item))
 }
 
@@ -107,7 +107,7 @@ async fn update_checklist_item(
     Json(payload): Json<UpdateChecklistItemRequest>,
 ) -> Result<Json<ChecklistItem>, StatusCode> {
     let mut store = checklist_store().write().unwrap();
-    let items = store.entry(section_id).or_insert_with(Vec::new);
+    let items = store.entry(section_id).or_default();
     let item = items.iter_mut().find(|i| i.id == item_id).ok_or(StatusCode::NOT_FOUND)?;
 
     if let Some(title) = payload.title { item.title = title; }

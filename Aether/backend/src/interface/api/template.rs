@@ -92,7 +92,7 @@ async fn update_template(
     }
 
     let template = LayoutTemplate {
-        id: id,
+        id,
         renderer_id: normalize_renderer_id(Some(payload.renderer_id.as_str()))
             .unwrap_or(payload.renderer_id),
         title: payload.title,

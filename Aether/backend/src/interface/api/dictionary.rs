@@ -91,7 +91,7 @@ async fn lookup_word(
         for i in 1..10 {
             cleaned = cleaned.replace(&format!(" {} ", i), &format!("\n{}. ", i));
         }
-        for c in 'a'..'z' {
+        for c in 'a'..='z' {
             cleaned = cleaned.replace(&format!(" ({}) ", c), &format!("\n({}) ", c));
         }
 
@@ -407,7 +407,7 @@ async fn word_family(
     let word = params.word.trim().to_lowercase();
 
     // Use Datamuse "related words" API
-    let url = format!(
+    let _url = format!(
         "https://api.datamuse.com/words?rel_jja={}&max=10",
         word
     );

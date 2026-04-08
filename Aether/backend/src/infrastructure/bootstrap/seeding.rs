@@ -128,7 +128,7 @@ async fn seed_layout_templates(db: &DatabaseConnection) {
             active.title = Set(title.to_string());
             active.description = Set(desc.to_string());
             active.thumbnail = Set(Some(thumb.to_string()));
-            active.updated_at = Set(chrono::Utc::now().into());
+            active.updated_at = Set(chrono::Utc::now());
             if let Err(e) = active.update(db).await {
                 tracing::warn!("Failed to update template {}: {}", rid, e);
             }
@@ -143,8 +143,8 @@ async fn seed_layout_templates(db: &DatabaseConnection) {
                 thumbnail: Set(Some(thumb.to_string())),
                 tags: Set(Some(serde_json::to_value(tags).unwrap())),
                 config: Set(Some(serde_json::json!({}))),
-                created_at: Set(chrono::Utc::now().into()),
-                updated_at: Set(chrono::Utc::now().into()),
+                created_at: Set(chrono::Utc::now()),
+                updated_at: Set(chrono::Utc::now()),
             };
             if let Err(e) = active.insert(db).await {
                 tracing::error!("Failed to seed template {}: {}", title, e);
@@ -158,12 +158,12 @@ async fn seed_public_group(repo: &Arc<PostgresRepository>) {
     let public_group_id = Uuid::nil();
     // We don't have a check logic in repo easily for groups yet, simply try create.
     // Repo usually handles idempotency or we ignore error.
-    match repo
+    if repo
         .create_group(public_group_id, "public".to_string())
         .await
+        .is_ok()
     {
-        Ok(_) => tracing::info!("Public group initialized"),
-        Err(_) => {} // Assume exists
+        tracing::info!("Public group initialized");
     }
 }
 
@@ -253,7 +253,7 @@ async fn seed_prkb_feeds(db: &DatabaseConnection) {
                 feed_type: Set(ftype.to_string()),
                 enabled: Set(true),
                 last_fetched_at: Set(None),
-                created_at: Set(chrono::Utc::now().into()),
+                created_at: Set(chrono::Utc::now()),
                 health_status: Set("unknown".to_string()),
                 total_fetched: Set(0),
                 parse_errors: Set(0),

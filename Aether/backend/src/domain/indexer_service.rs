@@ -63,7 +63,7 @@ impl IndexerService {
         let mut current_block: Option<ParsedNodeBuilder> = None;
         let mut current_id_counter = 0;
 
-        for (_i, line) in lines.iter().enumerate() {
+        for line in lines.iter() {
             let trim_line = line.trim();
 
             // Check Start
