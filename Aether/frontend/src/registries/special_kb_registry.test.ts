@@ -22,7 +22,7 @@ describe('special_kb_registry', () => {
     expect(resolveLayoutIdForRenderer('vrkb')).toBe('vulnerability_research');
     expect(resolveDashboardIdForRenderer('vulnerability_research')).toBe('vulnerability_research');
     expect(resolvePortabilityProviderIdForRenderer('vocabulary')).toBe('english_v1');
-    expect(resolvePortabilityProviderIdForRenderer('assets')).toBe('default');
+    expect(resolvePortabilityProviderIdForRenderer('assets')).toBe('assets_v1');
   });
 
   it('tracks singleton renderers using canonical ids only', () => {

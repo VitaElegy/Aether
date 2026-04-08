@@ -124,7 +124,7 @@ const SPECIAL_KB_REGISTRY: SpecialKbRegistryEntry[] = [
         pluginId: 'vrkb',
         layoutId: 'vulnerability_research',
         dashboardId: 'vulnerability_research',
-        portabilityProviderId: 'default',
+        portabilityProviderId: 'vrkb',
         singleton: true,
         legacyRendererIds: ['vrkb_std', 'vulnerability_research'],
         capabilities: { ...NO_CAPABILITIES, assets: true, auditLog: true, collaboration: true, search: true, dashboard: true, export: true, import: true },
@@ -139,7 +139,7 @@ const SPECIAL_KB_REGISTRY: SpecialKbRegistryEntry[] = [
     {
         canonicalRendererId: 'assets_v1',
         pluginId: 'assets_v1',
-        portabilityProviderId: 'default',
+        portabilityProviderId: 'assets_v1',
         singleton: true,
         legacyRendererIds: ['assets'],
         capabilities: { ...NO_CAPABILITIES, assets: true, export: true, import: true, search: true },

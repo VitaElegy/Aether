@@ -139,10 +139,10 @@ describe('[B] Identity Resolution', () => {
     expect(resolvePortabilityProviderIdForRenderer('vocabulary')).toBe('english_v1');
     expect(resolvePortabilityProviderIdForRenderer('english_v1')).toBe('english_v1');
     expect(resolvePortabilityProviderIdForRenderer('article-analysis')).toBe('english_v1');
-    expect(resolvePortabilityProviderIdForRenderer('assets_v1')).toBe('default');
-    expect(resolvePortabilityProviderIdForRenderer('assets')).toBe('default');
-    expect(resolvePortabilityProviderIdForRenderer('memo')).toBe('default');
-    expect(resolvePortabilityProviderIdForRenderer('vrkb')).toBe('default');
+    expect(resolvePortabilityProviderIdForRenderer('assets_v1')).toBe('assets_v1');
+    expect(resolvePortabilityProviderIdForRenderer('assets')).toBe('assets_v1');
+    expect(resolvePortabilityProviderIdForRenderer('memo')).toBe('memo');
+    expect(resolvePortabilityProviderIdForRenderer('vrkb')).toBe('vrkb');
   });
 });
 
@@ -424,15 +424,15 @@ describe('[N] Cross-Layer Consistency', () => {
 
   const BACKEND_PROVIDER_MAP: Record<string, string> = {
     'default': 'default',
-    'memo': 'default',
+    'memo': 'memo',
     'vocabulary': 'english_v1',
     'english_v1': 'english_v1',
     'article-analysis': 'english_v1',
     'math_v3': 'default',
     'math_v1': 'default',
-    'vrkb': 'default',
-    'prkb': 'default',
-    'assets_v1': 'default',
+    'vrkb': 'vrkb',
+    'prkb': 'prkb',
+    'assets_v1': 'assets_v1',
     'admin_system': 'default',
   };
 
